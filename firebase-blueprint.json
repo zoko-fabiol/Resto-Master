@@ -1,0 +1,54 @@
+{
+  "entities": {
+    "RestaurantSettings": {
+      "title": "Restaurant Settings",
+      "description": "General settings of the restaurant including currency, tax rates, zones, and profile.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "currency": { "type": "string" },
+        "taxRate": { "type": "number" },
+        "phone": { "type": "string" },
+        "email": { "type": "string" },
+        "address": { "type": "string" }
+      }
+    },
+    "User": {
+      "title": "User",
+      "description": "Authenticated user profile and assigned role.",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string" },
+        "name": { "type": "string" },
+        "role": { "type": "string" }
+      }
+    },
+    "Table": {
+      "title": "Table",
+      "description": "Restaurant table entity with zone, capacity, and current state.",
+      "type": "object",
+      "properties": {
+        "number": { "type": "string" },
+        "zone": { "type": "string" },
+        "capacity": { "type": "number" },
+        "status": { "type": "string" },
+        "currentOrderId": { "type": "string" }
+      }
+    },
+    "Order": {
+      "title": "Order",
+      "description": "POS restaurant order with items, status, subtotal, and tax.",
+      "type": "object",
+      "properties": {
+        "orderNumber": { "type": "string" },
+        "tableId": { "type": "string" },
+        "status": { "type": "string" },
+        "total": { "type": "number" },
+        "createdAt": { "type": "string" }
+      }
+    }
+  },
+  "firestore": {
+    "indexes": []
+  }
+}

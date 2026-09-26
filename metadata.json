@@ -1,0 +1,6 @@
+{
+  "name": "RestoMaster OS — Système de Gestion Intégrée de Restaurant",
+  "description": "Plateforme centralisée tout-en-un pour la gestion de restaurant : POS, tables, KDS cuisine & bar, stocks, achats fournisseurs, caisse, personnel et rapports temps réel.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
