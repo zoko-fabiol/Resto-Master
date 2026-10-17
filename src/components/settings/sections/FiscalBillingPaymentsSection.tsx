@@ -12,14 +12,29 @@ import {
   QrCode,
   Building,
   Landmark,
+  FileCheck,
+  Printer,
+  Sparkles,
+  ListOrdered,
+  FileSignature,
+  Percent,
+  RotateCcw,
+  ShieldAlert,
+  Wallet,
+  Briefcase,
+  Calendar,
+  Monitor,
+  Banknote,
+  Coins,
 } from 'lucide-react';
+import { ModernRuleToggle } from './ModernRuleToggle';
 
 interface Props {
   subTab: 'facturation' | 'fiscalite' | 'paiements' | 'mobile_money' | 'comptabilite';
 }
 
 export const FiscalBillingPaymentsSection: React.FC<Props> = ({ subTab }) => {
-  const { settings, updateSettings, addAuditLog } = useRestaurant();
+  const { settings, updateSettings, addAuditLog, operationRules, updateOperationRules } = useRestaurant();
   const [savedSuccess, setSavedSuccess] = useState(false);
 
   // Fiscal Form State
@@ -48,23 +63,36 @@ export const FiscalBillingPaymentsSection: React.FC<Props> = ({ subTab }) => {
 
   // Billing & Payment methods toggles
   const [billingOptions, setBillingOptions] = useState<Record<string, boolean>>({
-    bill_active: true,
-    bill_a5: true,
-    bill_custom_templates: true,
-    bill_auto_numbering: true,
-    bill_numbering_by_outlet: true,
-    bill_numbering_by_terminal: false,
-    bill_amount_in_words: true,
-    bill_discounts: true,
-    bill_taxes_detail: true,
-    bill_withholdings: true,
-    bill_credit_notes: true,
-    bill_cancellations: true,
-    bill_refunds: true,
-    bill_corporate: true,
-    bill_events: true,
-    bill_client_credit: true,
+    bill_active: operationRules?.bill_active ?? true,
+    bill_a5: operationRules?.bill_a5 ?? true,
+    bill_custom_templates: operationRules?.bill_custom_templates ?? true,
+    bill_auto_numbering: operationRules?.bill_auto_numbering ?? true,
+    bill_numbering_by_outlet: operationRules?.bill_numbering_by_outlet ?? true,
+    bill_numbering_by_terminal: operationRules?.bill_numbering_by_terminal ?? false,
+    bill_amount_in_words: operationRules?.bill_amount_in_words ?? true,
+    bill_discounts: operationRules?.bill_discounts ?? true,
+    bill_taxes_detail: operationRules?.bill_taxes_detail ?? true,
+    bill_withholdings: operationRules?.bill_withholdings ?? true,
+    bill_credit_notes: operationRules?.bill_credit_notes ?? true,
+    bill_cancellations: operationRules?.bill_cancellations ?? true,
+    bill_refunds: operationRules?.bill_refunds ?? true,
+    bill_corporate: operationRules?.bill_corporate ?? true,
+    bill_events: operationRules?.bill_events ?? true,
+    bill_client_credit: operationRules?.bill_client_credit ?? true,
   });
+
+  React.useEffect(() => {
+    if (operationRules) {
+      setBillingOptions((prev) => ({ ...prev, ...operationRules }));
+    }
+  }, [operationRules]);
+
+  const handleSaveBilling = async () => {
+    await updateOperationRules(billingOptions);
+    setSavedSuccess(true);
+    addAuditLog('Mise à jour facturation', 'Paramètres', 'Paramètres FACTURATION enregistrés');
+    setTimeout(() => setSavedSuccess(false), 2500);
+  };
 
   const [paymentMethods, setPaymentMethods] = useState<Record<string, boolean>>({
     pay_especes: true,
@@ -109,68 +137,147 @@ export const FiscalBillingPaymentsSection: React.FC<Props> = ({ subTab }) => {
   // 1. FACTURATION (Section 18)
   if (subTab === 'facturation') {
     const billingItems = [
-      { key: 'bill_active', label: 'Facturation officielle active' },
-      { key: 'bill_a5', label: 'Factures format laser A5 déductibles' },
-      { key: 'bill_custom_templates', label: 'Modèles de factures personnalisées (Logo & coordonnées)' },
-      { key: 'bill_auto_numbering', label: 'Numérotation automatique continue' },
-      { key: 'bill_numbering_by_outlet', label: 'Numérotation préfixée par établissement' },
-      { key: 'bill_numbering_by_terminal', label: 'Numérotation distincte par caisse/terminal' },
-      { key: 'bill_amount_in_words', label: 'Conversion dynamique du montant en toutes lettres' },
-      { key: 'bill_discounts', label: 'Gestion des remises commerciales sur facture' },
-      { key: 'bill_taxes_detail', label: 'Ventilation détaillée des taxes (TVA & CAC)' },
-      { key: 'bill_withholdings', label: 'Mentions des retenues à la source (AIR)' },
-      { key: 'bill_credit_notes', label: 'Émission d’avoirs officiels' },
-      { key: 'bill_cancellations', label: 'Procédure d’annulation contrôlée avec motif' },
-      { key: 'bill_refunds', label: 'Gestion des remboursements clients' },
-      { key: 'bill_corporate', label: 'Facturation entreprises (NIU contribuable obligatoire)' },
-      { key: 'bill_events', label: 'Facturation spécifique événementielle' },
-      { key: 'bill_client_credit', label: 'Facturation différée pour clients à crédit' },
+      {
+        key: 'bill_active',
+        label: 'Facturation officielle active',
+        description: 'Émission autorisée de factures formelles restaurant conformes DGI',
+        icon: FileCheck,
+      },
+      {
+        key: 'bill_a5',
+        label: 'Factures format laser A5 déductibles',
+        description: 'Mise en page format A5 pour sociétés avec TVA et décharges',
+        icon: Printer,
+      },
+      {
+        key: 'bill_custom_templates',
+        label: 'Modèles de factures personnalisées',
+        description: 'En-tête officiel avec Logo, NIU, RCCM, Ville et Slogan',
+        icon: Sparkles,
+      },
+      {
+        key: 'bill_auto_numbering',
+        label: 'Numérotation automatique continue',
+        description: 'Séquence chronologique immuable sans saut de numéro',
+        icon: ListOrdered,
+      },
+      {
+        key: 'bill_numbering_by_outlet',
+        label: 'Numérotation préfixée par établissement',
+        description: 'Identifiant du site intégré au numéro (ex: 2026-RESTO-001)',
+        icon: Building,
+      },
+      {
+        key: 'bill_numbering_by_terminal',
+        label: 'Numérotation distincte par caisse/terminal',
+        description: 'Compteur séparé pour chaque caisse physique ou tablette',
+        icon: Monitor,
+      },
+      {
+        key: 'bill_amount_in_words',
+        label: 'Conversion du montant en toutes lettres',
+        description: 'Formule d’arrêté légale obligatoire en Francs CFA',
+        icon: FileSignature,
+      },
+      {
+        key: 'bill_discounts',
+        label: 'Gestion des remises commerciales sur facture',
+        description: 'Ligne explicite des pourcentages et remises accordées',
+        icon: Percent,
+      },
+      {
+        key: 'bill_taxes_detail',
+        label: 'Ventilation détaillée des taxes (TVA & CAC)',
+        description: 'Décomposition légale : TVA 17,50% + CAC 1,75% (Total 19,25%)',
+        icon: Receipt,
+      },
+      {
+        key: 'bill_withholdings',
+        label: 'Mentions des retenues à la source (AIR)',
+        description: 'Mentions des acomptes libératoires AIR 2,2% ou 5,5%',
+        icon: ShieldCheck,
+      },
+      {
+        key: 'bill_credit_notes',
+        label: 'Émission d’avoirs officiels',
+        description: 'Factures d’avoir certifiées avec numéro d’annulation',
+        icon: RotateCcw,
+      },
+      {
+        key: 'bill_cancellations',
+        label: 'Procédure d’annulation contrôlée avec motif',
+        description: 'Justificatif obligatoire en cas d’annulation d’une facture',
+        icon: ShieldAlert,
+      },
+      {
+        key: 'bill_refunds',
+        label: 'Gestion des remboursements clients',
+        description: 'Enregistrement des sorties pour remboursement client',
+        icon: Wallet,
+      },
+      {
+        key: 'bill_corporate',
+        label: 'Facturation entreprises (NIU obligatoire)',
+        description: 'Contrôle du NIU contribuable valide pour déductibilité',
+        icon: Briefcase,
+      },
+      {
+        key: 'bill_events',
+        label: 'Facturation spécifique événementielle',
+        description: 'Gestion des devis, acomptes et solde de banquets',
+        icon: Calendar,
+      },
+      {
+        key: 'bill_client_credit',
+        label: 'Facturation différée pour clients à crédit',
+        description: 'Regroupement mensuel des consommations en compte',
+        icon: CreditCard,
+      },
     ];
 
     return (
-      <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-6">
+      <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-xs space-y-6">
         <div className="flex items-center justify-between border-b border-slate-100 pb-4">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-slate-900 text-amber-400 flex items-center justify-center">
+            <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-emerald-600 to-green-500 text-white flex items-center justify-center shadow-md shadow-emerald-500/20">
               <Receipt className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="text-sm font-bold text-slate-900">Centre Détaillé de Facturation Officielle</h3>
-              <p className="text-xs text-slate-500">
-                Normes d’émission des factures A5, avoirs, remises et numérotations conformes (Section 18)
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm sm:text-base font-black text-slate-900">
+                  Centre Détaillé de Facturation Officielle
+                </h3>
+                <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
+                  Section 18
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Normes d’émission des factures A5, avoirs, remises et numérotations conformes CGI Cameroun 2026
               </p>
             </div>
           </div>
           {savedSuccess && (
-            <span className="flex items-center gap-1.5 text-xs font-bold text-emerald-700 bg-emerald-50 px-3 py-1.5 rounded-xl border border-emerald-200">
-              <CheckCircle2 className="w-4 h-4" /> Enregistré
+            <span className="flex items-center gap-1.5 text-xs font-bold text-emerald-700 bg-emerald-50 px-3.5 py-1.5 rounded-xl border border-emerald-200 shadow-xs animate-in fade-in">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600" /> Paramètres enregistrés
             </span>
           )}
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
-          {billingItems.map((item) => {
-            const checked = billingOptions[item.key] ?? false;
-            return (
-              <label
-                key={item.key}
-                onClick={() => setBillingOptions((prev) => ({ ...prev, [item.key]: !prev[item.key] }))}
-                className={`flex items-start gap-3 p-3.5 rounded-xl border cursor-pointer transition-all ${
-                  checked ? 'border-amber-400/80 bg-amber-50/30' : 'border-slate-200 bg-slate-50/50 hover:bg-slate-50'
-                }`}
-              >
-                <input
-                  type="checkbox"
-                  checked={checked}
-                  onChange={() => {}}
-                  className="w-4 h-4 rounded text-amber-600 focus:ring-amber-500 mt-0.5"
-                />
-                <span className={`font-semibold ${checked ? 'text-slate-950 font-bold' : 'text-slate-700'}`}>
-                  {item.label}
-                </span>
-              </label>
-            );
-          })}
+        {/* Modern Rule Toggles Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+          {billingItems.map((item) => (
+            <ModernRuleToggle
+              key={item.key}
+              id={item.key}
+              label={item.label}
+              description={item.description}
+              icon={item.icon}
+              checked={billingOptions[item.key] ?? false}
+              onChange={() =>
+                setBillingOptions((prev) => ({ ...prev, [item.key]: !prev[item.key] }))
+              }
+            />
+          ))}
         </div>
 
         <div className="pt-4 border-t border-slate-100 flex items-center justify-between">
@@ -179,7 +286,7 @@ export const FiscalBillingPaymentsSection: React.FC<Props> = ({ subTab }) => {
           </span>
           <button
             type="button"
-            onClick={() => handleSave()}
+            onClick={() => handleSaveBilling()}
             className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-slate-900 text-white font-bold text-xs hover:bg-slate-800 shadow-xs"
           >
             <Save className="w-4 h-4" />
@@ -337,80 +444,107 @@ export const FiscalBillingPaymentsSection: React.FC<Props> = ({ subTab }) => {
   // 3. PAIEMENTS (Section 20)
   if (subTab === 'paiements') {
     const paymentMethodsList = [
-      { key: 'pay_especes', label: 'Espèces (FCFA)' },
-      { key: 'pay_cb', label: 'Carte bancaire (TPE Visa / Mastercard)' },
-      { key: 'pay_mtn_momo', label: 'MTN Mobile Money' },
-      { key: 'pay_orange_money', label: 'Orange Money' },
-      { key: 'pay_virement', label: 'Virement bancaire' },
-      { key: 'pay_cheque', label: 'Chèque certifié' },
-      { key: 'pay_credit_client', label: 'Crédit client / Facturation fin de mois' },
-      { key: 'pay_partiel', label: 'Paiement partiel (Acomptes multiples)' },
-      { key: 'pay_multiple', label: 'Paiement multiple (Multi-moyens sur une même addition)' },
+      {
+        key: 'pay_especes',
+        label: 'Espèces (FCFA)',
+        description: 'Paiements au comptant avec rendu de monnaie automatique',
+        icon: Banknote,
+      },
+      {
+        key: 'pay_cb',
+        label: 'Carte Bancaire / TPE',
+        description: 'Terminaux bancaires physiques Visa, Mastercard et GIMAC',
+        icon: CreditCard,
+      },
+      {
+        key: 'pay_mtn_momo',
+        label: 'MTN Mobile Money',
+        description: 'Paiements push USSD *126# et QR codes commerçant',
+        icon: Smartphone,
+      },
+      {
+        key: 'pay_orange_money',
+        label: 'Orange Money',
+        description: 'Règlements sécurisés via pass #150# et Max it Cameroun',
+        icon: Smartphone,
+      },
+      {
+        key: 'pay_virement',
+        label: 'Virement Bancaire',
+        description: 'Paiement direct sur le compte bancaire de l’entreprise',
+        icon: Landmark,
+      },
+      {
+        key: 'pay_cheque',
+        label: 'Chèque Certifié',
+        description: 'Encaissement de chèques d’entreprises avec n° de série',
+        icon: FileSignature,
+      },
+      {
+        key: 'pay_credit_client',
+        label: 'Crédit Client / Compte',
+        description: 'Mise en ardoise et facturation différée fin de mois',
+        icon: Wallet,
+      },
+      {
+        key: 'pay_partiel',
+        label: 'Paiement Partiel (Acomptes)',
+        description: 'Multiples versements successifs sur une même commande',
+        icon: Percent,
+      },
+      {
+        key: 'pay_multiple',
+        label: 'Paiement Mixte / Fractionné',
+        description: 'Règlement d’une même table avec plusieurs moyens',
+        icon: Coins,
+      },
     ];
 
     return (
-      <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-6">
+      <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-xs space-y-6">
         <div className="flex items-center justify-between border-b border-slate-100 pb-4">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-slate-900 text-amber-400 flex items-center justify-center">
+            <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-slate-900 to-slate-800 text-amber-400 flex items-center justify-center shadow-md">
               <CreditCard className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="text-sm font-bold text-slate-900">Moyens d'Encaissement & de Paiement (Section 20)</h3>
-              <p className="text-xs text-slate-500">
-                Activez ou désactivez chaque mode de règlement accepté en caisse et sur les terminaux
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm sm:text-base font-black text-slate-900">
+                  Moyens d'Encaissement & de Paiement
+                </h3>
+                <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-slate-100 text-slate-700">
+                  Section 20
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Activez ou désactivez chaque mode de règlement accepté en caisse et sur les terminaux mobiles
               </p>
             </div>
           </div>
           {savedSuccess && (
-            <span className="flex items-center gap-1.5 text-xs font-bold text-emerald-700 bg-emerald-50 px-3 py-1.5 rounded-xl border border-emerald-200">
-              <CheckCircle2 className="w-4 h-4" /> Enregistré
+            <span className="flex items-center gap-1.5 text-xs font-bold text-emerald-700 bg-emerald-50 px-3 py-1.5 rounded-xl border border-emerald-200 shadow-xs">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600" /> Enregistré
             </span>
           )}
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-          {paymentMethodsList.map((m) => {
-            const isEnabled = paymentMethods[m.key] ?? false;
-
-            return (
-              <div
-                key={m.key}
-                className={`p-4 rounded-xl border flex items-center justify-between transition-all ${
-                  isEnabled ? 'border-emerald-300 bg-emerald-50/20' : 'border-slate-200 bg-slate-50/50'
-                }`}
-              >
-                <div>
-                  <h4 className="font-bold text-xs text-slate-900">{m.label}</h4>
-                  <span
-                    className={`text-[10px] font-bold mt-0.5 inline-flex items-center gap-1.5 ${
-                      isEnabled ? 'text-emerald-700' : 'text-slate-400'
-                    }`}
-                  >
-                    <span className={`w-1.5 h-1.5 rounded-full ${isEnabled ? 'bg-emerald-500' : 'bg-slate-300'}`} />
-                    {isEnabled ? 'Activé' : 'Désactivé'}
-                  </span>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() =>
-                    setPaymentMethods((prev) => ({
-                      ...prev,
-                      [m.key]: !prev[m.key],
-                    }))
-                  }
-                  className={`text-xs font-bold px-3 py-1.5 rounded-xl transition-all ${
-                    isEnabled
-                      ? 'bg-rose-100 text-rose-800 hover:bg-rose-200'
-                      : 'bg-emerald-600 text-white hover:bg-emerald-700'
-                  }`}
-                >
-                  {isEnabled ? 'Désactiver' : 'Activer'}
-                </button>
-              </div>
-            );
-          })}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
+          {paymentMethodsList.map((m) => (
+            <ModernRuleToggle
+              key={m.key}
+              id={m.key}
+              label={m.label}
+              description={m.description}
+              icon={m.icon}
+              checked={paymentMethods[m.key] ?? false}
+              onChange={() =>
+                setPaymentMethods((prev) => ({
+                  ...prev,
+                  [m.key]: !prev[m.key],
+                }))
+              }
+            />
+          ))}
         </div>
 
         <div className="pt-4 border-t border-slate-100 flex justify-end">
@@ -468,15 +602,24 @@ export const FiscalBillingPaymentsSection: React.FC<Props> = ({ subTab }) => {
                 </div>
                 <h4 className="font-bold text-sm text-slate-900">MTN Mobile Money (MoMo)</h4>
               </div>
-              <label className="flex items-center gap-1.5 text-xs font-bold text-slate-800 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={mtnActive}
-                  onChange={(e) => setMtnActive(e.target.checked)}
-                  className="w-4 h-4 rounded text-amber-600"
-                />
-                <span>{mtnActive ? 'Activé' : 'Désactivé'}</span>
-              </label>
+              <div className="flex items-center gap-3">
+                <span className={`text-xs font-black uppercase ${mtnActive ? 'text-amber-700' : 'text-slate-400'}`}>
+                  {mtnActive ? 'Actif' : 'Inactif'}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setMtnActive(!mtnActive)}
+                  className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden ${
+                    mtnActive ? 'bg-amber-500 shadow-sm shadow-amber-500/30' : 'bg-slate-300'
+                  }`}
+                >
+                  <span
+                    className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
+                      mtnActive ? 'translate-x-5' : 'translate-x-0'
+                    }`}
+                  />
+                </button>
+              </div>
             </div>
 
             <div className="space-y-3 text-xs">
@@ -512,26 +655,56 @@ export const FiscalBillingPaymentsSection: React.FC<Props> = ({ subTab }) => {
                 </select>
               </div>
 
-              <div className="space-y-2 pt-2 border-t border-slate-200">
-                <label className="flex items-center gap-2 cursor-pointer font-semibold text-slate-800">
-                  <input
-                    type="checkbox"
-                    checked={mtnManualVerification}
-                    onChange={(e) => setMtnManualVerification(e.target.checked)}
-                    className="w-4 h-4 rounded text-amber-600"
-                  />
-                  <span>Vérification manuelle obligatoire de la référence</span>
-                </label>
+              <div className="space-y-2.5 pt-3 border-t border-slate-200">
+                <div
+                  onClick={() => setMtnManualVerification(!mtnManualVerification)}
+                  className="flex items-center justify-between p-3 rounded-xl border border-slate-200 bg-white hover:border-amber-300 transition-all cursor-pointer"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <ShieldCheck className="w-4 h-4 text-amber-600" />
+                    <div>
+                      <span className="font-bold text-slate-800 block text-xs">Vérification manuelle obligatoire</span>
+                      <span className="text-[10px] text-slate-500">Contrôle visuel du SMS officiel de confirmation</span>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out ${
+                      mtnManualVerification ? 'bg-amber-500' : 'bg-slate-300'
+                    }`}
+                  >
+                    <span
+                      className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                        mtnManualVerification ? 'translate-x-4' : 'translate-x-0'
+                      }`}
+                    />
+                  </button>
+                </div>
 
-                <label className="flex items-center gap-2 cursor-pointer font-semibold text-slate-800">
-                  <input
-                    type="checkbox"
-                    checked={mtnAutoConfirmApi}
-                    onChange={(e) => setMtnAutoConfirmApi(e.target.checked)}
-                    className="w-4 h-4 rounded text-amber-600"
-                  />
-                  <span>Confirmation automatique via API MoMo Open (WebHook)</span>
-                </label>
+                <div
+                  onClick={() => setMtnAutoConfirmApi(!mtnAutoConfirmApi)}
+                  className="flex items-center justify-between p-3 rounded-xl border border-slate-200 bg-white hover:border-amber-300 transition-all cursor-pointer"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <Sparkles className="w-4 h-4 text-amber-600" />
+                    <div>
+                      <span className="font-bold text-slate-800 block text-xs">Confirmation automatique API</span>
+                      <span className="text-[10px] text-slate-500">Validation via MoMo Open Webhook en direct</span>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out ${
+                      mtnAutoConfirmApi ? 'bg-amber-500' : 'bg-slate-300'
+                    }`}
+                  >
+                    <span
+                      className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                        mtnAutoConfirmApi ? 'translate-x-4' : 'translate-x-0'
+                      }`}
+                    />
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -545,15 +718,24 @@ export const FiscalBillingPaymentsSection: React.FC<Props> = ({ subTab }) => {
                 </div>
                 <h4 className="font-bold text-sm text-slate-900">Orange Money (Max it / #150#)</h4>
               </div>
-              <label className="flex items-center gap-1.5 text-xs font-bold text-slate-800 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={orangeActive}
-                  onChange={(e) => setOrangeActive(e.target.checked)}
-                  className="w-4 h-4 rounded text-orange-600"
-                />
-                <span>{orangeActive ? 'Activé' : 'Désactivé'}</span>
-              </label>
+              <div className="flex items-center gap-3">
+                <span className={`text-xs font-black uppercase ${orangeActive ? 'text-orange-700' : 'text-slate-400'}`}>
+                  {orangeActive ? 'Actif' : 'Inactif'}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setOrangeActive(!orangeActive)}
+                  className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden ${
+                    orangeActive ? 'bg-orange-500 shadow-sm shadow-orange-500/30' : 'bg-slate-300'
+                  }`}
+                >
+                  <span
+                    className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
+                      orangeActive ? 'translate-x-5' : 'translate-x-0'
+                    }`}
+                  />
+                </button>
+              </div>
             </div>
 
             <div className="space-y-3 text-xs">
@@ -589,26 +771,56 @@ export const FiscalBillingPaymentsSection: React.FC<Props> = ({ subTab }) => {
                 </select>
               </div>
 
-              <div className="space-y-2 pt-2 border-t border-slate-200">
-                <label className="flex items-center gap-2 cursor-pointer font-semibold text-slate-800">
-                  <input
-                    type="checkbox"
-                    checked={orangeManualVerification}
-                    onChange={(e) => setOrangeManualVerification(e.target.checked)}
-                    className="w-4 h-4 rounded text-orange-600"
-                  />
-                  <span>Vérification manuelle obligatoire de la référence</span>
-                </label>
+              <div className="space-y-2.5 pt-3 border-t border-slate-200">
+                <div
+                  onClick={() => setOrangeManualVerification(!orangeManualVerification)}
+                  className="flex items-center justify-between p-3 rounded-xl border border-slate-200 bg-white hover:border-orange-300 transition-all cursor-pointer"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <ShieldCheck className="w-4 h-4 text-orange-600" />
+                    <div>
+                      <span className="font-bold text-slate-800 block text-xs">Vérification manuelle obligatoire</span>
+                      <span className="text-[10px] text-slate-500">Contrôle visuel du SMS Orange Money</span>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out ${
+                      orangeManualVerification ? 'bg-orange-500' : 'bg-slate-300'
+                    }`}
+                  >
+                    <span
+                      className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                        orangeManualVerification ? 'translate-x-4' : 'translate-x-0'
+                      }`}
+                    />
+                  </button>
+                </div>
 
-                <label className="flex items-center gap-2 cursor-pointer font-semibold text-slate-800">
-                  <input
-                    type="checkbox"
-                    checked={orangeAutoConfirmApi}
-                    onChange={(e) => setOrangeAutoConfirmApi(e.target.checked)}
-                    className="w-4 h-4 rounded text-orange-600"
-                  />
-                  <span>Confirmation automatique via API Orange Money Web</span>
-                </label>
+                <div
+                  onClick={() => setOrangeAutoConfirmApi(!orangeAutoConfirmApi)}
+                  className="flex items-center justify-between p-3 rounded-xl border border-slate-200 bg-white hover:border-orange-300 transition-all cursor-pointer"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <Sparkles className="w-4 h-4 text-orange-600" />
+                    <div>
+                      <span className="font-bold text-slate-800 block text-xs">Confirmation automatique API</span>
+                      <span className="text-[10px] text-slate-500">Validation temps réel Orange Money Web</span>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out ${
+                      orangeAutoConfirmApi ? 'bg-orange-500' : 'bg-slate-300'
+                    }`}
+                  >
+                    <span
+                      className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                        orangeAutoConfirmApi ? 'translate-x-4' : 'translate-x-0'
+                      }`}
+                    />
+                  </button>
+                </div>
               </div>
             </div>
           </div>

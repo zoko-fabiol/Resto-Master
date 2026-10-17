@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useRestaurant } from '../../context/RestaurantContext';
+import { useToast } from '../../context/ToastContext';
 import { Reservation, ReservationStatus } from '../../types/restaurant';
 import { RESERVATION_STATUS_MAP, formatDateTime } from '../../lib/utils';
 import {
@@ -14,6 +15,7 @@ import {
   Search,
   Filter,
   X,
+  Sparkles,
 } from 'lucide-react';
 
 interface ReservationsViewProps {
@@ -21,7 +23,22 @@ interface ReservationsViewProps {
 }
 
 export const ReservationsView: React.FC<ReservationsViewProps> = ({ onSeatGuest }) => {
-  const { reservations, tables, createReservation, updateReservationStatus } = useRestaurant();
+  const {
+    reservations,
+    tables,
+    createReservation,
+    updateReservationStatus,
+    updateTableStatus,
+    isRuleEnabled,
+  } = useRestaurant();
+  const { showToast } = useToast();
+
+  // Règles Opérationnelles (Section 16 Réservations)
+  const isDepositRequired = isRuleEnabled('res_deposit', true);
+  const isNoShowAllowed = isRuleEnabled('res_noshow', true);
+  const isWaitlistAllowed = isRuleEnabled('res_waitlist', true);
+
+  const [depositReceived, setDepositReceived] = useState(false);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -37,6 +54,52 @@ export const ReservationsView: React.FC<ReservationsViewProps> = ({ onSeatGuest 
   const [tableId, setTableId] = useState('');
   const [specialRequests, setSpecialRequests] = useState('');
 
+  // Suggérer la meilleure table libre adaptée à la taille du groupe (Section 7 du Guide)
+  const handleSuggestTable = (count: number) => {
+    const freeTables = tables.filter((t) => t.status === 'libre');
+    const suited = freeTables
+      .filter((t) => t.capacity >= count)
+      .sort((a, b) => a.capacity - b.capacity);
+
+    if (suited.length > 0) {
+      setTableId(suited[0].id);
+      showToast({
+        type: 'success',
+        title: 'Table suggérée automatiquement',
+        message: `Table ${suited[0].number} (${suited[0].zone || 'Salle'}) recommandée pour ${count} convives (${suited[0].capacity} places).`,
+      });
+    } else if (freeTables.length > 0) {
+      setTableId(freeTables[0].id);
+      showToast({
+        type: 'warning',
+        title: 'Capacité approximative',
+        message: `Aucune table de taille exacte libre. Table ${freeTables[0].number} (${freeTables[0].capacity} places) suggérée.`,
+      });
+    } else {
+      showToast({
+        type: 'warning',
+        title: 'Aucune table disponible',
+        message: 'Toutes les tables sont actuellement occupées ou réservées.',
+      });
+    }
+  };
+
+  // Annuler et libérer immédiatement la table associée (Section 7 du Guide)
+  const handleCancelReservation = async (res: Reservation) => {
+    await updateReservationStatus(res.id, 'annulee');
+    if (res.tableId) {
+      const table = tables.find((t) => t.id === res.tableId);
+      if (table && table.status === 'reservee') {
+        await updateTableStatus(table.id, 'libre');
+      }
+    }
+    showToast({
+      type: 'info',
+      title: 'Réservation annulée',
+      message: `Réservation de ${res.customerName} annulée. La table associée est de nouveau disponible.`,
+    });
+  };
+
   const filteredReservations = reservations.filter((r) => {
     const matchStatus = statusFilter === 'all' || r.status === statusFilter;
     const matchQuery =
@@ -50,7 +113,20 @@ export const ReservationsView: React.FC<ReservationsViewProps> = ({ onSeatGuest 
   const handleCreateSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!customerName || !phone) {
-      alert('Veuillez renseigner le nom et le téléphone du client.');
+      showToast({
+        type: 'warning',
+        title: 'Champs manquants',
+        message: 'Veuillez renseigner au minimum le nom et le téléphone du client.',
+      });
+      return;
+    }
+
+    if (isDepositRequired && guestCount >= 6 && !depositReceived) {
+      showToast({
+        type: 'warning',
+        title: 'Acompte obligatoire',
+        message: 'Pour les groupes de 6 personnes ou plus, la réception d’un acompte de garantie est obligatoire.',
+      });
       return;
     }
 
@@ -69,6 +145,11 @@ export const ReservationsView: React.FC<ReservationsViewProps> = ({ onSeatGuest 
       specialRequests: specialRequests || undefined,
     });
 
+    // Marquer la table comme réservée sur le plan de salle
+    if (tableId) {
+      await updateTableStatus(tableId, 'reservee');
+    }
+
     setModalOpen(false);
     // Reset form
     setCustomerName('');
@@ -76,6 +157,13 @@ export const ReservationsView: React.FC<ReservationsViewProps> = ({ onSeatGuest 
     setEmail('');
     setSpecialRequests('');
     setTableId('');
+    setDepositReceived(false);
+
+    showToast({
+      type: 'success',
+      title: 'Réservation confirmée',
+      message: `Réservation pour ${customerName} enregistrée le ${date} à ${time}.`,
+    });
   };
 
   return (
@@ -203,7 +291,11 @@ export const ReservationsView: React.FC<ReservationsViewProps> = ({ onSeatGuest 
                                 if (targetTable) {
                                   onSeatGuest(res.id, targetTable);
                                 } else {
-                                  alert('Aucune table libre disponible actuellement.');
+                                  showToast({
+                                    type: 'warning',
+                                    title: 'Aucune table libre',
+                                    message: 'Toutes les tables sont actuellement occupées ou réservées.',
+                                  });
                                 }
                               }}
                               className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] flex items-center gap-1 shadow-xs"
@@ -213,11 +305,21 @@ export const ReservationsView: React.FC<ReservationsViewProps> = ({ onSeatGuest 
                             </button>
                           )}
 
+                          {isNoShowAllowed && res.status === 'confirmee' && (
+                            <button
+                              onClick={() => handleCancelReservation(res)}
+                              className="px-2 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-[10px] border border-rose-200"
+                              title="Déclarer No-Show et libérer la table"
+                            >
+                              No-Show
+                            </button>
+                          )}
+
                           {res.status !== 'annulee' && res.status !== 'terminee' && (
                             <button
-                              onClick={() => updateReservationStatus(res.id, 'annulee')}
+                              onClick={() => handleCancelReservation(res)}
                               className="p-1 text-slate-400 hover:text-rose-600 rounded"
-                              title="Annuler la réservation"
+                              title="Annuler la réservation et libérer la table"
                             >
                               <XCircle className="w-4 h-4" />
                             </button>
@@ -309,7 +411,17 @@ export const ReservationsView: React.FC<ReservationsViewProps> = ({ onSeatGuest 
               </div>
 
               <div>
-                <label className="text-xs font-bold text-slate-700 block mb-1">Affecter une table (Optionnel)</label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs font-bold text-slate-700">Affecter une table (Optionnel)</label>
+                  <button
+                    type="button"
+                    onClick={() => handleSuggestTable(guestCount)}
+                    className="text-[11px] font-bold text-amber-600 hover:text-amber-700 flex items-center gap-1 hover:underline"
+                  >
+                    <Sparkles className="w-3 h-3 text-amber-500" />
+                    <span>Suggérer table adaptée ({guestCount}p)</span>
+                  </button>
+                </div>
                 <select
                   value={tableId}
                   onChange={(e) => setTableId(e.target.value)}
@@ -334,6 +446,26 @@ export const ReservationsView: React.FC<ReservationsViewProps> = ({ onSeatGuest 
                   className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200"
                 />
               </div>
+
+              {isDepositRequired && guestCount >= 6 && (
+                <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-xs space-y-2">
+                  <div className="font-bold text-amber-900">
+                    Acompte de groupe obligatoire (≥ 6 convives)
+                  </div>
+                  <p className="text-amber-800 text-[11px]">
+                    Selon la politique opérationnelle (Section 16), un acompte de garantie est requis pour les grands groupes.
+                  </p>
+                  <label className="flex items-center gap-2 font-bold text-amber-950 cursor-pointer pt-0.5">
+                    <input
+                      type="checkbox"
+                      checked={depositReceived}
+                      onChange={(e) => setDepositReceived(e.target.checked)}
+                      className="rounded text-amber-600 focus:ring-amber-500"
+                    />
+                    <span>Acompte de garantie bien perçu (Cash / MoMo)</span>
+                  </label>
+                </div>
+              )}
 
               <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2">
                 <button

@@ -58,6 +58,17 @@ export function getMinutesElapsed(isoString: string): number {
   }
 }
 
+export function getMinutesBetween(startIso?: string, endIso?: string): number | null {
+  if (!startIso || !endIso) return null;
+  try {
+    const s = new Date(startIso).getTime();
+    const e = new Date(endIso).getTime();
+    return Math.max(0, Math.floor((e - s) / (1000 * 60)));
+  } catch {
+    return null;
+  }
+}
+
 export function generateOrderNumber(): string {
   const dateStr = new Date().toISOString().slice(2, 10).replace(/-/g, '');
   const rand = Math.floor(100 + Math.random() * 900);
@@ -233,6 +244,7 @@ export const ROLE_LABELS: Record<UserRole, { label: string; color: string }> = {
   finance: { label: 'Finance & Trésorerie', color: 'bg-emerald-100 text-emerald-800 border-emerald-200' },
   comptable: { label: 'Comptable (SYSCOHADA)', color: 'bg-teal-100 text-teal-800 border-teal-200' },
   auditeur: { label: 'Auditeur / Contrôle', color: 'bg-amber-100 text-amber-800 border-amber-200' },
+  tablette: { label: 'Tablette Tactile (Kiosk Client)', color: 'bg-violet-100 text-violet-800 border-violet-200' },
 };
 
 export const TABLE_STATUS_MAP: Record<TableStatus, { label: string; badgeClass: string; borderClass: string; bgClass: string }> = {

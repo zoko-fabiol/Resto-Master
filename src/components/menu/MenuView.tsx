@@ -1,7 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useRestaurant } from '../../context/RestaurantContext';
+import { useToast } from '../../context/ToastContext';
 import { Product, RecipeIngredient } from '../../types/restaurant';
 import { formatCurrency } from '../../lib/utils';
+import { cloudinaryService } from '../../services/media/cloudinaryService';
 import {
   MenuSquare,
   Plus,
@@ -14,10 +16,15 @@ import {
   DollarSign,
   X,
   Trash2,
+  UploadCloud,
+  Image as ImageIcon,
+  Loader2,
+  Sparkles,
 } from 'lucide-react';
 
 export const MenuView: React.FC = () => {
-  const { products, categories, stockItems, createProduct, toggleProductAvailability, settings } = useRestaurant();
+  const { products, categories, stockItems, createProduct, toggleProductAvailability, settings, activeRestaurant } = useRestaurant();
+  const { showToast } = useToast();
 
   const [selectedCat, setSelectedCat] = useState<string>('all');
   const [search, setSearch] = useState('');
@@ -32,6 +39,11 @@ export const MenuView: React.FC = () => {
   const [prepTime, setPrepTime] = useState<number>(15);
   const [destination, setDestination] = useState<'cuisine' | 'bar'>('cuisine');
   const [image, setImage] = useState('');
+  const [imagePublicId, setImagePublicId] = useState('');
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [ingredients, setIngredients] = useState<RecipeIngredient[]>([]);
 
   // Ingredient adding
@@ -51,7 +63,11 @@ export const MenuView: React.FC = () => {
     const stockItem = stockItems.find((s) => s.id === selectedStockId);
     if (!stockItem) return;
     if (ingredients.some((i) => i.stockItemId === stockItem.id)) {
-      alert('Cet ingrédient est déjà dans la fiche technique.');
+      showToast({
+        type: 'warning',
+        title: 'Ingrédient déjà présent',
+        message: 'Cet ingrédient figure déjà dans la fiche technique de cette recette.',
+      });
       return;
     }
 
@@ -73,7 +89,11 @@ export const MenuView: React.FC = () => {
   const handleCreateProduct = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name || price <= 0) {
-      alert('Veuillez renseigner le nom et un tarif valide.');
+      showToast({
+        type: 'warning',
+        title: 'Formulaire incomplet',
+        message: 'Veuillez renseigner un nom et un prix de vente valide supérieur à zéro.',
+      });
       return;
     }
 
@@ -90,6 +110,8 @@ export const MenuView: React.FC = () => {
       available: true,
       destination,
       image: image || undefined,
+      imageUrl: image || undefined,
+      imagePublicId: imagePublicId || undefined,
       ingredients,
       taxApplicable: true,
     });
@@ -101,7 +123,45 @@ export const MenuView: React.FC = () => {
     setPrice(5000);
     setCostPrice(2000);
     setImage('');
+    setImagePublicId('');
     setIngredients([]);
+    showToast('Plat enregistré avec succès avec sa photo Cloudinary !', 'success');
+  };
+
+  const handleFileUploadToCloudinary = async (file: File) => {
+    if (!file.type.startsWith('image/')) {
+      showToast('Veuillez sélectionner un fichier image valide (JPG, PNG, WEBP)', 'warning');
+      return;
+    }
+
+    setIsUploadingImage(true);
+    setUploadProgress(20);
+
+    const progressTimer = setInterval(() => {
+      setUploadProgress((prev) => (prev < 85 ? prev + 15 : prev));
+    }, 200);
+
+    try {
+      const asset = await cloudinaryService.upload(file, {
+        organizationId: 'org-cameroun-hospitality',
+        restaurantId: activeRestaurant?.id || 'out-1',
+        category: 'food',
+        entityType: 'product',
+        confidentialityLevel: 'public',
+        tags: ['menu', 'plat', 'restomaster'],
+      });
+
+      clearInterval(progressTimer);
+      setUploadProgress(100);
+      setImage(asset.secureUrl);
+      setImagePublicId(asset.cloudinaryPublicId);
+      showToast('Photo hébergée sur Cloudinary avec succès !', 'success');
+    } catch (err: any) {
+      clearInterval(progressTimer);
+      showToast(err.message || 'Erreur lors du téléversement Cloudinary', 'error');
+    } finally {
+      setIsUploadingImage(false);
+    }
   };
 
   return (
@@ -367,15 +427,104 @@ export const MenuView: React.FC = () => {
                 </div>
               </div>
 
+              {/* Photo du Plat avec Upload Cloudinary Réel */}
               <div>
-                <label className="text-xs font-bold text-slate-700 block mb-1">URL Photo (optionnel)</label>
-                <input
-                  type="url"
-                  placeholder="https://images.unsplash.com/..."
-                  value={image}
-                  onChange={(e) => setImage(e.target.value)}
-                  className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200"
-                />
+                <label className="text-xs font-bold text-slate-700 block mb-1">
+                  Photo du Plat (Cloudinary CDN)
+                </label>
+
+                {image ? (
+                  <div className="relative rounded-2xl overflow-hidden border-2 border-emerald-500/40 bg-slate-900 group">
+                    <img
+                      src={image}
+                      alt="Aperçu plat"
+                      className="w-full h-36 object-cover"
+                    />
+                    <div className="absolute top-2 left-2 px-2.5 py-1 rounded-full bg-emerald-500 text-white text-[10px] font-bold flex items-center gap-1 shadow-md">
+                      <CheckCircle2 className="w-3 h-3" />
+                      <span>Photo Cloudinary Active</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setImage('');
+                        setImagePublicId('');
+                      }}
+                      className="absolute top-2 right-2 p-1.5 rounded-full bg-slate-950/80 hover:bg-rose-600 text-white transition-colors"
+                      title="Supprimer la photo"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                    <div className="p-2 bg-slate-900/90 text-[11px] text-slate-300 flex items-center justify-between">
+                      <span className="truncate max-w-[280px] font-mono text-[10px]">{image}</span>
+                      <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        className="text-amber-400 font-bold hover:underline shrink-0"
+                      >
+                        Remplacer
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      setIsDragging(true);
+                    }}
+                    onDragLeave={() => setIsDragging(false)}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      setIsDragging(false);
+                      const file = e.dataTransfer.files?.[0];
+                      if (file) handleFileUploadToCloudinary(file);
+                    }}
+                    onClick={() => fileInputRef.current?.click()}
+                    className={`border-2 border-dashed rounded-2xl p-4 text-center cursor-pointer transition-all ${
+                      isDragging
+                        ? 'border-amber-500 bg-amber-50/60'
+                        : 'border-slate-300 hover:border-amber-500 bg-slate-50/80 hover:bg-white'
+                    }`}
+                  >
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp,image/jpg"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) handleFileUploadToCloudinary(file);
+                      }}
+                    />
+
+                    {isUploadingImage ? (
+                      <div className="py-3 flex flex-col items-center justify-center space-y-2">
+                        <Loader2 className="w-7 h-7 text-amber-500 animate-spin" />
+                        <span className="text-xs font-bold text-slate-800">
+                          Téléversement vers Cloudinary en cours... ({uploadProgress}%)
+                        </span>
+                        <div className="w-48 bg-slate-200 h-1.5 rounded-full overflow-hidden">
+                          <div
+                            className="bg-amber-500 h-full transition-all duration-200"
+                            style={{ width: `${uploadProgress}%` }}
+                          />
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="py-2 flex flex-col items-center justify-center">
+                        <div className="p-2.5 rounded-xl bg-amber-500/10 text-amber-600 mb-2">
+                          <UploadCloud className="w-6 h-6" />
+                        </div>
+                        <p className="text-xs font-bold text-slate-800">
+                          Cliquez ou glissez une photo du plat ici
+                        </p>
+                        <p className="text-[11px] text-slate-400 mt-0.5">
+                          JPG, PNG ou WebP hébergé automatiquement sur Cloudinary
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Recipe / Ingredients composition */}

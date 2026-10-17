@@ -1,56 +1,56 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRestaurant } from '../../../context/RestaurantContext';
-import { Package, Truck, Save, CheckCircle2 } from 'lucide-react';
+import {
+  Package,
+  Truck,
+  Save,
+  CheckCircle2,
+  Building,
+  MapPin,
+  Layers,
+  Calendar,
+  ArrowRightLeft,
+  Clock,
+  Calculator,
+  ShieldAlert,
+  AlertTriangle,
+  BellRing,
+  Trash2,
+  Flame,
+  Sliders,
+  UtensilsCrossed,
+  Coins,
+  FileText,
+  CheckCheck,
+  FileCheck,
+  PackageCheck,
+  Receipt,
+  CornerUpLeft,
+  BarChart3,
+  History,
+  Shield,
+} from 'lucide-react';
+import { ModernRuleToggle } from './ModernRuleToggle';
 
 interface Props {
   subTab: 'stock' | 'achats';
 }
 
 export const StockAndPurchasesSection: React.FC<Props> = ({ subTab }) => {
-  const { addAuditLog } = useRestaurant();
+  const { operationRules, updateOperationRules, addAuditLog } = useRestaurant();
   const [savedSuccess, setSavedSuccess] = useState(false);
+  const [options, setOptions] = useState<Record<string, boolean>>(operationRules);
 
-  const [stockOptions, setStockOptions] = useState<Record<string, boolean>>({
-    stock_gestion: true,
-    stock_by_outlet: true,
-    stock_by_location: true,
-    stock_lots: true,
-    stock_expiry_dates: true,
-    stock_fifo: false,
-    stock_fefo: true,
-    stock_inventory: true,
-    stock_disallow_negative: true,
-    stock_low_alert: true,
-    stock_expiry_alert: true,
-    stock_transfers: true,
-    stock_losses: true,
-    stock_breakage: true,
-    stock_adjustments: true,
-    stock_production: true,
-    stock_recipe_cost: true,
-  });
+  useEffect(() => {
+    setOptions(operationRules);
+  }, [operationRules]);
 
-  const [achatsOptions, setAchatsOptions] = useState<Record<string, boolean>>({
-    achats_purchase_requests: true,
-    achats_validation: true,
-    achats_purchase_orders: true,
-    achats_reception: true,
-    achats_supplier_invoices: true,
-    achats_supplier_returns: true,
-    achats_supplier_comparison: true,
-    achats_price_history: true,
-    achats_approval: true,
-  });
-
-  const toggleOption = (key: string, isStock: boolean) => {
-    if (isStock) {
-      setStockOptions((prev) => ({ ...prev, [key]: !prev[key] }));
-    } else {
-      setAchatsOptions((prev) => ({ ...prev, [key]: !prev[key] }));
-    }
+  const toggleOption = (key: string) => {
+    setOptions((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
+    await updateOperationRules(options);
     setSavedSuccess(true);
     addAuditLog('Mise à jour options', 'Paramètres', `Paramètres ${subTab.toUpperCase()} enregistrés`);
     setTimeout(() => setSavedSuccess(false), 2500);
@@ -67,89 +67,213 @@ export const StockAndPurchasesSection: React.FC<Props> = ({ subTab }) => {
 
   const items = isStock
     ? [
-        { key: 'stock_gestion', label: 'Gestion stock globale' },
-        { key: 'stock_by_outlet', label: 'Stock par établissement' },
-        { key: 'stock_by_location', label: 'Stock par emplacement (Cave, Chambre froide, Économat)' },
-        { key: 'stock_lots', label: 'Suivi rigoureux par numéros de Lots' },
-        { key: 'stock_expiry_dates', label: 'Dates d’expiration (DLC)' },
-        { key: 'stock_fifo', label: 'Méthode FIFO (First In, First Out)' },
-        { key: 'stock_fefo', label: 'Méthode FEFO (First Expired, First Out - Recommandé Restauration)' },
-        { key: 'stock_inventory', label: 'Inventaires physiques tournants' },
-        { key: 'stock_disallow_negative', label: 'Blocage du stock négatif' },
-        { key: 'stock_low_alert', label: 'Alertes stock faible' },
-        { key: 'stock_expiry_alert', label: 'Alertes expiration imminente (7 jours)' },
-        { key: 'stock_transfers', label: 'Transferts inter-magasins / succursales' },
-        { key: 'stock_losses', label: 'Gestion des pertes & avaries' },
-        { key: 'stock_breakage', label: 'Gestion de la casse' },
-        { key: 'stock_adjustments', label: 'Ajustements manuels de stock' },
-        { key: 'stock_production', label: 'Ordres de fabrication / Production cuisine' },
-        { key: 'stock_recipe_cost', label: 'Fiches techniques & Coût matière unitaire' },
+        {
+          key: 'stock_gestion',
+          label: 'Gestion stock globale',
+          description: 'Suivi centralisé des stocks et valorisation PMP/HT',
+          icon: Package,
+        },
+        {
+          key: 'stock_by_outlet',
+          label: 'Stock par établissement',
+          description: 'Découpage du stock par restaurant ou succursale',
+          icon: Building,
+        },
+        {
+          key: 'stock_by_location',
+          label: 'Stock par emplacement',
+          description: 'Gestion Cave, Chambre Froide, Économat et Réserves',
+          icon: MapPin,
+        },
+        {
+          key: 'stock_lots',
+          label: 'Suivi rigoureux par numéros de Lots',
+          description: 'Traçabilité unitaire par numéro de lot d’arrivage',
+          icon: Layers,
+        },
+        {
+          key: 'stock_expiry_dates',
+          label: 'Dates d’expiration (DLC)',
+          description: 'Gestion rigoureuse des dates limites de consommation',
+          icon: Calendar,
+        },
+        {
+          key: 'stock_fifo',
+          label: 'Méthode FIFO (First In, First Out)',
+          description: 'Sortie des articles selon la date de réception physique',
+          icon: ArrowRightLeft,
+        },
+        {
+          key: 'stock_fefo',
+          label: 'Méthode FEFO (Recommandé Restauration)',
+          description: 'Sortie prioritaire des denrées aux DLC les plus courtes',
+          icon: Clock,
+          badge: 'FEFO Actif',
+        },
+        {
+          key: 'stock_inventory',
+          label: 'Inventaires physiques tournants',
+          description: 'Comptages physiques périodiques et fiches d’écart',
+          icon: Calculator,
+        },
+        {
+          key: 'stock_disallow_negative',
+          label: 'Blocage du stock négatif',
+          description: 'Interdiction stricte de déstocker en dessous de zéro',
+          icon: ShieldAlert,
+          badge: 'Bloquant',
+        },
+        {
+          key: 'stock_low_alert',
+          label: 'Alertes stock faible',
+          description: 'Notification dès franchissement du seuil minimum',
+          icon: AlertTriangle,
+        },
+        {
+          key: 'stock_expiry_alert',
+          label: 'Alertes expiration imminente (7 jours)',
+          description: 'Alerte visuelle pour denrées périssables sous 7 jours',
+          icon: BellRing,
+        },
+        {
+          key: 'stock_transfers',
+          label: 'Transferts inter-magasins / succursales',
+          description: 'Bons de transfert entre magasins et points de vente',
+          icon: Truck,
+        },
+        {
+          key: 'stock_losses',
+          label: 'Gestion des pertes & avaries',
+          description: 'Enregistrement des denrées avariées ou perdues',
+          icon: Trash2,
+        },
+        {
+          key: 'stock_breakage',
+          label: 'Gestion de la casse',
+          description: 'Déclaration des bouteilles cassées et casse vaisselle',
+          icon: Flame,
+        },
+        {
+          key: 'stock_adjustments',
+          label: 'Ajustements manuels de stock',
+          description: 'Corrections exceptionnelles d’inventaire avec motif',
+          icon: Sliders,
+        },
+        {
+          key: 'stock_production',
+          label: 'Ordres de fabrication / Production cuisine',
+          description: 'Ordres de préparation cuisine et transformation matière',
+          icon: UtensilsCrossed,
+        },
+        {
+          key: 'stock_recipe_cost',
+          label: 'Fiches techniques & Coût matière',
+          description: 'Calcul du ratio coût matière sur fiches techniques',
+          icon: Coins,
+        },
       ]
     : [
-        { key: 'achats_purchase_requests', label: 'Demandes d’achat (DA)' },
-        { key: 'achats_validation', label: 'Validation achat hiérarchique' },
-        { key: 'achats_purchase_orders', label: 'Bons de commande officiels (BC)' },
-        { key: 'achats_reception', label: 'Bons de réception physique (BR)' },
-        { key: 'achats_supplier_invoices', label: 'Enregistrement factures fournisseurs' },
-        { key: 'achats_supplier_returns', label: 'Bons de retours fournisseurs' },
-        { key: 'achats_supplier_comparison', label: 'Comparaison des prix fournisseurs' },
-        { key: 'achats_price_history', label: 'Historique d’évolution des prix' },
-        { key: 'achats_approval', label: 'Seuil d’approbation obligatoire (Manager / Direction)' },
+        {
+          key: 'achats_purchase_requests',
+          label: 'Demandes d’achat (DA)',
+          description: 'Expression préalable des besoins par les chefs de poste',
+          icon: FileText,
+        },
+        {
+          key: 'achats_validation',
+          label: 'Validation achat hiérarchique',
+          description: 'Circuit d’approbation avant engagement de dépenses',
+          icon: CheckCheck,
+        },
+        {
+          key: 'achats_purchase_orders',
+          label: 'Bons de commande officiels (BC)',
+          description: 'Édition de bons de commande officiels fournisseurs',
+          icon: FileCheck,
+        },
+        {
+          key: 'achats_reception',
+          label: 'Bons de réception physique (BR)',
+          description: 'Contrôle quantitatif et qualitatif à la livraison',
+          icon: PackageCheck,
+        },
+        {
+          key: 'achats_supplier_invoices',
+          label: 'Enregistrement factures fournisseurs',
+          description: 'Rapprochement des factures d’achat et bons de livraison',
+          icon: Receipt,
+        },
+        {
+          key: 'achats_supplier_returns',
+          label: 'Bons de retours fournisseurs',
+          description: 'Gestion des litiges et retours de marchandises',
+          icon: CornerUpLeft,
+        },
+        {
+          key: 'achats_supplier_comparison',
+          label: 'Comparaison des prix fournisseurs',
+          description: 'Analyse comparée des tarifs et mercuriale fournisseurs',
+          icon: BarChart3,
+        },
+        {
+          key: 'achats_price_history',
+          label: 'Historique d’évolution des prix',
+          description: 'Suivi chronologique des variations tarifaires d’achat',
+          icon: History,
+        },
+        {
+          key: 'achats_approval',
+          label: 'Seuil d’approbation obligatoire (Manager)',
+          description: 'Validation Direction obligatoire au-delà de 100 000 FCFA',
+          icon: Shield,
+          badge: '> 100k FCFA',
+        },
       ];
 
-  const currentOptions = isStock ? stockOptions : achatsOptions;
-
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-6">
+    <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-xs space-y-6">
       <div className="flex items-center justify-between border-b border-slate-100 pb-4">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-slate-900 text-amber-400 flex items-center justify-center">
+          <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-amber-500 to-orange-500 text-white flex items-center justify-center shadow-md shadow-amber-500/20">
             <Icon className="w-5 h-5" />
           </div>
           <div>
-            <h3 className="text-sm font-bold text-slate-900">{title}</h3>
-            <p className="text-xs text-slate-500">{description}</p>
+            <div className="flex items-center gap-2">
+              <h3 className="text-sm sm:text-base font-black text-slate-900">{title}</h3>
+              <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">
+                {isStock ? 'Section 11' : 'Section 12'}
+              </span>
+            </div>
+            <p className="text-xs text-slate-500 mt-0.5">{description}</p>
           </div>
         </div>
 
         {savedSuccess && (
-          <span className="flex items-center gap-1.5 text-xs font-bold text-emerald-700 bg-emerald-50 px-3 py-1.5 rounded-xl border border-emerald-200">
-            <CheckCircle2 className="w-4 h-4" /> Enregistré
+          <span className="flex items-center gap-1.5 text-xs font-bold text-emerald-700 bg-emerald-50 px-3.5 py-1.5 rounded-xl border border-emerald-200 shadow-xs animate-in fade-in">
+            <CheckCircle2 className="w-4 h-4 text-emerald-600" /> Paramètres enregistrés
           </span>
         )}
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
-        {items.map((item) => {
-          const checked = currentOptions[item.key] ?? false;
-
-          return (
-            <label
-              key={item.key}
-              onClick={() => toggleOption(item.key, isStock)}
-              className={`flex items-start gap-3 p-3.5 rounded-xl border cursor-pointer transition-all ${
-                checked
-                  ? 'border-amber-400/80 bg-amber-50/30'
-                  : 'border-slate-200 bg-slate-50/50 hover:bg-slate-50'
-              }`}
-            >
-              <input
-                type="checkbox"
-                checked={checked}
-                onChange={() => {}}
-                className="w-4 h-4 rounded text-amber-600 focus:ring-amber-500 mt-0.5"
-              />
-              <span className={`font-semibold ${checked ? 'text-slate-950 font-bold' : 'text-slate-700'}`}>
-                {item.label}
-              </span>
-            </label>
-          );
-        })}
+      {/* Modern Rule Toggles Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+        {items.map((item) => (
+          <ModernRuleToggle
+            key={item.key}
+            id={item.key}
+            label={item.label}
+            description={item.description}
+            badge={item.badge}
+            icon={item.icon}
+            checked={options[item.key] ?? false}
+            onChange={() => toggleOption(item.key)}
+          />
+        ))}
       </div>
 
       <div className="pt-4 border-t border-slate-100 flex items-center justify-between">
         <span className="text-[11px] text-slate-400 font-mono">
-          {items.filter((i) => currentOptions[i.key]).length} sur {items.length} options activées
+          {items.filter((i) => options[i.key]).length} sur {items.length} options activées
         </span>
 
         <button

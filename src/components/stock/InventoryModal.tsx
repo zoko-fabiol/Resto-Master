@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useRestaurant } from '../../context/RestaurantContext';
 import { useAuth } from '../../context/AuthContext';
+import { useToast } from '../../context/ToastContext';
 import { StockItem, InventoryItemCheck } from '../../types/restaurant';
 import { formatCurrency } from '../../lib/utils';
 import { X, CheckCircle2, AlertTriangle, Calculator, FileCheck } from 'lucide-react';
@@ -14,6 +15,7 @@ interface InventoryModalProps {
 export const InventoryModal: React.FC<InventoryModalProps> = ({ isOpen, onClose }) => {
   const { stockItems, submitInventoryAudit, settings } = useRestaurant();
   const { currentUser } = useAuth();
+  const { showToast } = useToast();
 
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [actualQuantities, setActualQuantities] = useState<Record<string, number>>(() => {
@@ -61,7 +63,11 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({ isOpen, onClose 
     );
 
     if (missingJustification) {
-      alert('Veuillez renseigner une justification pour tous les écarts négatifs (pertes, casse, etc.).');
+      showToast({
+        type: 'error',
+        title: 'Justification requise',
+        message: 'Veuillez renseigner une justification pour tous les écarts négatifs (pertes, casse, périmé, etc.).',
+      });
       return;
     }
 

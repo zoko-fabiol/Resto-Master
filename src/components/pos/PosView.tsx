@@ -1,7 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useRestaurant } from '../../context/RestaurantContext';
-import { Product, OrderItem } from '../../types/restaurant';
+import { useToast } from '../../context/ToastContext';
+import { useAuth } from '../../context/AuthContext';
+import { Product, OrderItem, Order } from '../../types/restaurant';
 import { formatCurrency } from '../../lib/utils';
+import { printerService } from '../../services/printing/printerService';
 import {
   Search,
   Plus,
@@ -11,11 +14,16 @@ import {
   Send,
   CreditCard,
   User,
+  Users,
   Tag,
   AlertCircle,
   Clock,
   Sparkles,
   ShoppingBag,
+  SlidersHorizontal,
+  X,
+  Check,
+  Hash,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
@@ -24,16 +32,54 @@ interface PosViewProps {
   onOpenPayment: (orderId: string) => void;
 }
 
+// Preset Quick Tags for rapid modifiers
+const QUICK_MODIFIERS = {
+  cuissons: ['Bleu', 'Saignant', 'À point', 'Bien cuit', 'Grillé à vif'],
+  garnitures: ['Frites', 'Alloco', 'Riz blanc', 'Miondo', 'Légumes sautés', 'Plantain vapeur'],
+  sauces: ['Sans piment', 'Piment à part', 'Piment fort', 'Sauce poivre', 'Mayo maison'],
+  regimes: ['Sans sel', 'Sans arachide', 'Sans huile', 'Bien chaud', 'À emporter séparé'],
+};
+
 export const PosView: React.FC<PosViewProps> = ({ initialTableId, onOpenPayment }) => {
+  const { currentUser } = useAuth();
   const {
     products,
     categories,
     tables,
+    orders,
     customers,
     createOrder,
+    addItemsToOrder,
+    updateTableGuestsCount,
     settings,
-    orders,
+    isFeatureEnabled,
+    isRuleEnabled,
+    peripherals,
+    printerSettings,
+    addAuditLog,
+    cashSession,
   } = useRestaurant();
+  const { showToast, playAudioChime } = useToast();
+
+  const isDeliveryEnabled = isFeatureEnabled('delivery_orders');
+  const isTakeawayEnabled = isFeatureEnabled('takeaway_orders');
+  const isTablesEnabled = isFeatureEnabled('tables_management');
+
+  // Règles Opérationnelles (Section 7 POS, Section 8 Tables, Section 22 Caisse)
+  const isDiscountsAllowed = isRuleEnabled('pos_allow_discount', true);
+  const isDiscountApprovalRequired = isRuleEnabled('pos_require_discount_approval', true);
+  const isDeleteLineAllowed = isRuleEnabled('pos_delete_line', true);
+  const isQuickOrdersAllowed = isRuleEnabled('pos_quick_orders', true);
+  const isSaleWithoutTableAllowed = isRuleEnabled('pos_sale_without_table', true);
+  const isUseTablesRequired = isRuleEnabled('pos_use_tables', true);
+  const isCancelOrderAllowed = isRuleEnabled('pos_cancel_order', true);
+  const isCancelReasonRequired = isRuleEnabled('pos_require_cancel_reason', true);
+  const isZeroPriceAllowed = isRuleEnabled('pos_zero_price', false);
+  const isCaisseMandatoryOpen = isRuleEnabled('caisse_mandatory_open', true);
+
+  const [showCancelReasonModal, setShowCancelReasonModal] = useState(false);
+  const [selectedCancelReason, setSelectedCancelReason] = useState('Erreur de commande');
+  const [customCancelReason, setCustomCancelReason] = useState('');
 
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -48,6 +94,56 @@ export const PosView: React.FC<PosViewProps> = ({ initialTableId, onOpenPayment 
   const [companyBillingName, setCompanyBillingName] = useState('');
   const [companyBillingNiu, setCompanyBillingNiu] = useState('');
 
+  // Commande active existante sur la table sélectionnée (Synchronisation temps réel Tablette & POS)
+  const existingTableOrder = useMemo(() => {
+    if (!selectedTableId || orderType !== 'sur_place') return null;
+    const currentT = tables.find((t) => t.id === selectedTableId);
+    if (currentT?.currentOrderId) {
+      const ord = orders.find((o) => o.id === currentT.currentOrderId);
+      if (ord && ord.status !== 'payee' && ord.status !== 'annulee') return ord;
+    }
+    return (
+      orders.find(
+        (o) =>
+          o.tableId === selectedTableId &&
+          o.status !== 'payee' &&
+          o.status !== 'annulee'
+      ) || null
+    );
+  }, [selectedTableId, orderType, tables, orders]);
+
+  // Gestion des Couverts / Seats
+  const [totalSeats, setTotalSeats] = useState<number>(2);
+  const [activeSeatNumber, setActiveSeatNumber] = useState<number>(1);
+
+  // Synchronisation automatique des couverts selon la table sélectionnée et sa commande active
+  useEffect(() => {
+    if (selectedTableId && orderType === 'sur_place') {
+      const currentT = tables.find((t) => t.id === selectedTableId);
+      const existingOrd = currentT?.currentOrderId
+        ? orders.find((o) => o.id === currentT.currentOrderId)
+        : orders.find(
+            (o) =>
+              o.tableId === selectedTableId &&
+              o.status !== 'payee' &&
+              o.status !== 'annulee'
+          );
+
+      const count =
+        existingOrd?.guestCount ||
+        currentT?.guestsCount ||
+        currentT?.capacity ||
+        2;
+      setTotalSeats(Math.max(1, count));
+    }
+  }, [selectedTableId, orderType, tables, orders]);
+
+  // Active item for Quick Modifiers Modal
+  const [activeModifierItemId, setActiveModifierItemId] = useState<string | null>(null);
+
+  // Active item for Quick Quantity Numpad Modal
+  const [activeNumpadItemId, setActiveNumpadItemId] = useState<string | null>(null);
+
   // Filter products
   const filteredProducts = products.filter((p) => {
     const matchCat = selectedCategory === 'all' || p.categoryId === selectedCategory;
@@ -60,11 +156,31 @@ export const PosView: React.FC<PosViewProps> = ({ initialTableId, onOpenPayment 
 
   // Cart operations
   const addToCart = (product: Product) => {
+    if (orderType === 'sur_place' && !selectedTableId && isUseTablesRequired && !isSaleWithoutTableAllowed) {
+      showToast({
+        type: 'warning',
+        title: 'Table Obligatoire',
+        message: 'La vente sans table est désactivée. Veuillez d\'abord sélectionner une table.',
+      });
+      return;
+    }
+
+    if (!isZeroPriceAllowed && product.price <= 0) {
+      showToast({
+        type: 'error',
+        title: 'Prix zéro interdit',
+        message: 'La configuration interdit la vente d\'articles gratuits (0 FCFA).',
+      });
+      return;
+    }
+
     setCart((prev) => {
-      const existing = prev.find((item) => item.productId === product.id);
+      const existing = prev.find(
+        (item) => item.productId === product.id && !item.notes && (item.seatNumber ?? 1) === activeSeatNumber
+      );
       if (existing) {
         return prev.map((item) =>
-          item.productId === product.id ? { ...item, quantity: item.quantity + 1 } : item
+          item.id === existing.id ? { ...item, quantity: item.quantity + 1 } : item
         );
       }
       return [
@@ -77,10 +193,53 @@ export const PosView: React.FC<PosViewProps> = ({ initialTableId, onOpenPayment 
           quantity: 1,
           destination: product.destination,
           status: 'en_attente',
-          folio: 1, // Folio 1 par défaut (Prise en charge entreprise / principal)
+          folio: 1,
+          seatNumber: activeSeatNumber,
+          seatLabel: activeSeatNumber === 0 ? 'Partagé / Table' : `Couvert ${activeSeatNumber}`,
         },
       ];
     });
+
+    playAudioChime('success');
+  };
+
+  const reassignItemSeat = (itemId: string, newSeat: number) => {
+    setCart((prev) =>
+      prev.map((item) =>
+        item.id === itemId
+          ? {
+              ...item,
+              seatNumber: newSeat,
+              seatLabel: newSeat === 0 ? 'Partagé / Table' : `Couvert ${newSeat}`,
+            }
+          : item
+      )
+    );
+  };
+
+  const handleAddSeat = async () => {
+    const next = totalSeats + 1;
+    setTotalSeats(next);
+    setActiveSeatNumber(next);
+    if (selectedTableId && orderType === 'sur_place') {
+      await updateTableGuestsCount(selectedTableId, next);
+    }
+    showToast({
+      type: 'info',
+      title: 'Couvert ajouté',
+      message: `Couvert ${next} ajouté pour cette table.`,
+    });
+  };
+
+  const handleUpdateTotalSeats = async (delta: number) => {
+    const next = Math.max(1, totalSeats + delta);
+    setTotalSeats(next);
+    if (activeSeatNumber > next) {
+      setActiveSeatNumber(next);
+    }
+    if (selectedTableId && orderType === 'sur_place') {
+      await updateTableGuestsCount(selectedTableId, next);
+    }
   };
 
   const toggleItemFolio = (itemId: string) => {
@@ -107,14 +266,95 @@ export const PosView: React.FC<PosViewProps> = ({ initialTableId, onOpenPayment 
     );
   };
 
+  const setExactQuantity = (itemId: string, qty: number) => {
+    if (qty <= 0) {
+      removeFromCart(itemId);
+      return;
+    }
+    setCart((prev) =>
+      prev.map((item) => (item.id === itemId ? { ...item, quantity: qty } : item))
+    );
+    setActiveNumpadItemId(null);
+  };
+
   const updateItemNotes = (itemId: string, notes: string) => {
     setCart((prev) =>
       prev.map((item) => (item.id === itemId ? { ...item, notes } : item))
     );
   };
 
+  const toggleModifierTag = (itemId: string, tag: string) => {
+    setCart((prev) =>
+      prev.map((item) => {
+        if (item.id !== itemId) return item;
+        const currentNotes = (item.notes || '').split(',').map((s) => s.trim()).filter(Boolean);
+        const exists = currentNotes.includes(tag);
+        const newNotes = exists
+          ? currentNotes.filter((t) => t !== tag)
+          : [...currentNotes, tag];
+        return { ...item, notes: newNotes.join(', ') };
+      })
+    );
+  };
+
   const removeFromCart = (itemId: string) => {
+    const isManagerOrAdmin = currentUser?.role === 'manager' || currentUser?.role === 'direction';
+    if (!isDeleteLineAllowed && !isManagerOrAdmin) {
+      showToast({
+        type: 'error',
+        title: 'Action Restreinte',
+        message: 'La suppression de ligne est désactivée pour votre profil serveur.',
+      });
+      return;
+    }
     setCart((prev) => prev.filter((item) => item.id !== itemId));
+  };
+
+  const handleApplyDiscount = (pct: number) => {
+    if (pct > 0 && isDiscountApprovalRequired) {
+      const isManagerOrAdmin = currentUser?.role === 'manager' || currentUser?.role === 'direction';
+      if (!isManagerOrAdmin) {
+        showToast({
+          type: 'warning',
+          title: 'Approbation Requise',
+          message: 'L\'application d\'une remise exige la validation d\'un manager ou directeur.',
+        });
+        return;
+      }
+    }
+    setDiscountPercent(pct);
+  };
+
+  const handleCancelCartClick = () => {
+    if (cart.length === 0) return;
+    const isManagerOrAdmin = currentUser?.role === 'manager' || currentUser?.role === 'direction';
+    if (!isCancelOrderAllowed && !isManagerOrAdmin) {
+      showToast({
+        type: 'error',
+        title: 'Annulation Interdite',
+        message: 'L\'annulation de commande est désactivée pour votre profil.',
+      });
+      return;
+    }
+
+    if (isCancelReasonRequired) {
+      setShowCancelReasonModal(true);
+    } else {
+      executeClearCart('Annulation directe');
+    }
+  };
+
+  const executeClearCart = (reason: string) => {
+    addAuditLog('Annulation commande POS', 'POS', `Panier annulé par ${currentUser?.name}. Motif: ${reason}`);
+    setCart([]);
+    setOrderNotes('');
+    setDiscountPercent(0);
+    setShowCancelReasonModal(false);
+    showToast({
+      type: 'info',
+      title: 'Commande Annulée',
+      message: `Panier vidé. Motif consigné : ${reason}`,
+    });
   };
 
   // Calculations
@@ -128,43 +368,167 @@ export const PosView: React.FC<PosViewProps> = ({ initialTableId, onOpenPayment 
   const currentTable = tables.find((t) => t.id === selectedTableId);
   const currentCustomer = customers.find((c) => c.id === selectedCustomerId);
 
+  // Group cart items by seatNumber
+  const distinctSeats = useMemo(() => {
+    const seatsInCart = new Set(cart.map((i) => i.seatNumber ?? 1));
+    seatsInCart.add(activeSeatNumber);
+    const arr = Array.from(seatsInCart);
+    return arr.sort((a, b) => {
+      if (a === 0) return 1;
+      if (b === 0) return -1;
+      return a - b;
+    });
+  }, [cart, activeSeatNumber]);
+
   // Submit order to Kitchen / Bar
   const handleSendOrder = async (payDirectly = false) => {
-    if (cart.length === 0) {
-      alert('Veuillez ajouter au moins un produit à la commande.');
+    if (isCaisseMandatoryOpen && (!cashSession || cashSession.status !== 'ouverte')) {
+      showToast({
+        type: 'warning',
+        title: 'Session Caisse Requise',
+        message: 'La caisse du jour doit être ouverte avec fond de caisse avant de saisir des commandes.',
+      });
       return;
     }
 
-    if (orderType === 'sur_place' && !selectedTableId) {
-      alert('Veuillez sélectionner une table pour une commande sur place.');
+    if (cart.length === 0) {
+      showToast({
+        type: 'warning',
+        title: 'Panier vide',
+        message: 'Veuillez ajouter au moins un produit pour valider la commande.',
+      });
+      return;
+    }
+
+    if (orderType === 'sur_place' && !selectedTableId && isUseTablesRequired && !isSaleWithoutTableAllowed) {
+      showToast({
+        type: 'error',
+        title: 'Table obligatoire',
+        message: 'La vente sans table est désactivée. Veuillez choisir une table.',
+      });
+      return;
+    }
+
+    if (orderType === 'sur_place' && isTablesEnabled && !selectedTableId) {
+      showToast({
+        type: 'error',
+        title: 'Table obligatoire',
+        message: 'Veuillez sélectionner une table pour une commande sur place.',
+      });
+      return;
+    }
+
+    const hasZeroPriceItem = cart.some((i) => i.unitPrice <= 0);
+    if (hasZeroPriceItem && !isZeroPriceAllowed) {
+      showToast({
+        type: 'error',
+        title: 'Article à 0 FCFA Interdit',
+        message: 'Votre panier contient un article à 0 FCFA, interdit par les règles opérationnelles.',
+      });
       return;
     }
 
     setIsSubmitting(true);
     try {
-      const createdOrder = await createOrder({
-        type: orderType,
-        tableId: orderType === 'sur_place' ? selectedTableId : undefined,
-        tableName: orderType === 'sur_place' && currentTable ? currentTable.number : undefined,
-        customerId: selectedCustomerId || undefined,
-        customerName: currentCustomer ? currentCustomer.name : undefined,
-        items: cart,
-        subtotal: subtotalAfterDiscount,
-        tax: taxAmount,
-        discount: discountAmount,
-        total: grandTotal,
-        notes: orderNotes,
-        isProforma,
-        companyBillingName: companyBillingName || undefined,
-        companyBillingNiu: companyBillingNiu || undefined,
-      });
+      let finalOrder: Order;
 
-      // trigger confetti animation
-      confetti({
-        particleCount: 50,
-        spread: 60,
-        origin: { y: 0.8 },
-      });
+      if (orderType === 'sur_place' && existingTableOrder) {
+        // Ajouter les nouveaux articles à la commande déjà active sur la table (synchronisé tablette & caisse)
+        finalOrder = await addItemsToOrder(existingTableOrder.id, cart, totalSeats);
+
+        // Auto-print kitchen & bar tickets pour les nouveaux articles
+        if (printerSettings?.autoPrintKitchenOnOrder) {
+          const kitchenItems = cart.filter((i) => i.destination === 'cuisine');
+          const barItems = cart.filter((i) => i.destination === 'bar');
+
+          const kitchenPrinter = peripherals.find(
+            (p) => p.active && (p.role === 'cuisine' || p.type === 'imprimante_cuisine')
+          );
+          const barPrinter = peripherals.find(
+            (p) => p.active && (p.role === 'bar' || p.type === 'imprimante_bar')
+          );
+
+          if (kitchenItems.length > 0) {
+            printerService
+              .printKitchenOrder(finalOrder, 'cuisine', kitchenItems, kitchenPrinter)
+              .catch(() => {});
+          }
+          if (barItems.length > 0) {
+            printerService
+              .printKitchenOrder(finalOrder, 'bar', barItems, barPrinter || kitchenPrinter)
+              .catch(() => {});
+          }
+        }
+
+        confetti({
+          particleCount: 50,
+          spread: 60,
+          origin: { y: 0.8 },
+        });
+
+        showToast({
+          type: 'success',
+          title: 'Articles ajoutés à la table',
+          message: `${cart.length} plat(s) ajouté(s) au Bon ${finalOrder.orderNumber} et transmis en cuisine/bar.`,
+        });
+      } else {
+        finalOrder = await createOrder({
+          type: orderType,
+          tableId: orderType === 'sur_place' ? selectedTableId : undefined,
+          tableName: orderType === 'sur_place' && currentTable ? currentTable.number : undefined,
+          customerId: selectedCustomerId || undefined,
+          customerName: currentCustomer ? currentCustomer.name : undefined,
+          guestCount: totalSeats,
+          items: cart,
+          subtotal: subtotalAfterDiscount,
+          tax: taxAmount,
+          discount: discountAmount,
+          total: grandTotal,
+          notes: orderNotes,
+          isProforma,
+          companyBillingName: companyBillingName || undefined,
+          companyBillingNiu: companyBillingNiu || undefined,
+        });
+
+        // Auto-print kitchen & bar tickets to hardware peripherals if enabled
+        if (printerSettings?.autoPrintKitchenOnOrder) {
+          const kitchenItems = finalOrder.items.filter((i: OrderItem) => i.destination === 'cuisine');
+          const barItems = finalOrder.items.filter((i: OrderItem) => i.destination === 'bar');
+
+          const kitchenPrinter = peripherals.find(
+            (p) => p.active && (p.role === 'cuisine' || p.type === 'imprimante_cuisine')
+          );
+          const barPrinter = peripherals.find(
+            (p) => p.active && (p.role === 'bar' || p.type === 'imprimante_bar')
+          );
+
+          if (kitchenItems.length > 0) {
+            printerService
+              .printKitchenOrder(finalOrder, 'cuisine', kitchenItems, kitchenPrinter)
+              .catch(() => {});
+          }
+          if (barItems.length > 0) {
+            printerService
+              .printKitchenOrder(finalOrder, 'bar', barItems, barPrinter || kitchenPrinter)
+              .catch(() => {});
+          }
+        }
+
+        confetti({
+          particleCount: 50,
+          spread: 60,
+          origin: { y: 0.8 },
+        });
+
+        showToast({
+          type: 'success',
+          title: 'Commande envoyée avec succès',
+          message: `Bon ${finalOrder.orderNumber} transmis à la cuisine et au bar.`,
+        });
+      }
+
+      // Play kitchen bell sound
+      playAudioChime('kitchen');
 
       // Clear cart
       setCart([]);
@@ -172,15 +536,40 @@ export const PosView: React.FC<PosViewProps> = ({ initialTableId, onOpenPayment 
       setDiscountPercent(0);
 
       if (payDirectly) {
-        onOpenPayment(createdOrder.id);
+        onOpenPayment(finalOrder.id);
       }
+    } catch {
+      showToast({
+        type: 'error',
+        title: 'Erreur d’enregistrement',
+        message: 'Impossible de transmettre la commande. Veuillez réessayer.',
+      });
     } finally {
       setIsSubmitting(false);
     }
   };
 
+  const activeModifierItem = cart.find((i) => i.id === activeModifierItemId);
+  const activeNumpadItem = cart.find((i) => i.id === activeNumpadItemId);
+
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 pb-12">
+    <div className="space-y-4 pb-12">
+      {/* Session Caisse Requise Alert Banner */}
+      {isCaisseMandatoryOpen && (!cashSession || cashSession.status !== 'ouverte') && (
+        <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-300 text-amber-900 text-xs font-medium flex items-center justify-between shadow-2xs">
+          <div className="flex items-center gap-2.5">
+            <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+            <span>
+              <strong>Caisse non ouverte :</strong> Aucune session de caisse n'est active aujourd'hui. Veuillez ouvrir la caisse avec fond de caisse avant d'enregistrer des ventes.
+            </span>
+          </div>
+          <span className="text-[10px] uppercase font-bold px-2 py-0.5 bg-amber-200/80 rounded text-amber-950 shrink-0 ml-2">
+            Règle Caisse Active
+          </span>
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
       {/* Left 7-8 Columns: Menu & Products */}
       <div className="lg:col-span-7 xl:col-span-8 space-y-4">
         {/* Top Control Bar: Search & Order Type */}
@@ -209,26 +598,30 @@ export const PosView: React.FC<PosViewProps> = ({ initialTableId, onOpenPayment 
             >
               Sur place
             </button>
-            <button
-              onClick={() => setOrderType('a_emporter')}
-              className={`px-3 py-1.5 rounded-lg transition-all ${
-                orderType === 'a_emporter'
-                  ? 'bg-white text-slate-900 shadow-xs'
-                  : 'text-slate-500 hover:text-slate-800'
-              }`}
-            >
-              À emporter
-            </button>
-            <button
-              onClick={() => setOrderType('livraison')}
-              className={`px-3 py-1.5 rounded-lg transition-all ${
-                orderType === 'livraison'
-                  ? 'bg-white text-slate-900 shadow-xs'
-                  : 'text-slate-500 hover:text-slate-800'
-              }`}
-            >
-              Livraison
-            </button>
+            {isTakeawayEnabled && (
+              <button
+                onClick={() => setOrderType('a_emporter')}
+                className={`px-3 py-1.5 rounded-lg transition-all ${
+                  orderType === 'a_emporter'
+                    ? 'bg-white text-slate-900 shadow-xs'
+                    : 'text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                À emporter
+              </button>
+            )}
+            {isDeliveryEnabled && (
+              <button
+                onClick={() => setOrderType('livraison')}
+                className={`px-3 py-1.5 rounded-lg transition-all ${
+                  orderType === 'livraison'
+                    ? 'bg-white text-slate-900 shadow-xs'
+                    : 'text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                Livraison
+              </button>
+            )}
           </div>
         </div>
 
@@ -272,7 +665,7 @@ export const PosView: React.FC<PosViewProps> = ({ initialTableId, onOpenPayment 
                 onClick={() => product.available && addToCart(product)}
                 className={`bg-white rounded-2xl border transition-all overflow-hidden flex flex-col justify-between shadow-xs ${
                   product.available
-                    ? 'border-slate-200 hover:border-amber-400 hover:shadow-md cursor-pointer'
+                    ? 'border-slate-200 hover:border-amber-400 hover:shadow-md cursor-pointer active:scale-98'
                     : 'border-slate-200 opacity-60 cursor-not-allowed bg-slate-50'
                 } ${inCart ? 'ring-2 ring-amber-500 border-amber-500' : ''}`}
               >
@@ -287,7 +680,7 @@ export const PosView: React.FC<PosViewProps> = ({ initialTableId, onOpenPayment 
                     {product.destination === 'cuisine' ? 'Cuisine' : 'Bar'}
                   </span>
                   {inCart && (
-                    <span className="absolute top-2 right-2 w-6 h-6 rounded-full bg-amber-600 text-white font-black text-xs flex items-center justify-center shadow-md">
+                    <span className="absolute top-2 right-2 w-6 h-6 rounded-full bg-amber-600 text-white font-black text-xs flex items-center justify-center shadow-md animate-scale-in">
                       {inCart.quantity}
                     </span>
                   )}
@@ -311,7 +704,7 @@ export const PosView: React.FC<PosViewProps> = ({ initialTableId, onOpenPayment 
                     </span>
                     <button
                       disabled={!product.available}
-                      className="w-7 h-7 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-700 flex items-center justify-center"
+                      className="w-7 h-7 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-700 flex items-center justify-center transition-colors"
                     >
                       <Plus className="w-3.5 h-3.5" />
                     </button>
@@ -333,17 +726,30 @@ export const PosView: React.FC<PosViewProps> = ({ initialTableId, onOpenPayment 
                 <ShoppingBag className="w-4 h-4 text-amber-600" />
                 Commande en cours
               </div>
-              <span className="text-[11px] text-slate-500 font-medium">
-                {cart.reduce((s, i) => s + i.quantity, 0)} articles
-              </span>
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] text-slate-500 font-medium">
+                  {cart.reduce((s, i) => s + i.quantity, 0)} articles
+                </span>
+                {cart.length > 0 && (
+                  <button
+                    onClick={handleCancelCartClick}
+                    className="text-[10px] font-bold text-rose-600 hover:text-rose-700 bg-rose-50 hover:bg-rose-100 px-2 py-0.5 rounded-md border border-rose-200 transition-colors"
+                    title="Vider le panier / Annuler la commande"
+                  >
+                    Vider
+                  </button>
+                )}
+              </div>
             </div>
 
             {/* Table & Customer Assignment Selectors */}
             <div className="grid grid-cols-2 gap-2 text-xs">
               {/* Table Selector */}
-              {orderType === 'sur_place' && (
+              {orderType === 'sur_place' && isTablesEnabled && (
                 <div className="space-y-1">
-                  <label className="text-[10px] font-bold uppercase text-slate-400">Table</label>
+                  <label className="text-[10px] font-bold uppercase text-slate-400">
+                    Table {!isSaleWithoutTableAllowed && <span className="text-rose-500 font-bold">* Obligatoire</span>}
+                  </label>
                   <select
                     value={selectedTableId}
                     onChange={(e) => setSelectedTableId(e.target.value)}
@@ -360,7 +766,7 @@ export const PosView: React.FC<PosViewProps> = ({ initialTableId, onOpenPayment 
               )}
 
               {/* Customer Selector */}
-              <div className={`space-y-1 ${orderType !== 'sur_place' ? 'col-span-2' : ''}`}>
+              <div className={`space-y-1 ${orderType !== 'sur_place' || !isTablesEnabled ? 'col-span-2' : ''}`}>
                 <label className="text-[10px] font-bold uppercase text-slate-400">Client / Compte</label>
                 <select
                   value={selectedCustomerId}
@@ -376,90 +782,319 @@ export const PosView: React.FC<PosViewProps> = ({ initialTableId, onOpenPayment 
                 </select>
               </div>
             </div>
-          </div>
 
-          {/* Cart Items Scrollable List */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-3 min-h-[220px] max-h-[360px] divide-y divide-slate-100">
-            {cart.length === 0 ? (
-              <div className="py-16 text-center text-xs text-slate-400">
-                Votre panier est vide.<br />Cliquez sur les articles pour les ajouter.
-              </div>
-            ) : (
-              cart.map((item) => (
-                <div key={item.id} className="pt-2.5 first:pt-0 space-y-1.5">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex-1 min-w-0">
-                      <div className="text-xs font-bold text-slate-800 truncate">{item.productName}</div>
-                      <div className="text-[10px] text-slate-400">
-                        {formatCurrency(item.unitPrice, settings.currency)} / unité
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      {/* Qty Stepper */}
-                      <div className="flex items-center gap-1 bg-slate-100 rounded-lg p-0.5 border border-slate-200">
-                        <button
-                          onClick={() => updateQuantity(item.id, -1)}
-                          className="w-5 h-5 rounded flex items-center justify-center hover:bg-white text-slate-600"
-                        >
-                          <Minus className="w-3 h-3" />
-                        </button>
-                        <span className="w-5 text-center font-bold text-xs text-slate-900">
-                          {item.quantity}
-                        </span>
-                        <button
-                          onClick={() => updateQuantity(item.id, 1)}
-                          className="w-5 h-5 rounded flex items-center justify-center hover:bg-white text-slate-600"
-                        >
-                          <Plus className="w-3 h-3" />
-                        </button>
-                      </div>
-
-                      {/* Total line */}
-                      <span className="text-xs font-black text-slate-900 min-w-[65px] text-right">
-                        {formatCurrency(item.unitPrice * item.quantity, settings.currency)}
-                      </span>
-
-                      {/* Delete */}
-                      <button
-                        onClick={() => removeFromCart(item.id)}
-                        className="text-slate-400 hover:text-red-600 p-1"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Item Specific Note & Folio Selector */}
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="text"
-                      placeholder="Instructions (cuisson, sauce...)"
-                      value={item.notes || ''}
-                      onChange={(e) => updateItemNotes(item.id, e.target.value)}
-                      className="flex-1 px-2 py-1 text-[11px] rounded-lg bg-slate-50 border border-slate-200 text-slate-700 placeholder-slate-400"
-                    />
+            {/* Couvert / Seat Selector Strip */}
+            <div className="pt-2 border-t border-slate-200/60">
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1">
+                  <Users className="w-3 h-3 text-amber-600" />
+                  <span>Saisie par Couvert ({totalSeats} pers.)</span>
+                </span>
+                <div className="flex items-center gap-1.5">
+                  <div className="flex items-center border border-slate-200 rounded-md overflow-hidden bg-white shadow-2xs">
                     <button
                       type="button"
-                      onClick={() => toggleItemFolio(item.id)}
-                      className={`text-[10px] font-bold px-2 py-1 rounded-lg border transition-all shrink-0 ${
-                        (item.folio || 1) === 1
-                          ? 'bg-indigo-100 text-indigo-800 border-indigo-200'
-                          : 'bg-amber-100 text-amber-800 border-amber-200'
-                      }`}
-                      title="Changer de Folio (Folio 1: Société, Folio 2: Extra personnel)"
+                      onClick={() => handleUpdateTotalSeats(-1)}
+                      disabled={totalSeats <= 1}
+                      className="px-1.5 py-0.5 text-slate-500 hover:bg-slate-100 disabled:opacity-30 transition-colors"
+                      title="Diminuer couverts"
                     >
-                      {(item.folio || 1) === 1 ? 'Folio 1 (Société)' : 'Folio 2 (Extra)'}
+                      <Minus className="w-2.5 h-2.5" />
+                    </button>
+                    <span className="px-1.5 text-[10px] font-black text-slate-700">{totalSeats}</span>
+                    <button
+                      type="button"
+                      onClick={() => handleUpdateTotalSeats(1)}
+                      className="px-1.5 py-0.5 text-slate-500 hover:bg-slate-100 transition-colors"
+                      title="Augmenter couverts"
+                    >
+                      <Plus className="w-2.5 h-2.5" />
                     </button>
                   </div>
+                  <button
+                    type="button"
+                    onClick={handleAddSeat}
+                    className="text-[10px] font-bold text-amber-700 hover:text-amber-800 flex items-center gap-0.5 bg-amber-50 hover:bg-amber-100 px-2 py-0.5 rounded-md border border-amber-200 transition-colors"
+                  >
+                    <Plus className="w-3 h-3" />
+                    <span>Ajouter</span>
+                  </button>
                 </div>
-              ))
+              </div>
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 custom-scrollbar">
+                <button
+                  type="button"
+                  onClick={() => setActiveSeatNumber(0)}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${
+                    activeSeatNumber === 0
+                      ? 'bg-slate-900 text-white shadow-xs'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  Partagé / Table
+                </button>
+                {Array.from({ length: totalSeats }, (_, i) => i + 1).map((seat) => {
+                  const itemsForSeat = cart.filter((i) => (i.seatNumber ?? 1) === seat);
+                  return (
+                    <button
+                      key={seat}
+                      type="button"
+                      onClick={() => setActiveSeatNumber(seat)}
+                      className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${
+                        activeSeatNumber === seat
+                          ? 'bg-amber-600 text-white shadow-xs'
+                          : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                      }`}
+                    >
+                      <span>Couvert {seat}</span>
+                      {itemsForSeat.length > 0 && (
+                        <span
+                          className={`text-[10px] px-1 py-0.2 rounded-full font-bold ${
+                            activeSeatNumber === seat
+                              ? 'bg-amber-800 text-white'
+                              : 'bg-slate-200 text-slate-700'
+                          }`}
+                        >
+                          {itemsForSeat.length}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+
+          {/* Cart Items Scrollable List (Grouped by Couvert) */}
+          <div className="flex-1 overflow-y-auto p-4 space-y-4 min-h-[220px] max-h-[380px]">
+            {/* Déjà commandé sur la table (Synchronisé Tablette & POS en direct) */}
+            {existingTableOrder && existingTableOrder.items.length > 0 && (
+              <div className="p-3 bg-emerald-50/90 border border-emerald-200 rounded-xl space-y-2">
+                <div className="flex items-center justify-between text-xs font-bold text-emerald-950 border-b border-emerald-200/80 pb-1.5">
+                  <div className="flex items-center gap-1.5">
+                    <Check className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>Commande active (Bon #{existingTableOrder.orderNumber})</span>
+                  </div>
+                  <span className="font-black text-emerald-700">
+                    {formatCurrency(existingTableOrder.total, settings.currency)}
+                  </span>
+                </div>
+
+                <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1 custom-scrollbar">
+                  {existingTableOrder.items.map((it) => (
+                    <div
+                      key={it.id}
+                      className="flex items-center justify-between text-[11px] text-slate-700 bg-white/90 px-2.5 py-1 rounded-lg border border-emerald-100/90"
+                    >
+                      <div className="flex items-center gap-1.5 truncate">
+                        <span className="font-bold text-slate-900">{it.quantity}x</span>
+                        <span className="truncate">{it.productName}</span>
+                        <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-amber-100 text-amber-800 shrink-0">
+                          {it.seatNumber === 0 ? 'Table' : `C${it.seatNumber ?? 1}`}
+                        </span>
+                        <span
+                          className={`text-[9px] font-bold px-1.5 py-0.2 rounded shrink-0 ${
+                            it.status === 'servi'
+                              ? 'bg-emerald-100 text-emerald-800'
+                              : it.status === 'pret'
+                              ? 'bg-blue-100 text-blue-800'
+                              : it.status === 'en_preparation'
+                              ? 'bg-amber-100 text-amber-800'
+                              : 'bg-slate-100 text-slate-600'
+                          }`}
+                        >
+                          {it.status === 'servi'
+                            ? 'Servi'
+                            : it.status === 'pret'
+                            ? 'Prêt'
+                            : it.status === 'en_preparation'
+                            ? 'En Cuisine'
+                            : 'En attente'}
+                        </span>
+                      </div>
+                      <span className="font-semibold text-slate-800 shrink-0 ml-1">
+                        {formatCurrency(it.unitPrice * it.quantity, settings.currency)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {cart.length === 0 ? (
+              <div className="py-12 text-center text-xs text-slate-400">
+                {existingTableOrder ? (
+                  <span>
+                    La table a déjà une commande en cours.<br />
+                    Sélectionnez d'autres articles pour ajouter au Couvert {activeSeatNumber === 0 ? 'Partagé' : activeSeatNumber}.
+                  </span>
+                ) : (
+                  <span>
+                    Votre panier est vide.<br />
+                    Cliquez sur les articles pour les ajouter au Couvert {activeSeatNumber === 0 ? 'Partagé' : activeSeatNumber}.
+                  </span>
+                )}
+              </div>
+            ) : (
+              distinctSeats.map((seatNum: number) => {
+                const seatItems = cart.filter((i) => (i.seatNumber ?? 1) === seatNum);
+                if (seatItems.length === 0 && seatNum !== activeSeatNumber) return null;
+                const seatTotal = seatItems.reduce((s, i) => s + i.unitPrice * i.quantity, 0);
+
+                return (
+                  <div key={seatNum} className="space-y-2 pt-2 first:pt-0">
+                    <div
+                      className={`px-3 py-1.5 rounded-xl flex items-center justify-between text-xs font-bold border transition-all cursor-pointer ${
+                        seatNum === activeSeatNumber
+                          ? 'bg-amber-100 text-amber-950 border-amber-300 shadow-2xs'
+                          : 'bg-slate-100 text-slate-700 border-slate-200 hover:bg-slate-200'
+                      }`}
+                      onClick={() => setActiveSeatNumber(seatNum)}
+                    >
+                      <div className="flex items-center gap-1.5">
+                        <span
+                          className={`w-2 h-2 rounded-full ${
+                            seatNum === activeSeatNumber ? 'bg-amber-600 animate-pulse' : 'bg-slate-400'
+                          }`}
+                        ></span>
+                        <span>{seatNum === 0 ? 'Articles Partagés (Table)' : `Couvert ${seatNum}`}</span>
+                        <span className="text-[10px] font-normal text-slate-500">
+                          ({seatItems.length} {seatItems.length > 1 ? 'articles' : 'article'})
+                        </span>
+                        {seatNum === activeSeatNumber && (
+                          <span className="text-[9px] bg-amber-600 text-white px-1.5 py-0.2 rounded font-black uppercase tracking-wider">
+                            Actif
+                          </span>
+                        )}
+                      </div>
+                      <span className="font-black text-slate-900">
+                        {formatCurrency(seatTotal, settings.currency)}
+                      </span>
+                    </div>
+
+                    {seatItems.length === 0 ? (
+                      <div className="px-3 py-2 text-[11px] text-amber-800 bg-amber-50/60 border border-dashed border-amber-200 rounded-xl italic">
+                        Couvert actif : les prochains plats sélectionnés seront assignés à ce couvert.
+                      </div>
+                    ) : (
+                      seatItems.map((item) => (
+                        <div key={item.id} className="p-2.5 rounded-xl bg-slate-50 border border-slate-100 space-y-2">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex-1 min-w-0">
+                              <div className="text-xs font-bold text-slate-800 truncate flex items-center gap-1.5">
+                                <span>{item.productName}</span>
+                                <span className="text-[9px] uppercase font-bold px-1 py-0.2 rounded bg-slate-200 text-slate-600">
+                                  {item.destination}
+                                </span>
+                              </div>
+                              <div className="text-[10px] text-slate-400">
+                                {formatCurrency(item.unitPrice, settings.currency)} / unité
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                              {/* Qty Stepper & Numpad trigger */}
+                              <div className="flex items-center gap-1 bg-white rounded-lg p-0.5 border border-slate-200 shadow-2xs">
+                                <button
+                                  onClick={() => updateQuantity(item.id, -1)}
+                                  className="w-5 h-5 rounded flex items-center justify-center hover:bg-slate-100 text-slate-600 transition-colors"
+                                >
+                                  <Minus className="w-3 h-3" />
+                                </button>
+                                <button
+                                  onClick={() => setActiveNumpadItemId(item.id)}
+                                  className="w-6 text-center font-bold text-xs text-slate-900 hover:bg-slate-50 rounded py-0.5"
+                                  title="Modifier la quantité directement"
+                                >
+                                  {item.quantity}
+                                </button>
+                                <button
+                                  onClick={() => updateQuantity(item.id, 1)}
+                                  className="w-5 h-5 rounded flex items-center justify-center hover:bg-slate-100 text-slate-600 transition-colors"
+                                >
+                                  <Plus className="w-3 h-3" />
+                                </button>
+                              </div>
+
+                              {/* Total line */}
+                              <span className="text-xs font-black text-slate-900 min-w-[65px] text-right">
+                                {formatCurrency(item.unitPrice * item.quantity, settings.currency)}
+                              </span>
+
+                              {/* Delete */}
+                              <button
+                                onClick={() => removeFromCart(item.id)}
+                                className="text-slate-400 hover:text-red-600 p-1 transition-colors"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Modifiers, Notes & Seat Switcher */}
+                          <div className="flex items-center gap-2 pt-1 border-t border-slate-200/40">
+                            {/* Reassign Couvert Select */}
+                            <select
+                              value={item.seatNumber ?? 1}
+                              onChange={(e) => reassignItemSeat(item.id, Number(e.target.value))}
+                              className="text-[10px] font-bold px-1.5 py-1 rounded-lg bg-white border border-slate-200 text-slate-700"
+                              title="Déplacer vers un autre couvert"
+                            >
+                              <option value={0}>Table</option>
+                              {Array.from({ length: totalSeats }, (_, i) => i + 1).map((s) => (
+                                <option key={s} value={s}>C{s}</option>
+                              ))}
+                            </select>
+
+                            <input
+                              type="text"
+                              placeholder="Instructions (cuisson, sauce...)"
+                              value={item.notes || ''}
+                              onChange={(e) => updateItemNotes(item.id, e.target.value)}
+                              className="flex-1 px-2 py-1 text-[11px] rounded-lg bg-white border border-slate-200 text-slate-700 placeholder-slate-400"
+                            />
+
+                            {/* Quick Modifiers Popover Button */}
+                            <button
+                              type="button"
+                              onClick={() => setActiveModifierItemId(item.id)}
+                              className={`flex items-center gap-1 px-2 py-1 text-[10px] font-bold rounded-lg border transition-colors shrink-0 ${
+                                item.notes
+                                  ? 'bg-amber-100 border-amber-300 text-amber-800'
+                                  : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-100'
+                              }`}
+                              title="Options rapides : Cuisson, garniture, sauce"
+                            >
+                              <SlidersHorizontal className="w-3 h-3 text-amber-600" />
+                              <span>Options</span>
+                            </button>
+
+                            {/* Folio Toggle */}
+                            <button
+                              type="button"
+                              onClick={() => toggleItemFolio(item.id)}
+                              className={`text-[10px] font-bold px-2 py-1 rounded-lg border transition-all shrink-0 ${
+                                (item.folio || 1) === 1
+                                  ? 'bg-indigo-100 text-indigo-800 border-indigo-200'
+                                  : 'bg-amber-100 text-amber-800 border-amber-200'
+                              }`}
+                              title="Folio 1 (Société) vs Folio 2 (Extra personnel)"
+                            >
+                              {(item.folio || 1) === 1 ? 'Folio 1' : 'Folio 2'}
+                            </button>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                );
+              })
             )}
           </div>
 
           {/* Cart Footer & Financial Summary */}
           <div className="p-4 border-t border-slate-200 bg-slate-50/80 rounded-b-2xl space-y-3">
-            {/* Cameroon Special Options: Proforma & Company Billing */}
+            {/* Proforma & Company Billing */}
             <div className="space-y-2 pt-1 border-t border-slate-200">
               <div className="flex items-center justify-between text-xs">
                 <label className="flex items-center gap-1.5 cursor-pointer font-bold text-slate-700">
@@ -476,14 +1111,14 @@ export const PosView: React.FC<PosViewProps> = ({ initialTableId, onOpenPayment 
               <div className="grid grid-cols-2 gap-2">
                 <input
                   type="text"
-                  placeholder="Raison Sociale Société (Optionnel)"
+                  placeholder="Raison Sociale Société"
                   value={companyBillingName}
                   onChange={(e) => setCompanyBillingName(e.target.value)}
                   className="w-full px-2 py-1 text-[11px] rounded-lg bg-white border border-slate-200"
                 />
                 <input
                   type="text"
-                  placeholder="NIU Entreprise (Ex: M01...)"
+                  placeholder="NIU Entreprise (M01...)"
                   value={companyBillingNiu}
                   onChange={(e) => setCompanyBillingNiu(e.target.value)}
                   className="w-full px-2 py-1 text-[11px] rounded-lg bg-white border border-slate-200 font-mono"
@@ -510,32 +1145,34 @@ export const PosView: React.FC<PosViewProps> = ({ initialTableId, onOpenPayment 
               </div>
 
               {/* Discount Selector */}
-              <div className="flex items-center justify-between">
-                <span className="flex items-center gap-1">
-                  <Tag className="w-3 h-3 text-amber-500" />
-                  Remise
-                </span>
-                <div className="flex items-center gap-1">
-                  {[0, 5, 10, 15].map((pct) => (
-                    <button
-                      key={pct}
-                      onClick={() => setDiscountPercent(pct)}
-                      className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
-                        discountPercent === pct
-                          ? 'bg-amber-600 text-white'
-                          : 'bg-white text-slate-600 border border-slate-200'
-                      }`}
-                    >
-                      {pct === 0 ? '0%' : `-${pct}%`}
-                    </button>
-                  ))}
-                  {discountPercent > 0 && (
-                    <span className="text-rose-600 font-bold ml-1">
-                      -{formatCurrency(discountAmount, settings.currency)}
-                    </span>
-                  )}
+              {isDiscountsAllowed && (
+                <div className="flex items-center justify-between">
+                  <span className="flex items-center gap-1">
+                    <Tag className="w-3 h-3 text-amber-500" />
+                    Remise {isDiscountApprovalRequired && <span className="text-[9px] text-amber-600 font-semibold">(Approbation)</span>}
+                  </span>
+                  <div className="flex items-center gap-1">
+                    {[0, 5, 10, 15].map((pct) => (
+                      <button
+                        key={pct}
+                        onClick={() => handleApplyDiscount(pct)}
+                        className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                          discountPercent === pct
+                            ? 'bg-amber-600 text-white'
+                            : 'bg-white text-slate-600 border border-slate-200'
+                        }`}
+                      >
+                        {pct === 0 ? '0%' : `-${pct}%`}
+                      </button>
+                    ))}
+                    {discountPercent > 0 && (
+                      <span className="text-rose-600 font-bold ml-1">
+                        -{formatCurrency(discountAmount, settings.currency)}
+                      </span>
+                    )}
+                  </div>
                 </div>
-              </div>
+              )}
 
               {settings.taxRate > 0 && (
                 <>
@@ -550,36 +1187,350 @@ export const PosView: React.FC<PosViewProps> = ({ initialTableId, onOpenPayment 
                 </>
               )}
 
+              {existingTableOrder && (
+                <div className="pt-2 border-t border-slate-200/80 space-y-1">
+                  <div className="flex items-center justify-between text-[11px] text-slate-500">
+                    <span>Nouveaux ajouts panier :</span>
+                    <span className="font-semibold text-slate-700">
+                      {formatCurrency(grandTotal, settings.currency)}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-[11px] text-slate-500">
+                    <span>Déjà commandé sur la table :</span>
+                    <span className="font-semibold text-emerald-600">
+                      {formatCurrency(existingTableOrder.total, settings.currency)}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-xs font-black text-slate-900 pt-1">
+                    <span>Total cumulé table :</span>
+                    <span className="text-emerald-700">
+                      {formatCurrency(existingTableOrder.total + grandTotal, settings.currency)}
+                    </span>
+                  </div>
+                </div>
+              )}
+
               <div className="pt-2 border-t border-slate-200 flex items-center justify-between text-base font-black text-slate-900">
-                <span>Total TTC ({settings.taxRate}%)</span>
+                <span>Total à régler ({settings.taxRate}%)</span>
                 <span className="text-amber-700">
-                  {formatCurrency(grandTotal, settings.currency)}
+                  {formatCurrency(
+                    existingTableOrder ? existingTableOrder.total + grandTotal : grandTotal,
+                    settings.currency
+                  )}
                 </span>
               </div>
             </div>
 
             {/* Action Buttons */}
-            <div className="grid grid-cols-2 gap-2 pt-1">
-              <button
-                disabled={isSubmitting || cart.length === 0}
-                onClick={() => handleSendOrder(false)}
-                className="flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 disabled:opacity-50 text-white text-xs font-bold transition-all shadow-xs"
-              >
-                <Send className="w-3.5 h-3.5 text-amber-400" />
-                <span>Envoyer Cuisine</span>
-              </button>
+            {cart.length === 0 && existingTableOrder ? (
+              <div className="pt-1">
+                <button
+                  disabled={isSubmitting}
+                  onClick={() => onOpenPayment(existingTableOrder.id)}
+                  className="w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-xs font-bold transition-all shadow-xs active:scale-98"
+                >
+                  <CreditCard className="w-3.5 h-3.5" />
+                  <span>Encaisser Table {currentTable?.number || ''} ({formatCurrency(existingTableOrder.total, settings.currency)})</span>
+                </button>
+              </div>
+            ) : (
+              <div className={`grid ${isQuickOrdersAllowed ? 'grid-cols-2' : 'grid-cols-1'} gap-2 pt-1`}>
+                <button
+                  disabled={isSubmitting || cart.length === 0}
+                  onClick={() => handleSendOrder(false)}
+                  className="flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 disabled:opacity-50 text-white text-xs font-bold transition-all shadow-xs active:scale-98"
+                >
+                  <Send className="w-3.5 h-3.5 text-amber-400" />
+                  <span>
+                    {existingTableOrder ? 'Envoyer ajouts' : 'Envoyer Cuisine'}
+                  </span>
+                </button>
 
+                {isQuickOrdersAllowed && (
+                  <button
+                    disabled={isSubmitting || cart.length === 0}
+                    onClick={() => handleSendOrder(true)}
+                    className="flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-xs font-bold transition-all shadow-xs active:scale-98"
+                  >
+                    <CreditCard className="w-3.5 h-3.5" />
+                    <span>Encaisser Direct</span>
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* QUICK MODIFIERS POPUP MODAL */}
+      {activeModifierItem && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col">
+            <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+              <div>
+                <h3 className="text-xs font-bold text-slate-900">
+                  Options & Instructions : {activeModifierItem.productName}
+                </h3>
+                <p className="text-[11px] text-slate-500">Sélectionnez les modificateurs rapides</p>
+              </div>
               <button
-                disabled={isSubmitting || cart.length === 0}
-                onClick={() => handleSendOrder(true)}
-                className="flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-xs font-bold transition-all shadow-xs"
+                onClick={() => setActiveModifierItemId(null)}
+                className="text-slate-400 hover:text-slate-700 p-1 rounded-lg"
               >
-                <CreditCard className="w-3.5 h-3.5" />
-                <span>Encaisser Direct</span>
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-4 space-y-4 max-h-[70vh] overflow-y-auto">
+              {/* Cuisson */}
+              <div className="space-y-1.5">
+                <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Cuisson :</div>
+                <div className="flex flex-wrap gap-1.5">
+                  {QUICK_MODIFIERS.cuissons.map((c) => {
+                    const active = (activeModifierItem.notes || '').includes(c);
+                    return (
+                      <button
+                        key={c}
+                        onClick={() => toggleModifierTag(activeModifierItem.id, c)}
+                        className={`text-xs font-semibold px-2.5 py-1.5 rounded-lg border transition-all ${
+                          active
+                            ? 'bg-amber-600 text-white border-amber-600 shadow-xs'
+                            : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                        }`}
+                      >
+                        {c}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Garnitures */}
+              <div className="space-y-1.5">
+                <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Accompagnement :</div>
+                <div className="flex flex-wrap gap-1.5">
+                  {QUICK_MODIFIERS.garnitures.map((g) => {
+                    const active = (activeModifierItem.notes || '').includes(g);
+                    return (
+                      <button
+                        key={g}
+                        onClick={() => toggleModifierTag(activeModifierItem.id, g)}
+                        className={`text-xs font-semibold px-2.5 py-1.5 rounded-lg border transition-all ${
+                          active
+                            ? 'bg-amber-600 text-white border-amber-600 shadow-xs'
+                            : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                        }`}
+                      >
+                        {g}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Sauces & Piment */}
+              <div className="space-y-1.5">
+                <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Sauce & Assaisonnement :</div>
+                <div className="flex flex-wrap gap-1.5">
+                  {QUICK_MODIFIERS.sauces.map((s) => {
+                    const active = (activeModifierItem.notes || '').includes(s);
+                    return (
+                      <button
+                        key={s}
+                        onClick={() => toggleModifierTag(activeModifierItem.id, s)}
+                        className={`text-xs font-semibold px-2.5 py-1.5 rounded-lg border transition-all ${
+                          active
+                            ? 'bg-amber-600 text-white border-amber-600 shadow-xs'
+                            : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                        }`}
+                      >
+                        {s}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Régimes & Spécial */}
+              <div className="space-y-1.5">
+                <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Allergies & Spécificités :</div>
+                <div className="flex flex-wrap gap-1.5">
+                  {QUICK_MODIFIERS.regimes.map((r) => {
+                    const active = (activeModifierItem.notes || '').includes(r);
+                    return (
+                      <button
+                        key={r}
+                        onClick={() => toggleModifierTag(activeModifierItem.id, r)}
+                        className={`text-xs font-semibold px-2.5 py-1.5 rounded-lg border transition-all ${
+                          active
+                            ? 'bg-rose-600 text-white border-rose-600 shadow-xs'
+                            : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                        }`}
+                      >
+                        {r}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Custom manual note */}
+              <div className="space-y-1 pt-2 border-t border-slate-100">
+                <div className="text-[11px] font-bold text-slate-500">Instruction personnalisée :</div>
+                <input
+                  type="text"
+                  placeholder="Ex: Servir en premier, sauce à part..."
+                  value={activeModifierItem.notes || ''}
+                  onChange={(e) => updateItemNotes(activeModifierItem.id, e.target.value)}
+                  className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 border border-slate-200"
+                />
+              </div>
+            </div>
+
+            <div className="p-3 border-t border-slate-100 bg-slate-50 flex justify-end">
+              <button
+                onClick={() => setActiveModifierItemId(null)}
+                className="px-4 py-2 rounded-xl bg-slate-900 text-white text-xs font-bold hover:bg-slate-800"
+              >
+                Valider les options
               </button>
             </div>
           </div>
         </div>
+      )}
+
+      {/* QUICK QUANTITY NUMPAD MODAL */}
+      {activeNumpadItem && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="bg-white w-full max-w-xs rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col">
+            <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+              <div className="text-xs font-bold text-slate-900 truncate">
+                Quantité : {activeNumpadItem.productName}
+              </div>
+              <button
+                onClick={() => setActiveNumpadItemId(null)}
+                className="text-slate-400 hover:text-slate-700 p-1"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-4 space-y-3">
+              <div className="text-center text-3xl font-black text-amber-600 bg-amber-50/70 p-3 rounded-xl border border-amber-200">
+                {activeNumpadItem.quantity}
+              </div>
+
+              {/* Direct preset buttons */}
+              <div className="grid grid-cols-4 gap-2">
+                {[1, 2, 3, 4, 5, 6, 8, 10, 12, 15, 20, 24].map((n) => (
+                  <button
+                    key={n}
+                    onClick={() => setExactQuantity(activeNumpadItem.id, n)}
+                    className={`py-2 text-xs font-black rounded-xl border transition-all ${
+                      activeNumpadItem.quantity === n
+                        ? 'bg-amber-600 text-white border-amber-600 shadow-xs'
+                        : 'bg-slate-50 text-slate-800 border-slate-200 hover:bg-slate-100'
+                    }`}
+                  >
+                    {n}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="p-3 border-t border-slate-100 bg-slate-50 flex justify-end">
+              <button
+                onClick={() => setActiveNumpadItemId(null)}
+                className="w-full py-2 rounded-xl bg-slate-900 text-white text-xs font-bold hover:bg-slate-800"
+              >
+                Terminé
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* CANCEL REASON POPUP MODAL */}
+      {showCancelReasonModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="bg-white w-full max-w-sm rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col p-4 space-y-3">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+              <div className="flex items-center gap-2 text-rose-600 font-bold text-sm">
+                <AlertCircle className="w-4 h-4" />
+                <span>Motif d'Annulation Requis</span>
+              </div>
+              <button
+                onClick={() => setShowCancelReasonModal(false)}
+                className="text-slate-400 hover:text-slate-600"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-500">
+              La règle opérationnelle de caisse exige de renseigner un motif pour tracer l'annulation dans le journal d'audit.
+            </p>
+
+            <div className="space-y-1.5">
+              {['Erreur de saisie', 'Client parti sans consommer', 'Plat indisponible / Rupture', 'Changement d\'avis', 'Autre motif'].map(
+                (reason) => (
+                  <label
+                    key={reason}
+                    onClick={() => setSelectedCancelReason(reason)}
+                    className={`flex items-center gap-2 p-2 rounded-xl border text-xs cursor-pointer transition-colors ${
+                      selectedCancelReason === reason
+                        ? 'border-rose-400 bg-rose-50/50 text-slate-900 font-bold'
+                        : 'border-slate-200 text-slate-700 hover:bg-slate-50'
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="cancel_reason"
+                      checked={selectedCancelReason === reason}
+                      onChange={() => setSelectedCancelReason(reason)}
+                      className="text-rose-600"
+                    />
+                    <span>{reason}</span>
+                  </label>
+                )
+              )}
+            </div>
+
+            {selectedCancelReason === 'Autre motif' && (
+              <input
+                type="text"
+                placeholder="Précisez le motif..."
+                value={customCancelReason}
+                onChange={(e) => setCustomCancelReason(e.target.value)}
+                className="w-full px-3 py-1.5 text-xs rounded-xl bg-slate-50 border border-slate-200"
+              />
+            )}
+
+            <div className="flex items-center gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowCancelReasonModal(false)}
+                className="flex-1 py-2 text-xs font-bold rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700"
+              >
+                Retour
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  executeClearCart(
+                    selectedCancelReason === 'Autre motif'
+                      ? customCancelReason || 'Autre motif'
+                      : selectedCancelReason
+                  )
+                }
+                className="flex-1 py-2 text-xs font-bold rounded-xl bg-rose-600 hover:bg-rose-700 text-white shadow-xs"
+              >
+                Confirmer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       </div>
     </div>
   );

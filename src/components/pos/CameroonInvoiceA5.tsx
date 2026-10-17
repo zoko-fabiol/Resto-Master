@@ -1,4 +1,5 @@
 import React from 'react';
+import { useRestaurant } from '../../context/RestaurantContext';
 import { Order, RestaurantSettings } from '../../types/restaurant';
 import { formatCurrency, formatDateTime, numberToFrenchWords, calculateCameroonTaxes } from '../../lib/utils';
 import { Printer, X, Download } from 'lucide-react';
@@ -16,6 +17,8 @@ export const CameroonInvoiceA5: React.FC<CameroonInvoiceA5Props> = ({
   folio,
   onClose,
 }) => {
+  const { isRuleEnabled } = useRestaurant();
+
   // Filter items by folio if requested
   const itemsToPrint = folio
     ? order.items.filter((i) => (i.folio || 1) === folio)
@@ -148,14 +151,23 @@ export const CameroonInvoiceA5: React.FC<CameroonInvoiceA5Props> = ({
                 <span>Total Prestations HT :</span>
                 <span className="font-semibold">{formatCurrency(taxes.subtotalHt, settings.currency)}</span>
               </div>
-              <div className="flex justify-between text-slate-600 text-[11px]">
-                <span>TVA (17,50%) :</span>
-                <span>{formatCurrency(taxes.tvaBase, settings.currency)}</span>
-              </div>
-              <div className="flex justify-between text-slate-600 text-[11px]">
-                <span>CAC (10% de TVA = 1,75%) :</span>
-                <span>{formatCurrency(taxes.cacBase, settings.currency)}</span>
-              </div>
+              {isRuleEnabled('bill_taxes_detail', true) ? (
+                <>
+                  <div className="flex justify-between text-slate-600 text-[11px]">
+                    <span>TVA (17,50%) :</span>
+                    <span>{formatCurrency(taxes.tvaBase, settings.currency)}</span>
+                  </div>
+                  <div className="flex justify-between text-slate-600 text-[11px]">
+                    <span>CAC (10% de TVA = 1,75%) :</span>
+                    <span>{formatCurrency(taxes.cacBase, settings.currency)}</span>
+                  </div>
+                </>
+              ) : (
+                <div className="flex justify-between text-slate-600 text-[11px]">
+                  <span>Taxes Fiscales (19,25%) :</span>
+                  <span>{formatCurrency(taxes.tvaBase + taxes.cacBase, settings.currency)}</span>
+                </div>
+              )}
               <div className="flex justify-between text-base font-black border-t-2 border-slate-900 pt-1 text-slate-950">
                 <span>TOTAL TTC :</span>
                 <span>{formatCurrency(taxes.totalTtc, settings.currency)}</span>
@@ -164,12 +176,14 @@ export const CameroonInvoiceA5: React.FC<CameroonInvoiceA5Props> = ({
           </div>
 
           {/* Legal Formula in Words (OBLIGATOIRE AU CAMEROUN) */}
-          <div className="mt-6 p-3 border border-slate-300 rounded-lg bg-slate-50 font-sans text-xs">
-            <div className="text-[10px] font-bold uppercase text-slate-400">Arrêté de la facture :</div>
-            <div className="font-bold text-slate-900 mt-0.5 italic">
-              « ARRETE LA PRESENTE FACTURE A LA SOMME DE : {totalInLetters} FRANCS CFA. »
+          {isRuleEnabled('bill_amount_in_words', true) && (
+            <div className="mt-6 p-3 border border-slate-300 rounded-lg bg-slate-50 font-sans text-xs">
+              <div className="text-[10px] font-bold uppercase text-slate-400">Arrêté de la facture :</div>
+              <div className="font-bold text-slate-900 mt-0.5 italic">
+                « ARRETE LA PRESENTE FACTURE A LA SOMME DE : {totalInLetters} FRANCS CFA. »
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Signatures & Stamps */}
           <div className="mt-8 grid grid-cols-2 gap-8 font-sans text-xs pt-4">

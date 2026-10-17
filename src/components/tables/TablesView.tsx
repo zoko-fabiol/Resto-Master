@@ -1,7 +1,9 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { useRestaurant } from '../../context/RestaurantContext';
+import { useToast } from '../../context/ToastContext';
 import { RestaurantTable, TableStatus, TableShape, Zone, ZoneType } from '../../types/restaurant';
 import { TABLE_STATUS_MAP, formatCurrency, getMinutesElapsed } from '../../lib/utils';
+import { TableKioskView } from '../kiosk/TableKioskView';
 import {
   Utensils,
   Plus,
@@ -29,14 +31,24 @@ import {
   Layers,
   ChevronRight,
   ShieldAlert,
+  Lock,
+  Unlock,
+  Tablet,
+  Bell,
+  Receipt,
+  Radio,
+  Send,
 } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
 
 interface TablesViewProps {
   onOpenOrder: (tableId: string) => void;
   onPayOrder: (orderId: string) => void;
+  onOpenKiosk?: (tableId: string) => void;
 }
 
-export const TablesView: React.FC<TablesViewProps> = ({ onOpenOrder, onPayOrder }) => {
+export const TablesView: React.FC<TablesViewProps> = ({ onOpenOrder, onPayOrder, onOpenKiosk }) => {
+  const { currentUser } = useAuth();
   const {
     tables,
     orders,
@@ -51,10 +63,49 @@ export const TablesView: React.FC<TablesViewProps> = ({ onOpenOrder, onPayOrder 
     splitTables,
     addZone,
     employees,
+    isFeatureEnabled,
+    isRuleEnabled,
+    lockTableTablet,
+    unlockTableTablet,
+    lockAllTableTablets,
+    unlockAllTableTablets,
+    dismissWaiterCall,
+    sendOrderToCashier,
+    updateOrderStatus,
   } = useRestaurant();
 
-  // Mode d'affichage : Plan 2D ou Grille
-  const [viewMode, setViewMode] = useState<'plan' | 'grille'>('plan');
+  const { showToast } = useToast();
+  const [activeKioskTableId, setActiveKioskTableId] = useState<string | null>(null);
+
+  const lockedTabletsCount = useMemo(() => {
+    return tables.filter((t) => t.tabletLocked).length;
+  }, [tables]);
+
+  const waiterCallsCount = useMemo(() => {
+    return tables.filter((t) => t.tabletCallWaiterPending).length;
+  }, [tables]);
+
+  const isReservationsEnabled = isFeatureEnabled('table_reservations');
+  const isZonesEnabled = isFeatureEnabled('zones_management');
+
+  // Règles Opérationnelles (Section 8 Tables & Salle)
+  const isFloorPlanAllowed = isRuleEnabled('tables_floor_plan', true);
+  const isZonesAllowed = isRuleEnabled('tables_zones', true) && isZonesEnabled;
+  const isCapacityAllowed = isRuleEnabled('tables_capacity', true);
+  const isTablesReservationsAllowed = isRuleEnabled('tables_reservations', true) && isReservationsEnabled;
+  const isMergeAllowed = isRuleEnabled('tables_merge', true);
+  const isDivisionAllowed = isRuleEnabled('tables_division', true);
+  const isCleaningAllowed = isRuleEnabled('tables_cleaning', true);
+
+  // Mode d'affichage : Plan 2D, Grille ou Commandes Actives (Section 4 du Guide : Gérer plusieurs tables en même temps)
+  const [viewMode, setViewMode] = useState<'plan' | 'grille' | 'commandes'>('plan');
+
+  useEffect(() => {
+    if (!isFloorPlanAllowed && viewMode === 'plan') {
+      setViewMode('grille');
+    }
+  }, [isFloorPlanAllowed, viewMode]);
+
   const [isEditMode, setIsEditMode] = useState(false);
   const [selectedZoneId, setSelectedZoneId] = useState<string | 'all'>('all');
   const [selectedTable, setSelectedTable] = useState<RestaurantTable | null>(null);
@@ -103,8 +154,8 @@ export const TablesView: React.FC<TablesViewProps> = ({ onOpenOrder, onPayOrder 
     return employees.filter((e) => e.role === 'serveur' || e.role === 'caisse' || e.role === 'manager');
   }, [employees]);
 
-  // Handlers pour le Drag & Drop sur le Canvas 2D
-  const handleMouseDownTable = (e: React.MouseEvent, table: RestaurantTable) => {
+  // Handlers pour le Drag & Drop sur le Canvas 2D (Compatible Souris + Écrans Tactiles iPad/POS)
+  const handlePointerDownTable = (e: React.PointerEvent, table: RestaurantTable) => {
     if (!isEditMode || !canvasRef.current) return;
     e.stopPropagation();
 
@@ -119,7 +170,7 @@ export const TablesView: React.FC<TablesViewProps> = ({ onOpenOrder, onPayOrder 
     });
   };
 
-  const handleMouseMoveCanvas = (e: React.MouseEvent) => {
+  const handlePointerMoveCanvas = (e: React.PointerEvent) => {
     if (!isEditMode || !draggingTableId || !canvasRef.current) return;
 
     const rect = canvasRef.current.getBoundingClientRect();
@@ -136,7 +187,7 @@ export const TablesView: React.FC<TablesViewProps> = ({ onOpenOrder, onPayOrder 
     updateTable(draggingTableId, { x: pctX, y: pctY });
   };
 
-  const handleMouseUpCanvas = () => {
+  const handlePointerUpCanvas = () => {
     setDraggingTableId(null);
   };
 
@@ -221,73 +272,164 @@ export const TablesView: React.FC<TablesViewProps> = ({ onOpenOrder, onPayOrder 
       <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-xs flex flex-col xl:flex-row xl:items-center justify-between gap-4">
         {/* Left: View Mode Switcher + Establishment Context */}
         <div className="flex flex-wrap items-center gap-3">
-          <div className="flex items-center p-1 bg-slate-100 rounded-xl border border-slate-200">
-            <button
-              onClick={() => setViewMode('plan')}
-              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                viewMode === 'plan'
-                  ? 'bg-white text-slate-900 shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              <Compass className="w-4 h-4 text-amber-600" />
-              <span>Plan de Salle 2D</span>
-            </button>
-            <button
-              onClick={() => setViewMode('grille')}
-              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                viewMode === 'grille'
-                  ? 'bg-white text-slate-900 shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              <LayoutGrid className="w-4 h-4 text-slate-600" />
-              <span>Vue Grille</span>
-            </button>
-          </div>
+          {isFloorPlanAllowed ? (
+            <div className="flex items-center p-1 bg-slate-100 rounded-xl border border-slate-200">
+              <button
+                onClick={() => setViewMode('plan')}
+                className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                  viewMode === 'plan'
+                    ? 'bg-white text-slate-900 shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <Compass className="w-4 h-4 text-amber-600" />
+                <span>Plan de Salle 2D</span>
+              </button>
+              <button
+                onClick={() => setViewMode('grille')}
+                className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                  viewMode === 'grille'
+                    ? 'bg-white text-slate-900 shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <LayoutGrid className="w-4 h-4 text-slate-600" />
+                <span>Vue Grille</span>
+              </button>
+              <button
+                onClick={() => setViewMode('commandes')}
+                className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                  viewMode === 'commandes'
+                    ? 'bg-amber-600 text-white shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+                title="Gérer plusieurs tables en même temps (Section 4 du Guide du Serveur)"
+              >
+                <ShoppingBag className="w-4 h-4" />
+                <span>Commandes Actives ({tables.filter((t) => t.currentOrderId).length})</span>
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center p-1 bg-slate-100 rounded-xl border border-slate-200">
+              <button
+                onClick={() => setViewMode('grille')}
+                className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                  viewMode === 'grille'
+                    ? 'bg-white text-slate-900 shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <LayoutGrid className="w-4 h-4 text-amber-600" />
+                <span>Affichage Grille</span>
+              </button>
+              <button
+                onClick={() => setViewMode('commandes')}
+                className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                  viewMode === 'commandes'
+                    ? 'bg-amber-600 text-white shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <ShoppingBag className="w-4 h-4" />
+                <span>Commandes ({tables.filter((t) => t.currentOrderId).length})</span>
+              </button>
+            </div>
+          )}
 
-          <div className="h-6 w-px bg-slate-200 hidden sm:block"></div>
+          {isZonesAllowed && (
+            <>
+              <div className="h-6 w-px bg-slate-200 hidden sm:block"></div>
 
-          {/* Zones Tabs */}
-          <div className="flex items-center gap-1.5 overflow-x-auto max-w-full custom-scrollbar py-0.5">
-            <button
-              onClick={() => setSelectedZoneId('all')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all ${
-                selectedZoneId === 'all'
-                  ? 'bg-slate-900 text-white shadow-xs'
-                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-              }`}
-            >
-              Toutes les zones ({tables.length})
-            </button>
-            {zones.map((zone) => {
-              const count = tables.filter(
-                (t) => t.zoneId === zone.id || t.zone === zone.name
-              ).length;
-              return (
+              {/* Zones Tabs */}
+              <div className="flex items-center gap-1.5 overflow-x-auto max-w-full custom-scrollbar py-0.5">
                 <button
-                  key={zone.id}
-                  onClick={() => setSelectedZoneId(zone.id)}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all ${
-                    selectedZoneId === zone.id
-                      ? 'bg-amber-600 text-white shadow-xs'
-                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                  onClick={() => setSelectedZoneId('all')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all ${
+                    selectedZoneId === 'all'
+                      ? 'bg-slate-900 text-white shadow-xs'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                   }`}
                 >
-                  <span
-                    className="w-2 h-2 rounded-full"
-                    style={{ backgroundColor: zone.color || '#f59e0b' }}
-                  ></span>
-                  <span>{zone.name}</span>
-                  <span className="text-[10px] opacity-80">({count})</span>
+                  Toutes les zones ({tables.length})
                 </button>
-              );
-            })}
-          </div>
+                {zones.map((zone) => {
+                  const count = tables.filter(
+                    (t) => t.zoneId === zone.id || t.zone === zone.name
+                  ).length;
+                  return (
+                    <button
+                      key={zone.id}
+                      onClick={() => setSelectedZoneId(zone.id)}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all ${
+                        selectedZoneId === zone.id
+                          ? 'bg-amber-600 text-white shadow-xs'
+                          : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                      }`}
+                    >
+                      <span
+                        className="w-2 h-2 rounded-full"
+                        style={{ backgroundColor: zone.color || '#f59e0b' }}
+                      ></span>
+                      <span>{zone.name}</span>
+                      <span className="text-[10px] opacity-80">({count})</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </>
+          )}
         </div>
 
         {/* Right: Actions, Edit Mode Toggle, Add Table / Zone */}
         <div className="flex flex-wrap items-center gap-2">
+          {/* Tablettes Kiosk Remote Control Group */}
+          <div className="flex items-center gap-1.5 p-1 bg-slate-100 rounded-xl border border-slate-200">
+            {lockedTabletsCount > 0 ? (
+              <button
+                onClick={async () => {
+                  await unlockAllTableTablets();
+                  showToast('Toutes les tablettes ont été déverrouillées avec succès', 'success');
+                }}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-white text-emerald-700 hover:bg-emerald-50 border border-emerald-200 transition-all shadow-xs"
+                title="Déverrouiller à distance toutes les tablettes des tables"
+              >
+                <Unlock className="w-3.5 h-3.5 text-emerald-600" />
+                <span>Déverrouiller Tout ({lockedTabletsCount})</span>
+              </button>
+            ) : (
+              <button
+                onClick={async () => {
+                  const reason =
+                    window.prompt('Motif du verrouillage global des tablettes :', 'Fin de service / Clôture') ||
+                    'Verrouillage global Direction';
+                  await lockAllTableTablets(reason);
+                  showToast('Toutes les tablettes ont été verrouillées à distance', 'warning');
+                }}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-slate-700 hover:text-slate-900 transition-all"
+                title="Verrouiller à distance toutes les tablettes des tables"
+              >
+                <Lock className="w-3.5 h-3.5 text-rose-600" />
+                <span>Verrouiller Tablettes</span>
+              </button>
+            )}
+
+            <button
+              onClick={() => {
+                const targetId = selectedZoneId !== 'all' ? filteredTables[0]?.id || tables[0]?.id : tables[0]?.id;
+                if (onOpenKiosk && targetId) {
+                  onOpenKiosk(targetId);
+                } else if (targetId) {
+                  setActiveKioskTableId(targetId);
+                }
+              }}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-900 text-amber-400 hover:bg-slate-800 transition-all shadow-xs"
+              title="Tester la borne / tablette client en mode plein écran"
+            >
+              <Tablet className="w-3.5 h-3.5" />
+              <span>Borne Client</span>
+            </button>
+          </div>
+
           {viewMode === 'plan' && (
             <button
               onClick={() => setIsEditMode(!isEditMode)}
@@ -310,13 +452,15 @@ export const TablesView: React.FC<TablesViewProps> = ({ onOpenOrder, onPayOrder 
             <span>Ajouter Table</span>
           </button>
 
-          <button
-            onClick={() => setShowAddZoneModal(true)}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold border border-slate-200 transition-all"
-          >
-            <Layers className="w-3.5 h-3.5 text-slate-500" />
-            <span>Nouvelle Salle</span>
-          </button>
+          {isZonesEnabled && (
+            <button
+              onClick={() => setShowAddZoneModal(true)}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold border border-slate-200 transition-all"
+            >
+              <Layers className="w-3.5 h-3.5 text-slate-500" />
+              <span>Nouvelle Salle</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -331,10 +475,12 @@ export const TablesView: React.FC<TablesViewProps> = ({ onOpenOrder, onPayOrder 
             <span className="w-2.5 h-2.5 rounded-full bg-amber-500 ring-2 ring-amber-200"></span>
             <span>Occupée / En service</span>
           </span>
-          <span className="flex items-center gap-1.5 font-medium">
-            <span className="w-2.5 h-2.5 rounded-full bg-blue-500 ring-2 ring-blue-200"></span>
-            <span>Réservée</span>
-          </span>
+          {isReservationsEnabled && (
+            <span className="flex items-center gap-1.5 font-medium">
+              <span className="w-2.5 h-2.5 rounded-full bg-blue-500 ring-2 ring-blue-200"></span>
+              <span>Réservée</span>
+            </span>
+          )}
           <span className="flex items-center gap-1.5 font-medium">
             <span className="w-2.5 h-2.5 rounded-full bg-rose-500 ring-2 ring-rose-200"></span>
             <span>Attente paiement</span>
@@ -382,12 +528,13 @@ export const TablesView: React.FC<TablesViewProps> = ({ onOpenOrder, onPayOrder 
           {/* 2D Plan Canvas Container */}
           <div
             ref={canvasRef}
-            onMouseMove={handleMouseMoveCanvas}
-            onMouseUp={handleMouseUpCanvas}
+            onPointerMove={handlePointerMoveCanvas}
+            onPointerUp={handlePointerUpCanvas}
             className={`relative w-full h-[640px] sm:h-[720px] bg-slate-900 rounded-3xl border-4 overflow-hidden shadow-2xl transition-all ${
               isEditMode ? 'border-amber-400 cursor-crosshair' : 'border-slate-800'
             }`}
             style={{
+              touchAction: isEditMode ? 'none' : 'auto',
               backgroundImage: `
                 radial-gradient(circle at 1px 1px, rgba(255, 255, 255, 0.08) 1.5px, transparent 0),
                 linear-gradient(to right, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
@@ -426,7 +573,7 @@ export const TablesView: React.FC<TablesViewProps> = ({ onOpenOrder, onPayOrder 
               return (
                 <div
                   key={table.id}
-                  onMouseDown={(e) => handleMouseDownTable(e, table)}
+                  onPointerDown={(e) => handlePointerDownTable(e, table)}
                   onClick={() => {
                     if (!isEditMode) setSelectedTable(table);
                     else setEditingTableDetails(table);
@@ -465,18 +612,30 @@ export const TablesView: React.FC<TablesViewProps> = ({ onOpenOrder, onPayOrder 
                         <GitMerge className="w-3 h-3" />
                       </span>
                     )}
-                  </div>
-
-                  {/* Capacity & Zone */}
-                  <div className="flex items-center gap-1 text-[10px] text-slate-300 font-semibold mt-0.5">
-                    <Users className="w-2.5 h-2.5 text-slate-400" />
-                    <span>{table.capacity}p</span>
-                    {table.assignedServerName && (
-                      <span className="text-amber-400 truncate max-w-[50px]">
-                        • {table.assignedServerName.split(' ')[0]}
+                    {table.tabletLocked && (
+                      <span className="p-0.5 rounded bg-rose-600 text-white shadow-xs animate-pulse" title="Tablette Verrouillée à distance">
+                        <Lock className="w-3 h-3" />
+                      </span>
+                    )}
+                    {table.tabletCallWaiterPending && (
+                      <span className="p-0.5 rounded bg-amber-500 text-slate-950 font-bold shadow-xs animate-bounce" title="Appel Serveur !">
+                        <Bell className="w-3 h-3" />
                       </span>
                     )}
                   </div>
+
+                  {/* Capacity & Zone */}
+                  {isCapacityAllowed && (
+                    <div className="flex items-center gap-1 text-[10px] text-slate-300 font-semibold mt-0.5">
+                      <Users className="w-2.5 h-2.5 text-slate-400" />
+                      <span>{table.capacity}p</span>
+                      {table.assignedServerName && (
+                        <span className="text-amber-400 truncate max-w-[50px]">
+                          • {table.assignedServerName.split(' ')[0]}
+                        </span>
+                      )}
+                    </div>
+                  )}
 
                   {/* Active Order Summary */}
                   {order ? (
@@ -528,16 +687,34 @@ export const TablesView: React.FC<TablesViewProps> = ({ onOpenOrder, onPayOrder 
                     </span>
                   </div>
                   <div className="text-[11px] text-slate-500 mt-1 flex items-center gap-1.5 flex-wrap">
-                    <span className="flex items-center gap-0.5">
-                      <Users className="w-3 h-3 text-slate-400" />
-                      {table.capacity} places
-                    </span>
-                    <span className="text-slate-300">•</span>
+                    {isCapacityAllowed && (
+                      <>
+                        <span className="flex items-center gap-0.5">
+                          <Users className="w-3 h-3 text-slate-400" />
+                          {table.capacity} places
+                        </span>
+                        <span className="text-slate-300">•</span>
+                      </>
+                    )}
                     <span className="truncate">{table.zone}</span>
                   </div>
                   {table.assignedServerName && (
                     <div className="text-[10px] font-semibold text-amber-700 mt-1">
                       Serveur : {table.assignedServerName}
+                    </div>
+                  )}
+
+                  {/* Tablet Kiosk Status Pills */}
+                  {table.tabletLocked && (
+                    <div className="mt-2 py-0.5 px-2 rounded-lg bg-rose-50 border border-rose-200 text-rose-700 text-[10px] font-bold flex items-center gap-1">
+                      <Lock className="w-3 h-3 text-rose-600 shrink-0" />
+                      <span className="truncate">Tablette Verrouillée</span>
+                    </div>
+                  )}
+                  {table.tabletCallWaiterPending && (
+                    <div className="mt-2 py-0.5 px-2 rounded-lg bg-amber-50 border border-amber-300 text-amber-800 text-[10px] font-bold flex items-center gap-1 animate-bounce">
+                      <Bell className="w-3 h-3 text-amber-600 shrink-0" />
+                      <span className="truncate">Appel Serveur !</span>
                     </div>
                   )}
                 </div>
@@ -565,6 +742,189 @@ export const TablesView: React.FC<TablesViewProps> = ({ onOpenOrder, onPayOrder 
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* VUE 3: COMMANDES ACTIVES MULTI-TABLES (Guide du Serveur - Section 4) */}
+      {viewMode === 'commandes' && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between bg-amber-500/10 border border-amber-500/30 p-4 rounded-2xl">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-amber-600 text-white flex items-center justify-center font-bold">
+                <ShoppingBag className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="font-bold text-slate-900 text-sm">Gestion des Commandes Actives Multi-Tables</h3>
+                <p className="text-xs text-slate-600">
+                  Passez d'une table à l'autre librement. Suivez la préparation en direct et envoyez l'addition à la caisse en fin de repas.
+                </p>
+              </div>
+            </div>
+            <span className="text-xs font-bold px-3 py-1 bg-amber-600 text-white rounded-xl shadow-xs">
+              {tables.filter((t) => t.currentOrderId).length} tables actives
+            </span>
+          </div>
+
+          {tables.filter((t) => t.currentOrderId).length === 0 ? (
+            <div className="bg-white rounded-3xl p-12 text-center border border-slate-200">
+              <ShoppingBag className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+              <h4 className="font-bold text-slate-700 text-sm">Aucune commande active en cours</h4>
+              <p className="text-xs text-slate-500 mt-1 mb-4">
+                Toutes les tables sont actuellement libres ou en attente d'accueil.
+              </p>
+              <button
+                onClick={() => setViewMode('plan')}
+                className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-xl shadow-xs cursor-pointer"
+              >
+                Retour au Plan de Salle
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+              {tables
+                .filter((t) => t.currentOrderId)
+                .map((table) => {
+                  const ord = orders.find((o) => o.id === table.currentOrderId);
+                  if (!ord) return null;
+                  const elapsed = getMinutesElapsed(ord.createdAt);
+                  const isReady = ord.status === 'pret' || ord.items.some((i) => i.status === 'pret');
+                  const isAllServi = ord.items.every((i) => i.status === 'servi');
+                  const isAwaitingPayment = table.status === 'attente_paiement' || ord.status === 'attente_paiement';
+
+                  return (
+                    <div
+                      key={table.id}
+                      className="bg-white rounded-2xl border border-slate-200 p-4 shadow-xs hover:border-amber-400 transition-all flex flex-col justify-between"
+                    >
+                      <div>
+                        {/* Table card header */}
+                        <div className="flex items-start justify-between mb-2 pb-2 border-b border-slate-100">
+                          <div className="flex items-center gap-2.5">
+                            <div className="w-9 h-9 rounded-xl bg-amber-600 text-white font-black text-sm flex items-center justify-center">
+                              {table.number}
+                            </div>
+                            <div>
+                              <div className="font-bold text-slate-900 text-xs">Table {table.number} ({table.zone})</div>
+                              <div className="text-[10px] text-slate-500 flex items-center gap-1.5">
+                                <span>{table.guestsCount || table.capacity} convives</span>
+                                <span>•</span>
+                                <span>{ord.serverName || 'Serveur'}</span>
+                              </div>
+                            </div>
+                          </div>
+
+                          <span
+                            className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                              isAwaitingPayment
+                                ? 'bg-amber-100 text-amber-900 border-amber-300'
+                                : isReady
+                                ? 'bg-emerald-100 text-emerald-900 border-emerald-300 animate-pulse'
+                                : isAllServi
+                                ? 'bg-blue-100 text-blue-900 border-blue-300'
+                                : 'bg-slate-100 text-slate-700 border-slate-200'
+                            }`}
+                          >
+                            {isAwaitingPayment
+                              ? 'Attente Caisse'
+                              : isReady
+                              ? 'Plat Prêt !'
+                              : isAllServi
+                              ? 'Servi'
+                              : 'En préparation'}
+                          </span>
+                        </div>
+
+                        {/* Order info */}
+                        <div className="flex items-center justify-between text-xs mb-3 bg-slate-50 p-2 rounded-xl">
+                          <span className="font-mono text-slate-600 text-[11px]">{ord.orderNumber}</span>
+                          <span className="font-black text-slate-900">{formatCurrency(ord.total, settings.currency)}</span>
+                        </div>
+
+                        {/* Items list */}
+                        <div className="space-y-1 mb-3 max-h-36 overflow-y-auto custom-scrollbar">
+                          {ord.items.map((item) => (
+                            <div key={item.id} className="flex items-center justify-between text-xs py-0.5">
+                              <span className="text-slate-800">
+                                <strong className="text-slate-900">{item.quantity}x</strong> {item.productName}
+                              </span>
+                              <span
+                                className={`text-[9px] font-bold px-1.5 py-0.2 rounded ${
+                                  item.status === 'pret'
+                                    ? 'bg-emerald-500 text-white animate-pulse'
+                                    : item.status === 'servi'
+                                    ? 'bg-slate-200 text-slate-700'
+                                    : 'bg-amber-100 text-amber-800'
+                                }`}
+                              >
+                                {item.status === 'pret' ? 'Prêt' : item.status === 'servi' ? 'Servi' : 'Cuisine'}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Card actions */}
+                      <div className="pt-2 border-t border-slate-100 flex flex-wrap items-center gap-1.5">
+                        <button
+                          onClick={() => onOpenOrder(table.id)}
+                          className="flex-1 py-1.5 px-2 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-lg text-xs font-bold flex items-center justify-center gap-1 cursor-pointer"
+                          title="Ajouter des plats ou modifier la commande"
+                        >
+                          <ShoppingBag className="w-3.5 h-3.5" />
+                          <span>Ajouter plats</span>
+                        </button>
+
+                        {!isAllServi && (
+                          <button
+                            onClick={async () => {
+                              await updateOrderStatus(ord.id, 'servi');
+                              updateTableStatus(table.id, 'en_service');
+                              showToast({
+                                type: 'success',
+                                title: 'Commande Servie',
+                                message: `La table ${table.number} a été servie. Bon appétit !`,
+                              });
+                            }}
+                            className="py-1.5 px-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold flex items-center gap-1 shadow-xs cursor-pointer"
+                            title="Marquer la commande comme servie à table"
+                          >
+                            <Sparkles className="w-3.5 h-3.5" />
+                            <span>Servie</span>
+                          </button>
+                        )}
+
+                        <button
+                          onClick={async () => {
+                            await sendOrderToCashier(ord.id, table.id);
+                            showToast({
+                              type: 'success',
+                              title: 'Addition transmise',
+                              message: `Addition Table ${table.number} transmise au poste de caisse !`,
+                            });
+                          }}
+                          className="py-1.5 px-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold flex items-center gap-1 shadow-xs cursor-pointer"
+                          title="Transmettre à la caisse pour impression et encaissement"
+                        >
+                          <Send className="w-3.5 h-3.5" />
+                          <span>À la Caisse</span>
+                        </button>
+
+                        {(currentUser.role === 'direction' || currentUser.role === 'manager' || currentUser.role === 'caisse') && (
+                          <button
+                            onClick={() => onPayOrder(ord.id)}
+                            className="py-1.5 px-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold flex items-center gap-1 shadow-xs cursor-pointer"
+                            title="Encaisser directement"
+                          >
+                            <CreditCard className="w-3.5 h-3.5" />
+                            <span>Encaisser</span>
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+            </div>
+          )}
         </div>
       )}
 
@@ -695,69 +1055,85 @@ export const TablesView: React.FC<TablesViewProps> = ({ onOpenOrder, onPayOrder 
               </div>
 
               {/* Table Merge / Split Options */}
-              <div className="pt-3 border-t border-slate-100">
-                <div className="text-xs font-bold text-slate-700 mb-2 flex items-center justify-between">
-                  <span className="flex items-center gap-1.5">
-                    <GitMerge className="w-3.5 h-3.5 text-amber-600" />
-                    <span>Fusion / Séparation de Tables :</span>
-                  </span>
-                  {selectedTable.mergedWithTableId && (
-                    <button
-                      onClick={() => {
-                        splitTables(selectedTable.id);
-                        setSelectedTable({ ...selectedTable, mergedWithTableId: undefined });
-                      }}
-                      className="text-[11px] font-bold text-rose-600 hover:text-rose-700 flex items-center gap-1"
-                    >
-                      <Split className="w-3 h-3" /> Séparer
-                    </button>
+              {(isMergeAllowed || isDivisionAllowed) && (
+                <div className="pt-3 border-t border-slate-100">
+                  <div className="text-xs font-bold text-slate-700 mb-2 flex items-center justify-between">
+                    <span className="flex items-center gap-1.5">
+                      <GitMerge className="w-3.5 h-3.5 text-amber-600" />
+                      <span>Fusion / Séparation de Tables :</span>
+                    </span>
+                    {isDivisionAllowed && selectedTable.mergedWithTableId && (
+                      <button
+                        onClick={() => {
+                          splitTables(selectedTable.id);
+                          setSelectedTable({ ...selectedTable, mergedWithTableId: undefined });
+                        }}
+                        className="text-[11px] font-bold text-rose-600 hover:text-rose-700 flex items-center gap-1"
+                      >
+                        <Split className="w-3 h-3" /> Séparer
+                      </button>
+                    )}
+                  </div>
+
+                  {isMergeAllowed && !selectedTable.mergedWithTableId && (
+                    <div className="flex items-center gap-2">
+                      <select
+                        value={tableToMergeWith}
+                        onChange={(e) => setTableToMergeWith(e.target.value)}
+                        className="flex-1 text-xs border border-slate-200 rounded-xl px-3 py-2 bg-white text-slate-800"
+                      >
+                        <option value="">Sélectionner une table voisine...</option>
+                        {tables
+                          .filter((t) => t.id !== selectedTable.id && !t.mergedWithTableId)
+                          .map((t) => (
+                            <option key={t.id} value={t.id}>
+                              Table {t.number} ({t.zone} - {t.capacity}p)
+                            </option>
+                          ))}
+                      </select>
+                      <button
+                        disabled={!tableToMergeWith}
+                        onClick={() => {
+                          if (tableToMergeWith) {
+                            mergeTables(selectedTable.id, tableToMergeWith);
+                            setTableToMergeWith('');
+                            setSelectedTable(null);
+                          }
+                        }}
+                        className="px-3 py-2 bg-amber-600 disabled:opacity-50 text-white rounded-xl text-xs font-bold hover:bg-amber-700"
+                      >
+                        Fusionner
+                      </button>
+                    </div>
                   )}
                 </div>
-
-                {!selectedTable.mergedWithTableId && (
-                  <div className="flex items-center gap-2">
-                    <select
-                      value={tableToMergeWith}
-                      onChange={(e) => setTableToMergeWith(e.target.value)}
-                      className="flex-1 text-xs border border-slate-200 rounded-xl px-3 py-2 bg-white text-slate-800"
-                    >
-                      <option value="">Sélectionner une table voisine...</option>
-                      {tables
-                        .filter((t) => t.id !== selectedTable.id && !t.mergedWithTableId)
-                        .map((t) => (
-                          <option key={t.id} value={t.id}>
-                            Table {t.number} ({t.zone} - {t.capacity}p)
-                          </option>
-                        ))}
-                    </select>
-                    <button
-                      disabled={!tableToMergeWith}
-                      onClick={() => {
-                        if (tableToMergeWith) {
-                          mergeTables(selectedTable.id, tableToMergeWith);
-                          setTableToMergeWith('');
-                          setSelectedTable(null);
-                        }
-                      }}
-                      className="px-3 py-2 bg-amber-600 disabled:opacity-50 text-white rounded-xl text-xs font-bold hover:bg-amber-700"
-                    >
-                      Fusionner
-                    </button>
-                  </div>
-                )}
-              </div>
+              )}
 
               {/* Status Change Buttons */}
               <div className="pt-3 border-t border-slate-100">
+                {selectedTable.status === 'reservee' && !isTablesReservationsAllowed && (
+                  <div className="mb-3 p-3 bg-amber-50 border border-amber-300 rounded-xl text-xs text-amber-900 flex items-center justify-between">
+                    <span>Le module Réservations est désactivé dans la configuration système.</span>
+                    <button
+                      onClick={() => {
+                        updateTableStatus(selectedTable.id, 'libre');
+                        setSelectedTable({ ...selectedTable, status: 'libre' });
+                      }}
+                      className="px-2.5 py-1 bg-amber-600 text-white rounded-lg font-bold hover:bg-amber-700 shrink-0"
+                    >
+                      Remettre libre
+                    </button>
+                  </div>
+                )}
                 <div className="text-xs font-bold text-slate-600 mb-2">Modifier manuellement le statut :</div>
                 <div className="flex flex-wrap gap-1.5">
                   {(
                     [
                       'libre',
                       'occupee',
-                      'reservee',
+                      ...(isTablesReservationsAllowed ? (['reservee'] as TableStatus[]) : []),
                       'attente_paiement',
-                      'a_nettoyer',
+                      ...(isCleaningAllowed ? (['a_nettoyer'] as TableStatus[]) : []),
                       'hors_service',
                     ] as TableStatus[]
                   ).map((st) => (
@@ -778,10 +1154,137 @@ export const TablesView: React.FC<TablesViewProps> = ({ onOpenOrder, onPayOrder 
                   ))}
                 </div>
               </div>
+
+              {/* Tablet Kiosk Remote Controls (Direction / Firebase) */}
+              <div className="pt-3 border-t border-slate-100">
+                <div className="text-xs font-bold text-slate-700 mb-2 flex items-center justify-between">
+                  <span className="flex items-center gap-1.5">
+                    <Tablet className="w-3.5 h-3.5 text-amber-600" />
+                    <span>Borne & Tablette Client (Menu Numérique) :</span>
+                  </span>
+                  {selectedTable.tabletLocked ? (
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 border border-rose-200 flex items-center gap-1">
+                      <Lock className="w-2.5 h-2.5" />
+                      <span>Verrouillée à distance</span>
+                    </span>
+                  ) : (
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 border border-emerald-200 flex items-center gap-1">
+                      <Check className="w-2.5 h-2.5" />
+                      <span>Tablette Active</span>
+                    </span>
+                  )}
+                </div>
+
+                {/* Notifications en cours sur la tablette */}
+                {selectedTable.tabletCallWaiterPending && (
+                  <div className="mb-2.5 p-2.5 rounded-xl bg-amber-50 border border-amber-300 flex items-center justify-between text-xs text-amber-900">
+                    <div className="flex items-center gap-2">
+                      <Bell className="w-4 h-4 text-amber-600 animate-bounce" />
+                      <span className="font-semibold">Appel Serveur en cours sur cette table !</span>
+                    </div>
+                    <button
+                      onClick={async () => {
+                        await dismissWaiterCall(selectedTable.id);
+                        setSelectedTable({ ...selectedTable, tabletCallWaiterPending: false });
+                        showToast('Appel serveur acquitté', 'info');
+                      }}
+                      className="px-2 py-1 rounded-lg bg-amber-600 text-white font-bold hover:bg-amber-700 text-[11px]"
+                    >
+                      Acquitter
+                    </button>
+                  </div>
+                )}
+
+                {selectedTable.tabletBillRequested && (
+                  <div className="mb-2.5 p-2.5 rounded-xl bg-blue-50 border border-blue-200 flex items-center gap-2 text-xs text-blue-900 font-semibold">
+                    <Receipt className="w-4 h-4 text-blue-600" />
+                    <span>Les convives ont demandé l'addition depuis la tablette.</span>
+                  </div>
+                )}
+
+                {selectedTable.tabletLocked && (
+                  <div className="mb-3 p-3 bg-rose-50/70 border border-rose-200 rounded-xl text-xs space-y-1">
+                    <div className="text-rose-900 font-bold">
+                      Motif : « {selectedTable.tabletLockedReason || 'Verrouillée à distance par la Direction'} »
+                    </div>
+                    {selectedTable.tabletLockedBy && (
+                      <div className="text-[11px] text-rose-700">
+                        Verrouillée par {selectedTable.tabletLockedBy}{' '}
+                        {selectedTable.tabletLockedAt &&
+                          `à ${new Date(selectedTable.tabletLockedAt).toLocaleTimeString('fr-FR', {
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })}`}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Action buttons */}
+                <div className="flex items-center gap-2">
+                  {selectedTable.tabletLocked ? (
+                    <button
+                      onClick={async () => {
+                        await unlockTableTablet(selectedTable.id);
+                        setSelectedTable({
+                          ...selectedTable,
+                          tabletLocked: false,
+                          tabletLockedReason: undefined,
+                        });
+                        showToast(`Tablette de la Table ${selectedTable.number} déverrouillée`, 'success');
+                      }}
+                      className="flex-1 py-2 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all shadow-xs flex items-center justify-center gap-1.5"
+                    >
+                      <Unlock className="w-3.5 h-3.5" />
+                      <span>Déverrouiller à distance (Firebase)</span>
+                    </button>
+                  ) : (
+                    <button
+                      onClick={async () => {
+                        const reason =
+                          window.prompt(
+                            `Motif de verrouillage de la Table ${selectedTable.number} :`,
+                            "Table en cours d'encaissement"
+                          ) || 'Verrouillée à distance par la Direction';
+                        await lockTableTablet(selectedTable.id, reason);
+                        setSelectedTable({
+                          ...selectedTable,
+                          tabletLocked: true,
+                          tabletLockedReason: reason,
+                          tabletLockedBy: 'Direction',
+                          tabletLockedAt: new Date().toISOString(),
+                        });
+                        showToast(`Tablette de la Table ${selectedTable.number} verrouillée à distance`, 'warning');
+                      }}
+                      className="flex-1 py-2 px-3 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold transition-all shadow-xs flex items-center justify-center gap-1.5"
+                    >
+                      <Lock className="w-3.5 h-3.5" />
+                      <span>Verrouiller à distance</span>
+                    </button>
+                  )}
+
+                  <button
+                    onClick={() => {
+                      const tId = selectedTable.id;
+                      setSelectedTable(null);
+                      if (onOpenKiosk) {
+                        onOpenKiosk(tId);
+                      } else {
+                        setActiveKioskTableId(tId);
+                      }
+                    }}
+                    className="py-2 px-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-amber-400 text-xs font-bold transition-all shadow-xs flex items-center gap-1.5"
+                    title="Ouvrir l'écran de la tablette client pour cette table"
+                  >
+                    <Tablet className="w-3.5 h-3.5" />
+                    <span>Lancer Borne</span>
+                  </button>
+                </div>
+              </div>
             </div>
 
             {/* Modal Actions Footer */}
-            <div className="p-4 border-t border-slate-100 bg-slate-50 flex items-center justify-end gap-2">
+            <div className="p-4 border-t border-slate-100 bg-slate-50 flex flex-wrap items-center justify-end gap-2">
               {currentOrder ? (
                 <>
                   <button
@@ -789,21 +1292,52 @@ export const TablesView: React.FC<TablesViewProps> = ({ onOpenOrder, onPayOrder 
                       onOpenOrder(selectedTable.id);
                       setSelectedTable(null);
                     }}
-                    className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-800 text-xs font-bold"
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-800 text-xs font-bold transition-all"
                   >
                     <ShoppingBag className="w-4 h-4" />
-                    <span>Modifier commande</span>
+                    <span>+ Ajouter plats</span>
                   </button>
+
+                  {currentOrder.status !== 'servi' && currentOrder.status !== 'payee' && (
+                    <button
+                      onClick={() => {
+                        updateOrderStatus(currentOrder.id, 'servi');
+                        showToast(`Commande Table ${selectedTable.number} marquée servie aux convives`, 'success');
+                      }}
+                      className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition-all shadow-xs"
+                      title="Marquer les plats comme apportés et servis à table"
+                    >
+                      <Utensils className="w-4 h-4" />
+                      <span>Marquer Servie</span>
+                    </button>
+                  )}
+
                   <button
                     onClick={() => {
-                      onPayOrder(currentOrder.id);
-                      setSelectedTable(null);
+                      sendOrderToCashier(currentOrder.id, selectedTable.id);
+                      setSelectedTable({ ...selectedTable, status: 'attente_paiement' });
+                      showToast(`Table ${selectedTable.number} transmise au caissier pour addition`, 'info');
                     }}
-                    className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs"
+                    className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold transition-all shadow-xs"
+                    title="Alerter le caissier que la table a demandé l'addition"
                   >
-                    <CreditCard className="w-4 h-4" />
-                    <span>Encaisser ({formatCurrency(currentOrder.total, settings.currency)})</span>
+                    <Send className="w-4 h-4" />
+                    <span>Envoyer à la caisse</span>
                   </button>
+
+                  {/* Bouton d'encaissement direct (réservé Caisse / Manager / Direction) */}
+                  {(currentUser?.role === 'direction' || currentUser?.role === 'manager' || currentUser?.role === 'caisse') && (
+                    <button
+                      onClick={() => {
+                        onPayOrder(currentOrder.id);
+                        setSelectedTable(null);
+                      }}
+                      className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs transition-all"
+                    >
+                      <CreditCard className="w-4 h-4" />
+                      <span>Encaisser ({formatCurrency(currentOrder.total, settings.currency)})</span>
+                    </button>
+                  )}
                 </>
               ) : selectedTable.status === 'a_nettoyer' ? (
                 <button
@@ -1171,6 +1705,14 @@ export const TablesView: React.FC<TablesViewProps> = ({ onOpenOrder, onPayOrder 
             </div>
           </form>
         </div>
+      )}
+
+      {/* Mode Borne Client Tablette Kiosk Fullscreen Overlay */}
+      {activeKioskTableId && (
+        <TableKioskView
+          initialTableId={activeKioskTableId}
+          onExit={() => setActiveKioskTableId(null)}
+        />
       )}
     </div>
   );

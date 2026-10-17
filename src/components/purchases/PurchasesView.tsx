@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useRestaurant } from '../../context/RestaurantContext';
+import { useToast } from '../../context/ToastContext';
 import { Supplier, PurchaseOrder, PurchaseOrderItem } from '../../types/restaurant';
 import { formatCurrency, formatDateTime } from '../../lib/utils';
 import {
@@ -27,7 +28,9 @@ export const PurchasesView: React.FC = () => {
     receivePurchaseOrder,
     createSupplier,
     settings,
+    isRuleEnabled,
   } = useRestaurant();
+  const { showToast } = useToast();
 
   const [activeTab, setActiveTab] = useState<'orders' | 'suppliers'>('orders');
   const [poModalOpen, setPoModalOpen] = useState(false);
@@ -58,7 +61,11 @@ export const PurchasesView: React.FC = () => {
     if (!stock) return;
 
     if (poItems.some((i) => i.stockItemId === stock.id)) {
-      alert('Cet article est déjà dans la commande.');
+      showToast({
+        type: 'warning',
+        title: 'Article déjà présent',
+        message: 'Cet article est déjà inclus dans ce bon de commande.',
+      });
       return;
     }
 
@@ -78,12 +85,18 @@ export const PurchasesView: React.FC = () => {
   const handleCreatePo = async (e: React.FormEvent) => {
     e.preventDefault();
     if (poItems.length === 0) {
-      alert('Veuillez ajouter au moins une ligne d’article.');
+      showToast({
+        type: 'warning',
+        title: 'Bon de commande vide',
+        message: 'Veuillez ajouter au moins une ligne d’article à commander.',
+      });
       return;
     }
 
     const supplier = suppliers.find((s) => s.id === selectedSupplierId);
     const totalAmount = poItems.reduce((s, i) => s + i.total, 0);
+
+    const requiresApproval = isRuleEnabled('achats_approval', true) && totalAmount >= 100000;
 
     await createPurchaseOrder({
       supplierId: selectedSupplierId,
@@ -95,12 +108,29 @@ export const PurchasesView: React.FC = () => {
       status: 'envoyee',
     });
 
+    if (requiresApproval) {
+      showToast({
+        type: 'info',
+        title: 'Seuil d’approbation atteint (Section 12)',
+        message: `Bon de commande de ${formatCurrency(totalAmount, settings.currency)} enregistré. Soumis à validation préalable de la Direction.`,
+      });
+    }
+
     setPoModalOpen(false);
     setPoItems([]);
   };
 
   const handleConfirmReceive = async () => {
     if (!receivingPoId) return;
+
+    if (isRuleEnabled('achats_supplier_invoices', true) && !invoiceNumberInput.trim()) {
+      showToast({
+        type: 'warning',
+        title: 'Facture fournisseur obligatoire (Section 12)',
+        message: 'L\'enregistrement des factures fournisseurs est obligatoire. Veuillez saisir le numéro de facture du fournisseur pour valider le bon de réception.',
+      });
+      return;
+    }
 
     await receivePurchaseOrder(receivingPoId, invoiceNumberInput);
 
@@ -117,7 +147,11 @@ export const PurchasesView: React.FC = () => {
   const handleCreateSupplier = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!supCompany || !supPhone) {
-      alert('Veuillez renseigner le nom de la société et le téléphone.');
+      showToast({
+        type: 'warning',
+        title: 'Champs obligatoires',
+        message: 'Veuillez renseigner au minimum la raison sociale et le téléphone.',
+      });
       return;
     }
 

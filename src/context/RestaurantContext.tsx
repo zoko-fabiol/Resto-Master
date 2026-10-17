@@ -42,6 +42,10 @@ import {
   CashRegister,
   TableShape,
   MediaAsset,
+  UserAccount,
+  TabPermission,
+  AccountType,
+  WeeklySchedule,
 } from '../types/restaurant';
 import {
   INITIAL_SETTINGS,
@@ -73,13 +77,18 @@ import {
   INITIAL_ORGANIZATION,
   INITIAL_ZONES,
   INITIAL_CASH_REGISTERS,
+  INITIAL_USER_ACCOUNTS,
 } from '../lib/seedData';
 import {
   FeatureItem,
   FeatureStatus,
   Outlet,
   Terminal,
+  DeviceProfile,
   Peripheral,
+  PrinterSettings,
+  OperationRules,
+  DEFAULT_OPERATION_RULES,
   RoleLimits,
   RolePermissionMatrix,
   PermissionModule,
@@ -114,6 +123,14 @@ import { ordersFirestoreService } from '../services/firestore/ordersFirestoreSer
 import { tablesFirestoreService } from '../services/firestore/tablesFirestoreService';
 import { documentsFirestoreService } from '../services/firestore/documentsFirestoreService';
 import { restaurantFirestoreService } from '../services/firestore/restaurantFirestoreService';
+import { productsFirestoreService } from '../services/firestore/productsFirestoreService';
+import { stockFirestoreService } from '../services/firestore/stockFirestoreService';
+import { cashFirestoreService } from '../services/firestore/cashFirestoreService';
+import { reservationsFirestoreService } from '../services/firestore/reservationsFirestoreService';
+import { staffFirestoreService } from '../services/firestore/staffFirestoreService';
+import { fiscalFirestoreService } from '../services/firestore/fiscalFirestoreService';
+import { configFirestoreService } from '../services/firestore/configFirestoreService';
+import { firebaseSeedService } from '../services/firestore/firebaseSeedService';
 import { offlineSyncService } from '../services/firestore/offlineSyncService';
 import { cloudinaryService } from '../services/media/cloudinaryService';
 
@@ -169,6 +186,8 @@ interface RestaurantContextType {
     method: PaymentMethod,
     note?: string
   ) => Promise<void>;
+  addItemsToOrder: (orderId: string, newItems: OrderItem[], guestCount?: number) => Promise<Order>;
+  updateTableGuestsCount: (tableId: string, count: number) => Promise<void>;
   updateTableStatus: (tableId: string, status: TableStatus) => Promise<void>;
   createReservation: (resData: Omit<Reservation, 'id' | 'createdAt'>) => Promise<void>;
   updateReservationStatus: (resId: string, status: Reservation['status']) => Promise<void>;
@@ -226,10 +245,46 @@ interface RestaurantContextType {
     }
   ) => Promise<Invoice>;
 
+  // Pilotage Tablette Table (Kiosk) & Verrouillage à distance Admin/Firebase
+  lockTableTablet: (tableId: string, reason?: string) => Promise<void>;
+  unlockTableTablet: (tableId: string) => Promise<void>;
+  lockAllTableTablets: (reason?: string) => Promise<void>;
+  unlockAllTableTablets: () => Promise<void>;
+  callWaiterFromTablet: (tableId: string) => Promise<void>;
+  dismissWaiterCall: (tableId: string) => Promise<void>;
+  requestBillFromTablet: (tableId: string) => Promise<void>;
+  updateEmployeePin: (employeeId: string, newPin: string) => Promise<void>;
+  updateEmployeeWeeklySchedule: (employeeId: string, schedule: WeeklySchedule) => Promise<void>;
+  quickReceiveStock: (
+    stockItemId: string,
+    quantity: number,
+    supplierName: string,
+    invoiceNumber?: string,
+    unitPrice?: number
+  ) => Promise<void>;
+  sendOrderToCashier: (orderId: string, tableId?: string) => Promise<void>;
+
+  // Gestion des Comptes Utilisateurs & Tablettes Tactiles (Droits Granulaires CRUD par Onglet)
+  userAccounts: UserAccount[];
+  createUserAccount: (accountData: Omit<UserAccount, 'id' | 'createdAt' | 'updatedAt'>) => Promise<UserAccount>;
+  updateUserAccount: (id: string, updates: Partial<UserAccount>) => Promise<void>;
+  deleteUserAccount: (id: string) => Promise<void>;
+  toggleUserAccountStatus: (id: string) => Promise<void>;
+  updateUserAccountPermissions: (
+    id: string,
+    tabPermissions: Record<string, TabPermission>,
+    additionalTabs: string[]
+  ) => Promise<void>;
+
   // Centre d'Administration & Configuration Professionnel (eZee Optimus style)
   features: FeatureItem[];
   outlets: Outlet[];
   terminals: Terminal[];
+  currentDeviceProfile: DeviceProfile | null;
+  pairDeviceWithCode: (pairingCode: string) => Promise<DeviceProfile | null>;
+  unpairCurrentDevice: () => Promise<void>;
+  generateTerminalPairingCode: (terminalId: string) => Promise<string>;
+  toggleProduct86: (productId: string) => Promise<void>;
   rolePermissions: RolePermissionMatrix;
   roleLimits: Record<UserRole, RoleLimits>;
   peripherals: Peripheral[];
@@ -285,6 +340,13 @@ interface RestaurantContextType {
   addOutlet: (outlet: Omit<Outlet, 'id'>) => Promise<void>;
   addTerminal: (terminal: Omit<Terminal, 'id'>) => Promise<void>;
   addPeripheral: (periph: Omit<Peripheral, 'id'>) => Promise<void>;
+  updatePeripheral: (id: string, updates: Partial<Peripheral>) => Promise<void>;
+  deletePeripheral: (id: string) => Promise<void>;
+  printerSettings: PrinterSettings;
+  updatePrinterSettings: (settings: Partial<PrinterSettings>) => Promise<void>;
+  operationRules: OperationRules;
+  updateOperationRules: (updates: Partial<OperationRules>) => Promise<void>;
+  isRuleEnabled: (ruleKey: string, defaultValue?: boolean) => boolean;
   isFeatureEnabled: (featureId: string) => boolean;
 }
 
@@ -316,6 +378,9 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const [customers, setCustomers] = useState<Customer[]>(() => loadState('customers', INITIAL_CUSTOMERS));
   const [employees, setEmployees] = useState<Employee[]>(() => loadState('employees', INITIAL_EMPLOYEES));
   const [attendances, setAttendances] = useState<Attendance[]>(() => loadState('attendances', INITIAL_ATTENDANCE));
+  const [userAccounts, setUserAccounts] = useState<UserAccount[]>(() =>
+    loadState('user_accounts', INITIAL_USER_ACCOUNTS)
+  );
   const [cashSession, setCashSession] = useState<CashRegisterSession>(() => loadState('cashSession', INITIAL_CASH_SESSION));
   const [cashMovements, setCashMovements] = useState<CashMovement[]>(() => loadState('cashMovements', INITIAL_CASH_MOVEMENTS));
   const [expenses, setExpenses] = useState<Expense[]>(() => loadState('expenses', INITIAL_EXPENSES));
@@ -342,9 +407,29 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const [features, setFeatures] = useState<FeatureItem[]>(() => loadState('features', INITIAL_FEATURES));
   const [outlets, setOutlets] = useState<Outlet[]>(() => loadState('outlets', INITIAL_OUTLETS));
   const [terminals, setTerminals] = useState<Terminal[]>(() => loadState('terminals', INITIAL_TERMINALS));
+  const [currentDeviceProfile, setCurrentDeviceProfile] = useState<DeviceProfile | null>(() => {
+    try {
+      const saved = localStorage.getItem('restomaster_device_profile');
+      if (saved) return JSON.parse(saved);
+    } catch {
+      // ignore
+    }
+    return null;
+  });
   const [rolePermissions, setRolePermissions] = useState<RolePermissionMatrix>(() => loadState('rolePermissions', DEFAULT_PERMISSIONS));
   const [roleLimits, setRoleLimits] = useState<Record<UserRole, RoleLimits>>(() => loadState('roleLimits', INITIAL_ROLE_LIMITS));
   const [peripherals, setPeripherals] = useState<Peripheral[]>(() => loadState('peripherals', INITIAL_PERIPHERALS));
+  const [printerSettings, setPrinterSettings] = useState<PrinterSettings>(() =>
+    loadState('printerSettings', {
+      autoPrintReceiptOnPayment: true,
+      autoPrintKitchenOnOrder: true,
+      autoOpenCashDrawerOnCash: true,
+      receiptCopiesCount: 1,
+    })
+  );
+  const [operationRules, setOperationRules] = useState<OperationRules>(() =>
+    loadState('operations_rules', DEFAULT_OPERATION_RULES)
+  );
   const [configHistory, setConfigHistory] = useState<ConfigurationHistoryItem[]>(() => loadState('configHistory', INITIAL_CONFIG_HISTORY));
   const [configAlerts, setConfigAlerts] = useState<ConfigurationAlert[]>(() => loadState('configAlerts', CONFIGURATION_ALERTS_INITIAL));
   const [selectedOutletId, setSelectedOutletId] = useState<string>(() => loadState('selectedOutletId', 'out-1'));
@@ -395,102 +480,12 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     };
   }, []);
 
-  // Persist to localStorage
+  // Initialisation et migration automatique localStorage -> Firestore au démarrage
   useEffect(() => {
-    localStorage.setItem('restomaster_settings', JSON.stringify(settings));
-    localStorage.setItem('restomaster_tables', JSON.stringify(tables));
-    localStorage.setItem('restomaster_orders', JSON.stringify(orders));
-    localStorage.setItem('restomaster_stockItems', JSON.stringify(stockItems));
-    localStorage.setItem('restomaster_stockMovements', JSON.stringify(stockMovements));
-    localStorage.setItem('restomaster_products', JSON.stringify(products));
-    localStorage.setItem('restomaster_reservations', JSON.stringify(reservations));
-    localStorage.setItem('restomaster_cashSession', JSON.stringify(cashSession));
-    localStorage.setItem('restomaster_cashMovements', JSON.stringify(cashMovements));
-    localStorage.setItem('restomaster_expenses', JSON.stringify(expenses));
-    localStorage.setItem('restomaster_suppliers', JSON.stringify(suppliers));
-    localStorage.setItem('restomaster_purchaseOrders', JSON.stringify(purchaseOrders));
-    localStorage.setItem('restomaster_customers', JSON.stringify(customers));
-    localStorage.setItem('restomaster_employees', JSON.stringify(employees));
-    localStorage.setItem('restomaster_attendances', JSON.stringify(attendances));
-    localStorage.setItem('restomaster_documents', JSON.stringify(documents));
-    localStorage.setItem('restomaster_mediaAssets', JSON.stringify(mediaAssets));
-    localStorage.setItem('restomaster_auditLogs', JSON.stringify(auditLogs));
-    localStorage.setItem('restomaster_notifications', JSON.stringify(notifications));
-
-    // Nouveaux modules
-    localStorage.setItem('restomaster_stockLots', JSON.stringify(stockLots));
-    localStorage.setItem('restomaster_hygieneChecks', JSON.stringify(hygieneChecks));
-    localStorage.setItem('restomaster_events', JSON.stringify(events));
-    localStorage.setItem('restomaster_deliveries', JSON.stringify(deliveries));
-    localStorage.setItem('restomaster_withholdings', JSON.stringify(withholdings));
-    localStorage.setItem('restomaster_fiscalObligations', JSON.stringify(fiscalObligations));
-    localStorage.setItem('restomaster_clientCredits', JSON.stringify(clientCredits));
-    localStorage.setItem('restomaster_cancellationLogs', JSON.stringify(cancellationLogs));
-    localStorage.setItem('restomaster_fiscalJournal', JSON.stringify(fiscalJournal));
-    localStorage.setItem('restomaster_invoices', JSON.stringify(invoices));
-    localStorage.setItem('restomaster_offlineQueue', JSON.stringify(offlineQueue));
-
-    // Administration & Feature Flags
-    localStorage.setItem('restomaster_features', JSON.stringify(features));
-    localStorage.setItem('restomaster_outlets', JSON.stringify(outlets));
-    localStorage.setItem('restomaster_terminals', JSON.stringify(terminals));
-    localStorage.setItem('restomaster_rolePermissions', JSON.stringify(rolePermissions));
-    localStorage.setItem('restomaster_roleLimits', JSON.stringify(roleLimits));
-    localStorage.setItem('restomaster_peripherals', JSON.stringify(peripherals));
-    localStorage.setItem('restomaster_configHistory', JSON.stringify(configHistory));
-
-    // Architecture Multi-Restaurants & Groupes
-    localStorage.setItem('restomaster_organization', JSON.stringify(organization));
-    localStorage.setItem('restomaster_zones', JSON.stringify(zones));
-    localStorage.setItem('restomaster_cashRegisters', JSON.stringify(cashRegisters));
-    localStorage.setItem('restomaster_selectedOutletId', JSON.stringify(selectedOutletId));
-    localStorage.setItem('restomaster_activeZoneId', JSON.stringify(activeZoneId));
-    localStorage.setItem('restomaster_activeCashRegisterId', JSON.stringify(activeCashRegisterId));
-  }, [
-    settings,
-    tables,
-    orders,
-    stockItems,
-    stockMovements,
-    products,
-    reservations,
-    cashSession,
-    cashMovements,
-    expenses,
-    suppliers,
-    purchaseOrders,
-    customers,
-    employees,
-    attendances,
-    documents,
-    mediaAssets,
-    auditLogs,
-    notifications,
-    stockLots,
-    hygieneChecks,
-    events,
-    deliveries,
-    withholdings,
-    fiscalObligations,
-    clientCredits,
-    cancellationLogs,
-    fiscalJournal,
-    invoices,
-    offlineQueue,
-    features,
-    outlets,
-    terminals,
-    rolePermissions,
-    roleLimits,
-    peripherals,
-    configHistory,
-    organization,
-    zones,
-    cashRegisters,
-    selectedOutletId,
-    activeZoneId,
-    activeCashRegisterId,
-  ]);
+    firebaseSeedService.initializeOrMigrateToFirestore().catch((err) => {
+      console.warn('Initialisation Firestore:', err);
+    });
+  }, []);
 
   // Offline sync queue subscriber
   useEffect(() => {
@@ -563,12 +558,94 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       }
     );
 
+    // Menu & Produits
+    const unsubProducts = productsFirestoreService.subscribeToProducts(selectedOutletId, setProducts);
+    const unsubCategories = productsFirestoreService.subscribeToCategories(setCategories);
+
+    // Stocks & Lots
+    const unsubStockItems = stockFirestoreService.subscribeToStockItems(selectedOutletId, setStockItems);
+    const unsubStockMovements = stockFirestoreService.subscribeToStockMovements(setStockMovements);
+    const unsubStockLots = stockFirestoreService.subscribeToStockLots(setStockLots);
+    const unsubSuppliers = stockFirestoreService.subscribeToSuppliers(setSuppliers);
+    const unsubPurchaseOrders = stockFirestoreService.subscribeToPurchaseOrders(setPurchaseOrders);
+    const unsubHygieneChecks = stockFirestoreService.subscribeToHygieneChecks(setHygieneChecks);
+
+    // Caisse & Finances
+    const unsubCashRegisters = cashFirestoreService.subscribeToCashRegisters(selectedOutletId, setCashRegisters);
+    const unsubCashMovements = cashFirestoreService.subscribeToCashMovements(setCashMovements);
+    const unsubExpenses = cashFirestoreService.subscribeToExpenses(setExpenses);
+    const unsubCustomers = cashFirestoreService.subscribeToCustomers(setCustomers);
+    const unsubClientCredits = cashFirestoreService.subscribeToClientCredits(setClientCredits);
+
+    // Réservations, Événements & Livraisons
+    const unsubReservations = reservationsFirestoreService.subscribeToReservations(selectedOutletId, setReservations);
+    const unsubDeliveries = reservationsFirestoreService.subscribeToDeliveries(setDeliveries);
+    const unsubEvents = reservationsFirestoreService.subscribeToEvents(setEvents);
+
+    // RH, Personnel & Comptes
+    const unsubUserAccounts = staffFirestoreService.subscribeToUserAccounts(setUserAccounts);
+    const unsubEmployees = staffFirestoreService.subscribeToEmployees(setEmployees);
+    const unsubAttendances = staffFirestoreService.subscribeToAttendances(setAttendances);
+
+    // Fiscalité & Facturation
+    const unsubInvoices = fiscalFirestoreService.subscribeToInvoices(selectedOutletId, setInvoices);
+    const unsubFiscalJournal = fiscalFirestoreService.subscribeToFiscalJournal(selectedOutletId, setFiscalJournal);
+    const unsubWithholdings = fiscalFirestoreService.subscribeToWithholdings(setWithholdings);
+    const unsubFiscalObligations = fiscalFirestoreService.subscribeToFiscalObligations(setFiscalObligations);
+    const unsubCancellationLogs = fiscalFirestoreService.subscribeToCancellationLogs(setCancellationLogs);
+
+    // Configuration & Système
+    const unsubFeatures = configFirestoreService.subscribeToFeatures(setFeatures);
+    const unsubTerminals = configFirestoreService.subscribeToTerminals(setTerminals);
+    const unsubPeripherals = configFirestoreService.subscribeToPeripherals(setPeripherals);
+    const unsubRolePermissions = configFirestoreService.subscribeToRolePermissions(setRolePermissions);
+    const unsubRoleLimits = configFirestoreService.subscribeToRoleLimits(setRoleLimits);
+    const unsubPrinterSettings = configFirestoreService.subscribeToPrinterSettings(setPrinterSettings);
+    const unsubOperationRules = configFirestoreService.subscribeToOperationRules(setOperationRules);
+    const unsubConfigHistory = configFirestoreService.subscribeToConfigHistory(setConfigHistory);
+    const unsubAuditLogs = configFirestoreService.subscribeToAuditLogs(setAuditLogs);
+    const unsubNotifications = configFirestoreService.subscribeToNotifications(setNotifications);
+
     return () => {
       unsubOrders();
       unsubTables();
       unsubZones();
       unsubDocs();
       unsubAssets();
+      unsubProducts();
+      unsubCategories();
+      unsubStockItems();
+      unsubStockMovements();
+      unsubStockLots();
+      unsubSuppliers();
+      unsubPurchaseOrders();
+      unsubHygieneChecks();
+      unsubCashRegisters();
+      unsubCashMovements();
+      unsubExpenses();
+      unsubCustomers();
+      unsubClientCredits();
+      unsubReservations();
+      unsubDeliveries();
+      unsubEvents();
+      unsubUserAccounts();
+      unsubEmployees();
+      unsubAttendances();
+      unsubInvoices();
+      unsubFiscalJournal();
+      unsubWithholdings();
+      unsubFiscalObligations();
+      unsubCancellationLogs();
+      unsubFeatures();
+      unsubTerminals();
+      unsubPeripherals();
+      unsubRolePermissions();
+      unsubRoleLimits();
+      unsubPrinterSettings();
+      unsubOperationRules();
+      unsubConfigHistory();
+      unsubAuditLogs();
+      unsubNotifications();
     };
   }, [selectedOutletId, organization.id]);
 
@@ -660,6 +737,7 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       customerName: orderData.customerName,
       serverId: currentUser.id,
       serverName: currentUser.name,
+      guestCount: orderData.guestCount,
       items: orderData.items || [],
       subtotal: orderData.subtotal || 0,
       tax: orderData.tax || 0,
@@ -676,7 +754,7 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
     setOrders((prev) => [newOrder, ...prev]);
 
-    // If assigned to a table, update table status
+    // If assigned to a table, update table status & guestsCount
     if (newOrder.tableId) {
       setTables((prev) =>
         prev.map((t) =>
@@ -686,6 +764,7 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
                 status: 'en_service',
                 currentOrderId: newOrder.id,
                 assignedServerName: currentUser.name,
+                guestsCount: newOrder.guestCount || t.guestsCount || t.capacity,
                 timeOccupied: now,
               }
             : t
@@ -753,6 +832,137 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     return newOrder;
   };
 
+  // 1b. Ajouter des articles à une commande existante (Synchronisation POS & Tablette Convives)
+  const addItemsToOrder = async (
+    orderId: string,
+    newItems: OrderItem[],
+    guestCount?: number
+  ): Promise<Order> => {
+    const targetOrder = orders.find((o) => o.id === orderId);
+    if (!targetOrder) throw new Error('Commande introuvable');
+
+    const now = new Date().toISOString();
+    const updatedItems = [...targetOrder.items, ...newItems];
+
+    // Calcul du nouveau sous-total
+    const newSubtotal = updatedItems.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
+    // Calcul TVA / Taxe
+    const taxRate = settings.taxRate || 19.25;
+    const newTax = Math.round((newSubtotal * taxRate) / 100);
+    const newTotal = newSubtotal + newTax - (targetOrder.discount || 0);
+
+    const updatedGuestCount = guestCount || targetOrder.guestCount;
+
+    const updatedOrder: Order = {
+      ...targetOrder,
+      items: updatedItems,
+      subtotal: newSubtotal,
+      tax: newTax,
+      total: newTotal,
+      guestCount: updatedGuestCount,
+      status: targetOrder.status === 'payee' || targetOrder.status === 'annulee' ? targetOrder.status : 'envoye',
+      updatedAt: now,
+    };
+
+    setOrders((prev) => prev.map((o) => (o.id === orderId ? updatedOrder : o)));
+
+    // Si la commande est liée à une table, synchroniser guestsCount sur la table
+    if (targetOrder.tableId) {
+      setTables((prev) =>
+        prev.map((t) =>
+          t.id === targetOrder.tableId
+            ? {
+                ...t,
+                status: 'en_service',
+                currentOrderId: targetOrder.id,
+                guestsCount: updatedGuestCount || t.guestsCount,
+              }
+            : t
+        )
+      );
+    }
+
+    // Déduction des stocks si activée
+    if (settings.enableStockAutoDeduction) {
+      newItems.forEach((item) => {
+        const prod = products.find((p) => p.id === item.productId);
+        if (prod && prod.ingredients && prod.ingredients.length > 0) {
+          prod.ingredients.forEach((ing) => {
+            const consumedQty = ing.quantityRequired * item.quantity;
+            setStockItems((prevStk) =>
+              prevStk.map((s) => {
+                if (s.id === ing.stockItemId) {
+                  const newQ = Math.max(0, s.currentQuantity - consumedQty);
+                  return { ...s, currentQuantity: Math.round(newQ * 100) / 100, lastUpdated: now };
+                }
+                return s;
+              })
+            );
+
+            const newMovement: StockMovement = {
+              id: `mv-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+              stockItemId: ing.stockItemId,
+              stockItemName: ing.stockItemName,
+              type: 'sortie_consommation',
+              quantityChange: -consumedQty,
+              previousQuantity: 0,
+              newQuantity: 0,
+              unit: ing.unit,
+              reason: `Rajout commande ${targetOrder.orderNumber} (${item.quantity}x ${item.productName})`,
+              referenceId: targetOrder.id,
+              userName: currentUser.name,
+              timestamp: now,
+            };
+            setStockMovements((prev) => [newMovement, ...prev]);
+          });
+        }
+      });
+    }
+
+    addAuditLog(
+      'Ajout articles commande',
+      'POS',
+      `${newItems.length} article(s) ajouté(s) à la commande ${targetOrder.orderNumber} (${targetOrder.tableName || ''})`,
+      targetOrder.id
+    );
+
+    addNotification(
+      `Articles ajoutés : ${targetOrder.orderNumber}`,
+      `Nouveaux plats/boissons ajoutés à la ${targetOrder.tableName || 'table'}.`,
+      'info',
+      'Cuisine',
+      'moyenne',
+      'kitchen_kds'
+    );
+
+    await ordersFirestoreService.saveOrder(updatedOrder);
+
+    return updatedOrder;
+  };
+
+  // 1c. Mettre à jour le nombre de couverts d'une table
+  const updateTableGuestsCount = async (tableId: string, count: number): Promise<void> => {
+    setTables((prev) =>
+      prev.map((t) =>
+        t.id === tableId ? { ...t, guestsCount: count } : t
+      )
+    );
+    const targetTable = tables.find((t) => t.id === tableId);
+    if (targetTable?.currentOrderId) {
+      setOrders((prev) =>
+        prev.map((o) =>
+          o.id === targetTable.currentOrderId ? { ...o, guestCount: count } : o
+        )
+      );
+    }
+    addAuditLog(
+      'Mise à jour couverts table',
+      'Tables',
+      `Nombre de couverts défini à ${count} pour la Table ${targetTable?.number || tableId}`,
+      tableId
+    );
+  };
+
   // 2. Update Order Status
   const updateOrderStatus = async (orderId: string, status: OrderStatus) => {
     const now = new Date().toISOString();
@@ -761,7 +971,36 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     setOrders((prev) =>
       prev.map((o) => {
         if (o.id === orderId) {
-          updatedOrder = { ...o, status, updatedAt: now };
+          // If status is 'servi', mark items as 'servi' too
+          let newItems = o.items;
+          if (status === 'servi') {
+            newItems = o.items.map((it) => ({
+              ...it,
+              status: 'servi',
+              servedAt: it.servedAt || now,
+            }));
+          } else if (status === 'pret') {
+            newItems = o.items.map((it) => ({
+              ...it,
+              status: it.status === 'servi' ? 'servi' : 'pret',
+              preparedAt: it.preparedAt || now,
+            }));
+          } else if (status === 'en_preparation') {
+            newItems = o.items.map((it) => ({
+              ...it,
+              status: it.status === 'en_attente' ? 'en_preparation' : it.status,
+            }));
+          }
+
+          updatedOrder = {
+            ...o,
+            status,
+            items: newItems,
+            updatedAt: now,
+            preparedAt: status === 'pret' ? (o.preparedAt || now) : o.preparedAt,
+            servedAt: status === 'servi' ? (o.servedAt || now) : o.servedAt,
+            paidAt: status === 'payee' ? (o.paidAt || now) : o.paidAt,
+          };
           return updatedOrder;
         }
         return o;
@@ -776,6 +1015,15 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         'success',
         'Service',
         'haute',
+        'tables'
+      );
+    } else if (status === 'servi' && updatedOrder) {
+      addNotification(
+        `Commande Servie : ${updatedOrder.orderNumber}`,
+        `La table ${updatedOrder.tableName || 'commande'} a été servie. Bon appétit !`,
+        'info',
+        'Service',
+        'moyenne',
         'tables'
       );
     }
@@ -808,20 +1056,33 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
             return {
               ...item,
               status,
-              preparedAt: status === 'pret' ? now : item.preparedAt,
+              preparedAt: status === 'pret' ? (item.preparedAt || now) : item.preparedAt,
+              servedAt: status === 'servi' ? (item.servedAt || now) : item.servedAt,
             };
           }
           return item;
         });
 
-        // If all items ready, automatically advance order status to 'pret'
-        const allReady = newItems.every((i) => i.status === 'pret' || i.status === 'servi');
-        const nextOrderStatus = allReady ? 'pret' : order.status === 'envoye' ? 'en_preparation' : order.status;
+        // Determine updated order status based on all items
+        const allServi = newItems.every((i) => i.status === 'servi');
+        const allReadyOrServi = newItems.every((i) => i.status === 'pret' || i.status === 'servi');
+        const anyInPrep = newItems.some((i) => i.status === 'en_preparation');
+
+        let nextOrderStatus = order.status;
+        if (allServi) {
+          nextOrderStatus = 'servi';
+        } else if (allReadyOrServi) {
+          nextOrderStatus = 'pret';
+        } else if (anyInPrep && order.status === 'envoye') {
+          nextOrderStatus = 'en_preparation';
+        }
 
         return {
           ...order,
           items: newItems,
           status: nextOrderStatus,
+          preparedAt: nextOrderStatus === 'pret' ? (order.preparedAt || now) : order.preparedAt,
+          servedAt: nextOrderStatus === 'servi' ? (order.servedAt || now) : order.servedAt,
           updatedAt: now,
         };
       })
@@ -863,6 +1124,7 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       paidAmount: newPaidAmount,
       paymentStatus: isFullyPaid ? 'paye' : 'partiel',
       status: isFullyPaid ? 'payee' : 'attente_paiement',
+      paidAt: isFullyPaid ? now : targetOrder.paidAt,
       updatedAt: now,
       payments: [...(targetOrder.payments || []), payment],
     };
@@ -935,6 +1197,347 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     );
     await tablesFirestoreService.updateTableStatus(tableId, status);
     addAuditLog('Changement statut table', 'Tables', `Table passée au statut ${status}`, tableId);
+  };
+
+  // 5b. Pilotage Tablette Kiosk Table & Verrouillage à distance Admin / Firebase
+  const lockTableTablet = async (tableId: string, reason: string = 'Verrouillée à distance par la Direction') => {
+    setTables((prev) =>
+      prev.map((t) =>
+        t.id === tableId
+          ? {
+              ...t,
+              tabletLocked: true,
+              tabletLockedReason: reason,
+              tabletLockedAt: new Date().toISOString(),
+              tabletLockedBy: currentUser.name,
+            }
+          : t
+      )
+    );
+    await tablesFirestoreService.updateTableTabletLock(tableId, true, reason, currentUser.name);
+    const targetTable = tables.find((t) => t.id === tableId);
+    addAuditLog(
+      'Verrouillage Tablette Table',
+      'Tables',
+      `Table ${targetTable?.number || tableId} (${targetTable?.name || ''}) verrouillée à distance par ${currentUser.name}. Motif: ${reason}`,
+      tableId
+    );
+  };
+
+  const unlockTableTablet = async (tableId: string) => {
+    setTables((prev) =>
+      prev.map((t) =>
+        t.id === tableId
+          ? {
+              ...t,
+              tabletLocked: false,
+              tabletLockedReason: undefined,
+              tabletLockedAt: undefined,
+              tabletLockedBy: undefined,
+            }
+          : t
+      )
+    );
+    await tablesFirestoreService.updateTableTabletLock(tableId, false);
+    const targetTable = tables.find((t) => t.id === tableId);
+    addAuditLog(
+      'Déverrouillage Tablette Table',
+      'Tables',
+      `Table ${targetTable?.number || tableId} déverrouillée à distance par ${currentUser.name}`,
+      tableId
+    );
+  };
+
+  const lockAllTableTablets = async (reason: string = 'Verrouillage global Direction') => {
+    const tableIds = tables.filter((t) => !selectedOutletId || t.restaurantId === selectedOutletId).map((t) => t.id);
+    setTables((prev) =>
+      prev.map((t) =>
+        !selectedOutletId || t.restaurantId === selectedOutletId
+          ? {
+              ...t,
+              tabletLocked: true,
+              tabletLockedReason: reason,
+              tabletLockedAt: new Date().toISOString(),
+              tabletLockedBy: currentUser.name,
+            }
+          : t
+      )
+    );
+    for (const tid of tableIds) {
+      tablesFirestoreService.updateTableTabletLock(tid, true, reason, currentUser.name).catch(() => {});
+    }
+    addAuditLog(
+      'Verrouillage Global Tablettes',
+      'Tables',
+      `Toutes les tablettes de l'établissement (${tableIds.length}) verrouillées à distance par ${currentUser.name}`
+    );
+  };
+
+  const unlockAllTableTablets = async () => {
+    const tableIds = tables.filter((t) => !selectedOutletId || t.restaurantId === selectedOutletId).map((t) => t.id);
+    setTables((prev) =>
+      prev.map((t) =>
+        !selectedOutletId || t.restaurantId === selectedOutletId
+          ? {
+              ...t,
+              tabletLocked: false,
+              tabletLockedReason: undefined,
+              tabletLockedAt: undefined,
+              tabletLockedBy: undefined,
+            }
+          : t
+      )
+    );
+    for (const tid of tableIds) {
+      tablesFirestoreService.updateTableTabletLock(tid, false).catch(() => {});
+    }
+    addAuditLog(
+      'Déverrouillage Global Tablettes',
+      'Tables',
+      `Toutes les tablettes de l'établissement déverrouillées à distance par ${currentUser.name}`
+    );
+  };
+
+  const callWaiterFromTablet = async (tableId: string) => {
+    setTables((prev) =>
+      prev.map((t) => (t.id === tableId ? { ...t, tabletCallWaiterPending: true } : t))
+    );
+    await tablesFirestoreService.updateCallWaiterStatus(tableId, true);
+    const targetTable = tables.find((t) => t.id === tableId);
+    addAuditLog(
+      'Appel Serveur Client',
+      'Tables',
+      `Le client de la Table ${targetTable?.number || tableId} demande un serveur`,
+      tableId
+    );
+  };
+
+  const dismissWaiterCall = async (tableId: string) => {
+    setTables((prev) =>
+      prev.map((t) => (t.id === tableId ? { ...t, tabletCallWaiterPending: false } : t))
+    );
+    await tablesFirestoreService.updateCallWaiterStatus(tableId, false);
+  };
+
+  const requestBillFromTablet = async (tableId: string) => {
+    setTables((prev) =>
+      prev.map((t) =>
+        t.id === tableId ? { ...t, tabletBillRequested: true, status: 'attente_paiement' } : t
+      )
+    );
+    const targetTable = tables.find((t) => t.id === tableId);
+    addAuditLog(
+      'Demande Addition Client',
+      'Tables',
+      `Le client de la Table ${targetTable?.number || tableId} a demandé l'addition depuis sa tablette`,
+      tableId
+    );
+  };
+
+  const updateEmployeePin = async (employeeId: string, newPin: string) => {
+    setEmployees((prev) =>
+      prev.map((e) => (e.id === employeeId ? { ...e, pinCode: newPin } : e))
+    );
+    const emp = employees.find((e) => e.id === employeeId);
+    addAuditLog(
+      'Modification Code PIN',
+      'Personnel',
+      `Code PIN modifié pour l'employé ${emp?.fullName || employeeId}`,
+      employeeId
+    );
+  };
+
+  const updateEmployeeWeeklySchedule = async (employeeId: string, schedule: WeeklySchedule) => {
+    setEmployees((prev) =>
+      prev.map((e) => (e.id === employeeId ? { ...e, weeklySchedule: schedule } : e))
+    );
+    const emp = employees.find((e) => e.id === employeeId);
+    addAuditLog(
+      'Mise à jour planning hebdomadaire',
+      'Personnel',
+      `Planning de service hebdomadaire mis à jour pour ${emp?.fullName || employeeId}`,
+      employeeId
+    );
+  };
+
+  const quickReceiveStock = async (
+    stockItemId: string,
+    quantity: number,
+    supplierName: string,
+    invoiceNumber?: string,
+    unitPrice?: number
+  ) => {
+    const now = new Date().toISOString();
+    const item = stockItems.find((s) => s.id === stockItemId);
+    if (!item) return;
+
+    const previousQ = item.currentQuantity;
+    const newQ = previousQ + quantity;
+
+    setStockItems((prev) =>
+      prev.map((s) =>
+        s.id === stockItemId
+          ? {
+              ...s,
+              currentQuantity: Math.round(newQ * 100) / 100,
+              purchasePrice: unitPrice !== undefined && unitPrice > 0 ? unitPrice : s.purchasePrice,
+              supplierName: supplierName || s.supplierName,
+              lastUpdated: now,
+            }
+          : s
+      )
+    );
+
+    const newMovement: StockMovement = {
+      id: `mv-rec-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      stockItemId: item.id,
+      stockItemName: item.name,
+      type: 'entree_achat',
+      quantityChange: quantity,
+      previousQuantity: previousQ,
+      newQuantity: newQ,
+      unit: item.unit,
+      reason: `Réception livraison : ${supplierName || 'Fournisseur'} ${invoiceNumber ? `(Réf: ${invoiceNumber})` : ''}`,
+      referenceId: invoiceNumber || undefined,
+      userName: currentUser.name,
+      timestamp: now,
+    };
+    setStockMovements((prev) => [newMovement, ...prev]);
+
+    addAuditLog(
+      'Réception Marchandises',
+      'Stocks',
+      `Livraison de +${quantity} ${item.unit} de ${item.name} reçue de ${supplierName}`,
+      item.id
+    );
+
+    addNotification(
+      'Livraison Stock Enregistrée',
+      `+${quantity} ${item.unit} de ${item.name} (${supplierName}) ajoutés au stock.`,
+      'info',
+      'Stock'
+    );
+  };
+
+  const sendOrderToCashier = async (orderId: string, tableId?: string) => {
+    const now = new Date().toISOString();
+    let targetTableName = 'Table';
+
+    if (tableId) {
+      setTables((prev) =>
+        prev.map((t) => {
+          if (t.id === tableId) {
+            targetTableName = `Table ${t.number}`;
+            return { ...t, status: 'attente_paiement' };
+          }
+          return t;
+        })
+      );
+    }
+
+    setOrders((prev) =>
+      prev.map((o) => {
+        if (o.id === orderId) {
+          if (o.tableName) targetTableName = `Table ${o.tableName}`;
+          return { ...o, status: 'attente_paiement', updatedAt: now };
+        }
+        return o;
+      })
+    );
+
+    addAuditLog(
+      'Envoi Commande à la Caisse',
+      'POS',
+      `Addition de la ${targetTableName} envoyée à la caisse pour règlement`,
+      orderId
+    );
+
+    addNotification(
+      `Addition en attente : ${targetTableName}`,
+      `La commande de la ${targetTableName} a été transmise au poste de caisse pour encaissement.`,
+      'warning',
+      'Caisse',
+      'haute',
+      'caisse'
+    );
+  };
+
+  // 5c. Gestion des Comptes Utilisateurs & Tablettes Tactiles (Droits Granulaires CRUD par Onglet)
+  const createUserAccount = async (
+    accountData: Omit<UserAccount, 'id' | 'createdAt' | 'updatedAt'>
+  ): Promise<UserAccount> => {
+    const nowStr = new Date().toISOString().slice(0, 10);
+    const newAccount: UserAccount = {
+      ...accountData,
+      id: `acc-${Date.now()}`,
+      createdAt: nowStr,
+      updatedAt: nowStr,
+    };
+    setUserAccounts((prev) => [newAccount, ...prev]);
+    addAuditLog(
+      'Création Compte Utilisateur',
+      'Personnel',
+      `Création du compte ${newAccount.name} (${newAccount.accountType === 'tablette' ? 'Borne Tablette ' + (newAccount.assignedTableName || '') : 'Rôle ' + newAccount.role})`,
+      newAccount.id
+    );
+    return newAccount;
+  };
+
+  const updateUserAccount = async (id: string, updates: Partial<UserAccount>) => {
+    const nowStr = new Date().toISOString().slice(0, 10);
+    setUserAccounts((prev) =>
+      prev.map((acc) =>
+        acc.id === id ? { ...acc, ...updates, updatedAt: nowStr } : acc
+      )
+    );
+    addAuditLog(
+      'Modification Compte Utilisateur',
+      'Personnel',
+      `Mise à jour des paramètres du compte ID ${id}`,
+      id
+    );
+  };
+
+  const deleteUserAccount = async (id: string) => {
+    const target = userAccounts.find((a) => a.id === id);
+    setUserAccounts((prev) => prev.filter((acc) => acc.id !== id));
+    addAuditLog(
+      'Suppression Compte Utilisateur',
+      'Personnel',
+      `Suppression du compte ${target?.name || id} (${target?.role})`,
+      id
+    );
+  };
+
+  const toggleUserAccountStatus = async (id: string) => {
+    const nowStr = new Date().toISOString().slice(0, 10);
+    setUserAccounts((prev) =>
+      prev.map((acc) =>
+        acc.id === id ? { ...acc, active: !acc.active, updatedAt: nowStr } : acc
+      )
+    );
+  };
+
+  const updateUserAccountPermissions = async (
+    id: string,
+    tabPermissions: Record<string, TabPermission>,
+    additionalTabs: string[]
+  ) => {
+    const nowStr = new Date().toISOString().slice(0, 10);
+    setUserAccounts((prev) =>
+      prev.map((acc) =>
+        acc.id === id
+          ? { ...acc, tabPermissions, additionalTabs, updatedAt: nowStr }
+          : acc
+      )
+    );
+    const target = userAccounts.find((a) => a.id === id);
+    addAuditLog(
+      'Mise à Jour Droits Granulaires',
+      'Paramètres',
+      `Droits par onglet (Voir/Créer/Modifier/Supprimer) modifiés pour ${target?.name || id}`,
+      id
+    );
   };
 
   // 6. Create Reservation
@@ -1785,15 +2388,105 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   };
 
   const addTerminal = async (terminal: Omit<Terminal, 'id'>) => {
+    const chars = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    let rand = '';
+    for (let i = 0; i < 4; i++) {
+      rand += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
     const newTerm: Terminal = {
       ...terminal,
       id: `term-${Date.now()}`,
+      pairingCode: terminal.pairingCode || `TRM-${rand}`,
     };
     setTerminals((prev) => [...prev, newTerm]);
     addAuditLog(
       'Création terminal',
       'Paramètres',
       `Nouveau terminal configuré : ${newTerm.name} (${newTerm.type})`
+    );
+  };
+
+  const generateTerminalPairingCode = async (terminalId: string): Promise<string> => {
+    const chars = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    let rand = '';
+    for (let i = 0; i < 4; i++) {
+      rand += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    const code = `TRM-${rand}`;
+    const expires = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+
+    setTerminals((prev) =>
+      prev.map((t) => (t.id === terminalId ? { ...t, pairingCode: code, pairingExpiresAt: expires } : t))
+    );
+    addAuditLog('Code Appairage Généré', 'Paramètres', `Code ${code} généré pour terminal ${terminalId}`);
+    return code;
+  };
+
+  const pairDeviceWithCode = async (pairingCode: string): Promise<DeviceProfile | null> => {
+    const clean = pairingCode.trim().toUpperCase().replace(/\s+/g, '');
+    const found = terminals.find(
+      (t) => t.pairingCode && t.pairingCode.toUpperCase().replace(/\s+/g, '') === clean
+    );
+    if (!found) return null;
+
+    const now = new Date().toISOString();
+    const profile: DeviceProfile = {
+      terminalId: found.id,
+      terminalName: found.name,
+      type: found.type,
+      outletId: found.outletId,
+      assignedRole: found.assignedRole,
+      assignedTableId: found.assignedTableId,
+      assignedZone: found.assignedZone,
+      kdsStation: found.kdsStation,
+      pairedAt: now,
+      pairingCode: found.pairingCode || clean,
+    };
+
+    try {
+      localStorage.setItem('restomaster_device_profile', JSON.stringify(profile));
+      if (profile.assignedTableId) {
+        localStorage.setItem('restomaster_tablet_table_id', profile.assignedTableId);
+      }
+    } catch {
+      // ignore
+    }
+
+    setTerminals((prev) =>
+      prev.map((t) => (t.id === found.id ? { ...t, pairedAt: now } : t))
+    );
+    setCurrentDeviceProfile(profile);
+    addAuditLog(
+      'Appairage Réussi',
+      'Paramètres',
+      `Appareil appairé au profil "${found.name}" (${found.type})`
+    );
+    return profile;
+  };
+
+  const unpairCurrentDevice = async (): Promise<void> => {
+    try {
+      localStorage.removeItem('restomaster_device_profile');
+    } catch {
+      // ignore
+    }
+    setCurrentDeviceProfile(null);
+    addAuditLog('Désappairage Terminal', 'Paramètres', 'Terminal désappairé avec succès');
+  };
+
+  const toggleProduct86 = async (productId: string): Promise<void> => {
+    const target = products.find((p) => p.id === productId);
+    if (!target) return;
+    const newStatus = !target.available;
+
+    setProducts((prev) =>
+      prev.map((p) => (p.id === productId ? { ...p, available: newStatus } : p))
+    );
+
+    addAuditLog(
+      newStatus ? 'Remise en Vente Produit' : 'Règle 86 - Rupture Immédiate',
+      'Cuisine',
+      `${target.name} déclaré ${newStatus ? 'DISPONIBLE' : 'RUPTURE / 86'}`
     );
   };
 
@@ -1807,6 +2500,49 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       'Ajout périphérique',
       'Paramètres',
       `Périphérique configuré : ${newP.name} (${newP.type})`
+    );
+  };
+
+  const updatePeripheral = async (id: string, updates: Partial<Peripheral>) => {
+    setPeripherals((prev) =>
+      prev.map((p) => (p.id === id ? { ...p, ...updates } : p))
+    );
+    addAuditLog('Modification imprimante', 'Paramètres', `Périphérique mis à jour ${id}`);
+  };
+
+  const deletePeripheral = async (id: string) => {
+    setPeripherals((prev) => prev.filter((p) => p.id !== id));
+    addAuditLog('Suppression imprimante', 'Paramètres', `Périphérique supprimé ${id}`);
+  };
+
+  const updatePrinterSettings = async (settingsUpdates: Partial<PrinterSettings>) => {
+    setPrinterSettings((prev) => ({ ...prev, ...settingsUpdates }));
+    addAuditLog('Configuration impression', 'Paramètres', 'Options d\'automatisation d\'impression mises à jour');
+  };
+
+  // 31. Règles Opérationnelles Métier (Section 7 POS, Tables, Cuisine, Bar, Caisse)
+  const isRuleEnabled = useCallback(
+    (ruleKey: string, defaultValue = true): boolean => {
+      if (ruleKey in operationRules) {
+        return !!operationRules[ruleKey];
+      }
+      return defaultValue;
+    },
+    [operationRules]
+  );
+
+  const updateOperationRules = async (updates: Partial<OperationRules>) => {
+    setOperationRules((prev) => {
+      const next = { ...prev, ...updates } as unknown as OperationRules;
+      try {
+        localStorage.setItem('restomaster_operations_rules', JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+    addAuditLog(
+      'Mise à jour règles opérationnelles',
+      'Paramètres',
+      `${Object.keys(updates).length} règle(s) opérationnelle(s) mise(s) à jour`
     );
   };
 
@@ -2003,6 +2739,7 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     setOrganization(INITIAL_ORGANIZATION);
     setZones(INITIAL_ZONES);
     setCashRegisters(INITIAL_CASH_REGISTERS);
+    setUserAccounts(INITIAL_USER_ACCOUNTS);
     setSelectedOutletId('out-1');
     setActiveZoneId('all');
     setActiveCashRegisterId('reg-1');
@@ -2099,7 +2836,29 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         updateOrderStatus,
         updateOrderItemStatus,
         recordOrderPayment,
+        addItemsToOrder,
+        updateTableGuestsCount,
         updateTableStatus,
+        lockTableTablet,
+        unlockTableTablet,
+        lockAllTableTablets,
+        unlockAllTableTablets,
+        callWaiterFromTablet,
+        dismissWaiterCall,
+        requestBillFromTablet,
+        updateEmployeePin,
+        updateEmployeeWeeklySchedule,
+        quickReceiveStock,
+        sendOrderToCashier,
+
+        // Gestion des Comptes Utilisateurs & Tablettes Tactiles
+        userAccounts,
+        createUserAccount,
+        updateUserAccount,
+        deleteUserAccount,
+        toggleUserAccountStatus,
+        updateUserAccountPermissions,
+
         createReservation,
         updateReservationStatus,
         seatReservation,
@@ -2138,6 +2897,11 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         generateInvoiceForOrder,
 
         // Fonctions Configuration
+        currentDeviceProfile,
+        pairDeviceWithCode,
+        unpairCurrentDevice,
+        generateTerminalPairingCode,
+        toggleProduct86,
         updateFeatureStatus,
         updateFeatureConfig,
         updateRolePermission,
@@ -2146,6 +2910,13 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         addOutlet,
         addTerminal,
         addPeripheral,
+        updatePeripheral,
+        deletePeripheral,
+        printerSettings,
+        updatePrinterSettings,
+        operationRules,
+        updateOperationRules,
+        isRuleEnabled,
         isFeatureEnabled,
       }}
     >

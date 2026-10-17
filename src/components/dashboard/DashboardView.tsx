@@ -31,7 +31,14 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ navigateTo }) => {
     expenses,
     cashSession,
     settings,
+    isFeatureEnabled,
   } = useRestaurant();
+
+  const isReservationsEnabled = isFeatureEnabled('table_reservations');
+  const isTablesEnabled = isFeatureEnabled('tables_management');
+  const isStockEnabled = isFeatureEnabled('stock_lots_fefo');
+  const isCashEnabled = isFeatureEnabled('cash_register_z');
+  const isKitchenKdsEnabled = isFeatureEnabled('kds_kitchen');
 
   const [period, setPeriod] = useState<'today' | 'week' | 'month'>('today');
 
@@ -226,7 +233,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ navigateTo }) => {
       </div>
 
       {/* Operational Quick Pulse Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
         <div
           onClick={() => navigateTo('pos')}
           className="p-4 rounded-xl bg-white border border-slate-200 shadow-xs hover:border-amber-400 cursor-pointer transition-all"
@@ -236,42 +243,48 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ navigateTo }) => {
           <div className="text-[11px] text-slate-400 mt-0.5">En cuisine ou attente paiement</div>
         </div>
 
-        <div
-          onClick={() => navigateTo('tables')}
-          className="p-4 rounded-xl bg-white border border-slate-200 shadow-xs hover:border-indigo-400 cursor-pointer transition-all"
-        >
-          <div className="text-xs font-semibold text-slate-500">Taux d'occupation</div>
-          <div className="text-xl font-bold text-indigo-600 mt-1">
-            {Math.round((occupiedTables.length / tables.length) * 100)}%
+        {isTablesEnabled && (
+          <div
+            onClick={() => navigateTo('tables')}
+            className="p-4 rounded-xl bg-white border border-slate-200 shadow-xs hover:border-indigo-400 cursor-pointer transition-all"
+          >
+            <div className="text-xs font-semibold text-slate-500">Taux d'occupation</div>
+            <div className="text-xl font-bold text-indigo-600 mt-1">
+              {tables.length > 0 ? Math.round((occupiedTables.length / tables.length) * 100) : 0}%
+            </div>
+            <div className="text-[11px] text-slate-400 mt-0.5">
+              {occupiedTables.length} / {tables.length} tables occupées
+            </div>
           </div>
-          <div className="text-[11px] text-slate-400 mt-0.5">
-            {occupiedTables.length} / {tables.length} tables occupées
-          </div>
-        </div>
+        )}
 
-        <div
-          onClick={() => navigateTo('reservations')}
-          className="p-4 rounded-xl bg-white border border-slate-200 shadow-xs hover:border-blue-400 cursor-pointer transition-all"
-        >
-          <div className="text-xs font-semibold text-slate-500">Réservations à venir</div>
-          <div className="text-xl font-bold text-blue-600 mt-1">{pendingReservations.length}</div>
-          <div className="text-[11px] text-slate-400 mt-0.5">Pour ce midi et ce soir</div>
-        </div>
-
-        <div
-          onClick={() => navigateTo('stock')}
-          className={`p-4 rounded-xl border shadow-xs cursor-pointer transition-all ${
-            lowStockItems.length > 0
-              ? 'bg-rose-50/60 border-rose-200 hover:border-rose-400 text-rose-800'
-              : 'bg-white border-slate-200 text-slate-700'
-          }`}
-        >
-          <div className="text-xs font-semibold">Alertes Stock Bas</div>
-          <div className="text-xl font-bold mt-1 text-rose-600">
-            {lowStockItems.length} articles
+        {isReservationsEnabled && (
+          <div
+            onClick={() => navigateTo('reservations')}
+            className="p-4 rounded-xl bg-white border border-slate-200 shadow-xs hover:border-blue-400 cursor-pointer transition-all"
+          >
+            <div className="text-xs font-semibold text-slate-500">Réservations à venir</div>
+            <div className="text-xl font-bold text-blue-600 mt-1">{pendingReservations.length}</div>
+            <div className="text-[11px] text-slate-400 mt-0.5">Pour ce midi et ce soir</div>
           </div>
-          <div className="text-[11px] text-rose-700/80 mt-0.5">Sous le seuil de sécurité</div>
-        </div>
+        )}
+
+        {isStockEnabled && (
+          <div
+            onClick={() => navigateTo('stock')}
+            className={`p-4 rounded-xl border shadow-xs cursor-pointer transition-all ${
+              lowStockItems.length > 0
+                ? 'bg-rose-50/60 border-rose-200 hover:border-rose-400 text-rose-800'
+                : 'bg-white border-slate-200 text-slate-700'
+            }`}
+          >
+            <div className="text-xs font-semibold">Alertes Stock Bas</div>
+            <div className="text-xl font-bold mt-1 text-rose-600">
+              {lowStockItems.length} articles
+            </div>
+            <div className="text-[11px] text-rose-700/80 mt-0.5">Sous le seuil de sécurité</div>
+          </div>
+        )}
       </div>
 
       {/* Main Two-Column Layout */}
@@ -380,86 +393,90 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ navigateTo }) => {
         {/* Right 1 Col: Urgent Stock Alerts, Impending Reservations & Shortcuts */}
         <div className="space-y-6">
           {/* Critical Stock Alerts */}
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-5">
-            <div className="flex items-center justify-between mb-3">
-              <div className="font-bold text-slate-900 text-sm flex items-center gap-2">
-                <AlertTriangle className="w-4 h-4 text-rose-500" />
-                Alertes Stocks Critiques
+          {isStockEnabled && (
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-5">
+              <div className="flex items-center justify-between mb-3">
+                <div className="font-bold text-slate-900 text-sm flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4 text-rose-500" />
+                  Alertes Stocks Critiques
+                </div>
+                <button
+                  onClick={() => navigateTo('stock')}
+                  className="text-xs text-rose-600 hover:text-rose-800 font-semibold inline-flex items-center gap-1"
+                >
+                  <span>Réapprovisionner</span>
+                  <ArrowRight className="w-3 h-3" />
+                </button>
               </div>
-              <button
-                onClick={() => navigateTo('stock')}
-                className="text-xs text-rose-600 hover:text-rose-800 font-semibold inline-flex items-center gap-1"
-              >
-                <span>Réapprovisionner</span>
-                <ArrowRight className="w-3 h-3" />
-              </button>
-            </div>
 
-            {lowStockItems.length === 0 ? (
-              <div className="text-center py-6 text-xs text-slate-500 flex flex-col items-center gap-2">
-                <CheckCircle2 className="w-8 h-8 text-emerald-500" />
-                <span>Tous les stocks sont au-dessus des seuils de sécurité !</span>
+              {lowStockItems.length === 0 ? (
+                <div className="text-center py-6 text-xs text-slate-500 flex flex-col items-center gap-2">
+                  <CheckCircle2 className="w-8 h-8 text-emerald-500" />
+                  <span>Tous les stocks sont au-dessus des seuils de sécurité !</span>
+                </div>
+              ) : (
+                <div className="space-y-2.5">
+                  {lowStockItems.map((item) => (
+                    <div
+                      key={item.id}
+                      className="p-2.5 rounded-xl bg-rose-50/50 border border-rose-200/80 flex items-center justify-between text-xs"
+                    >
+                      <div>
+                        <div className="font-bold text-slate-800">{item.name}</div>
+                        <div className="text-[11px] text-rose-700">
+                          Reste : <strong>{item.currentQuantity} {item.unit}</strong> (Seuil : {item.minThreshold} {item.unit})
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => navigateTo('purchases')}
+                        className="text-[10px] font-bold px-2 py-1 bg-white hover:bg-rose-100 text-rose-700 rounded-lg border border-rose-300"
+                      >
+                        Commander
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Today's Reservations */}
+          {isReservationsEnabled && (
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-5">
+              <div className="flex items-center justify-between mb-3">
+                <div className="font-bold text-slate-900 text-sm flex items-center gap-2">
+                  <Calendar className="w-4 h-4 text-blue-500" />
+                  Réservations du Jour
+                </div>
+                <button
+                  onClick={() => navigateTo('reservations')}
+                  className="text-xs text-blue-600 hover:text-blue-800 font-semibold inline-flex items-center gap-1"
+                >
+                  <span>Planning</span>
+                  <ArrowRight className="w-3 h-3" />
+                </button>
               </div>
-            ) : (
+
               <div className="space-y-2.5">
-                {lowStockItems.map((item) => (
+                {reservations.slice(0, 3).map((res) => (
                   <div
-                    key={item.id}
-                    className="p-2.5 rounded-xl bg-rose-50/50 border border-rose-200/80 flex items-center justify-between text-xs"
+                    key={res.id}
+                    className="p-3 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between text-xs"
                   >
                     <div>
-                      <div className="font-bold text-slate-800">{item.name}</div>
-                      <div className="text-[11px] text-rose-700">
-                        Reste : <strong>{item.currentQuantity} {item.unit}</strong> (Seuil : {item.minThreshold} {item.unit})
+                      <div className="font-bold text-slate-800">{res.customerName}</div>
+                      <div className="text-[11px] text-slate-500">
+                        {res.time} • {res.guestCount} personnes • {res.tableName || 'Table non assignée'}
                       </div>
                     </div>
-                    <button
-                      onClick={() => navigateTo('purchases')}
-                      className="text-[10px] font-bold px-2 py-1 bg-white hover:bg-rose-100 text-rose-700 rounded-lg border border-rose-300"
-                    >
-                      Commander
-                    </button>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-800">
+                      {res.status}
+                    </span>
                   </div>
                 ))}
               </div>
-            )}
-          </div>
-
-          {/* Today's Reservations */}
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-5">
-            <div className="flex items-center justify-between mb-3">
-              <div className="font-bold text-slate-900 text-sm flex items-center gap-2">
-                <Calendar className="w-4 h-4 text-blue-500" />
-                Réservations du Jour
-              </div>
-              <button
-                onClick={() => navigateTo('reservations')}
-                className="text-xs text-blue-600 hover:text-blue-800 font-semibold inline-flex items-center gap-1"
-              >
-                <span>Planning</span>
-                <ArrowRight className="w-3 h-3" />
-              </button>
             </div>
-
-            <div className="space-y-2.5">
-              {reservations.slice(0, 3).map((res) => (
-                <div
-                  key={res.id}
-                  className="p-3 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between text-xs"
-                >
-                  <div>
-                    <div className="font-bold text-slate-800">{res.customerName}</div>
-                    <div className="text-[11px] text-slate-500">
-                      {res.time} • {res.guestCount} personnes • {res.tableName || 'Table non assignée'}
-                    </div>
-                  </div>
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-800">
-                    {res.status}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
+          )}
 
           {/* Quick Shortcuts */}
           <div className="bg-gradient-to-br from-slate-900 to-slate-800 text-white rounded-2xl p-5 shadow-lg">
@@ -467,27 +484,33 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ navigateTo }) => {
               Actions Fréquentes
             </div>
             <div className="grid grid-cols-2 gap-2 text-xs">
-              <button
-                onClick={() => navigateTo('tables')}
-                className="p-2.5 rounded-xl bg-slate-800/80 hover:bg-slate-700 border border-slate-700 text-left transition-colors"
-              >
-                <div className="font-bold">Plan de salle</div>
-                <div className="text-[10px] text-slate-400 mt-0.5">Assigner les tables</div>
-              </button>
-              <button
-                onClick={() => navigateTo('kitchen_kds')}
-                className="p-2.5 rounded-xl bg-slate-800/80 hover:bg-slate-700 border border-slate-700 text-left transition-colors"
-              >
-                <div className="font-bold text-amber-300">Cuisine KDS</div>
-                <div className="text-[10px] text-slate-400 mt-0.5">Écran des cuisiniers</div>
-              </button>
-              <button
-                onClick={() => navigateTo('caisse')}
-                className="p-2.5 rounded-xl bg-slate-800/80 hover:bg-slate-700 border border-slate-700 text-left transition-colors"
-              >
-                <div className="font-bold">Clôture Caisse</div>
-                <div className="text-[10px] text-slate-400 mt-0.5">Comptage journalier</div>
-              </button>
+              {isTablesEnabled && (
+                <button
+                  onClick={() => navigateTo('tables')}
+                  className="p-2.5 rounded-xl bg-slate-800/80 hover:bg-slate-700 border border-slate-700 text-left transition-colors"
+                >
+                  <div className="font-bold">Plan de salle</div>
+                  <div className="text-[10px] text-slate-400 mt-0.5">Assigner les tables</div>
+                </button>
+              )}
+              {isKitchenKdsEnabled && (
+                <button
+                  onClick={() => navigateTo('kitchen_kds')}
+                  className="p-2.5 rounded-xl bg-slate-800/80 hover:bg-slate-700 border border-slate-700 text-left transition-colors"
+                >
+                  <div className="font-bold text-amber-300">Cuisine KDS</div>
+                  <div className="text-[10px] text-slate-400 mt-0.5">Écran des cuisiniers</div>
+                </button>
+              )}
+              {isCashEnabled && (
+                <button
+                  onClick={() => navigateTo('caisse')}
+                  className="p-2.5 rounded-xl bg-slate-800/80 hover:bg-slate-700 border border-slate-700 text-left transition-colors"
+                >
+                  <div className="font-bold">Clôture Caisse</div>
+                  <div className="text-[10px] text-slate-400 mt-0.5">Comptage journalier</div>
+                </button>
+              )}
               <button
                 onClick={() => navigateTo('documents')}
                 className="p-2.5 rounded-xl bg-slate-800/80 hover:bg-slate-700 border border-slate-700 text-left transition-colors"

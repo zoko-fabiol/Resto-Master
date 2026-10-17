@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
 import { useRestaurant } from '../../../context/RestaurantContext';
+import { useToast } from '../../../context/ToastContext';
 import { UserRole } from '../../../types/restaurant';
 import {
   PermissionModule,
   PermissionAction,
   ConfigurationProfileType,
 } from '../../../types/configuration';
+import { PrintingHardwareSection } from './PrintingHardwareSection';
 import {
   Users,
   Bell,
@@ -20,24 +22,35 @@ import {
   Save,
   CheckCircle2,
   Plus,
-  ArrowRight,
-  Download,
-  Upload,
   RefreshCw,
+  AlertTriangle,
+  Clock,
+  Calculator,
+  FileText,
+  UtensilsCrossed,
+  Wine,
+  ArrowRight,
+  Copy,
+  KeyRound,
+  Tv,
+  Tablet,
+  ChefHat,
+  Check,
 } from 'lucide-react';
+import { ModernRuleToggle } from './ModernRuleToggle';
 
 interface Props {
   subTab:
-    | 'personnel'
-    | 'notifications'
-    | 'impression'
-    | 'terminaux'
-    | 'integrations'
-    | 'securite'
-    | 'permissions'
-    | 'audit'
-    | 'offline'
-    | 'avance';
+    | 'notifications' // Section 23
+    | 'personnel'     // Section 24
+    | 'permissions'   // Section 25
+    | 'impression'    // Section 26
+    | 'terminaux'     // Section 27
+    | 'integrations'  // Section 28
+    | 'securite'      // Section 28b
+    | 'audit'         // Section 29
+    | 'offline'       // Section 30
+    | 'avance';       // Section 31
 }
 
 export const HardwareAndSecuritySection: React.FC<Props> = ({ subTab }) => {
@@ -55,9 +68,15 @@ export const HardwareAndSecuritySection: React.FC<Props> = ({ subTab }) => {
     offlineQueueCount,
     resetToDemoData,
     addAuditLog,
+    operationRules,
+    updateOperationRules,
+    generateTerminalPairingCode,
+    pairDeviceWithCode,
   } = useRestaurant();
+  const { showToast } = useToast();
 
   const [savedSuccess, setSavedSuccess] = useState(false);
+  const [copiedTerminalId, setCopiedTerminalId] = useState<string | null>(null);
 
   // 1. PERSONNEL & RÔLES (Section 24)
   if (subTab === 'personnel') {
@@ -158,13 +177,20 @@ export const HardwareAndSecuritySection: React.FC<Props> = ({ subTab }) => {
 
                     return (
                       <td key={r} className="py-3 px-2 text-center">
-                        <input
-                          type="checkbox"
-                          checked={isDirection || canView}
+                        <button
+                          type="button"
                           disabled={isDirection}
-                          onChange={(e) => updateRolePermission(r, m.module, 'view', e.target.checked)}
-                          className="w-4 h-4 rounded text-amber-600 focus:ring-amber-500 cursor-pointer disabled:opacity-60"
-                        />
+                          onClick={() => updateRolePermission(r, m.module, 'view', !canView)}
+                          className={`relative inline-flex h-4 w-7 shrink-0 cursor-pointer rounded-full border border-transparent transition-colors duration-200 ease-in-out disabled:cursor-not-allowed ${
+                            (isDirection || canView) ? 'bg-amber-500' : 'bg-slate-200'
+                          }`}
+                        >
+                          <span
+                            className={`pointer-events-none inline-block h-3 w-3 transform rounded-full bg-white shadow-xs transition duration-200 ease-in-out ${
+                              (isDirection || canView) ? 'translate-x-3' : 'translate-x-0.5'
+                            } mt-0.5`}
+                          />
+                        </button>
                       </td>
                     );
                   })}
@@ -238,61 +264,200 @@ export const HardwareAndSecuritySection: React.FC<Props> = ({ subTab }) => {
 
   // 4. IMPRESSION & MATÉRIEL
   if (subTab === 'impression') {
+    return <PrintingHardwareSection />;
+  }
+
+  // 5. TERMINAUX & CAISSES (Section 27)
+  if (subTab === 'terminaux') {
+    const getTerminalIcon = (type: string) => {
+      switch (type) {
+        case 'caisse_fixe':
+          return Monitor;
+        case 'ecran_retrait':
+          return Tv;
+        case 'tablette_table':
+        case 'tablette_serveur':
+        case 'borne_client':
+          return Tablet;
+        case 'kds_cuisine':
+        case 'kds_bar':
+          return ChefHat;
+        default:
+          return Monitor;
+      }
+    };
+
     return (
-      <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-6">
-        <div className="flex items-center justify-between border-b border-slate-100 pb-4">
-          <div>
-            <h3 className="text-sm font-bold text-slate-900">Imprimantes Thermiques & Tiroirs-Caisses</h3>
-            <p className="text-xs text-slate-500">
-              Paramétrage des imprimantes 80mm/58mm réseau IP, Bluetooth et tiroir automatique
-            </p>
+      <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-xs space-y-6">
+        {/* Section Header */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-4">
+          <div className="flex items-center gap-3">
+            <div className="w-11 h-11 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-600">
+              <Monitor className="w-6 h-6" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-base font-black text-slate-900">
+                  Terminaux, Postes de Travail & Provisioning Matériel
+                </h3>
+                <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">
+                  Section 27
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Déploiement universel par jeton d'activation à 6 caractères, liaison aux rôles et verrouillage d'écran
+              </p>
+            </div>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-          {peripherals.map((p) => (
-            <div key={p.id} className="p-4 rounded-xl border border-slate-200 bg-slate-50 space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="font-bold text-slate-900">{p.name}</span>
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
-                  Connecté
-                </span>
+        {/* Universal Provisioning Protocol Notice */}
+        <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 text-xs text-amber-950 flex flex-col md:flex-row md:items-center justify-between gap-3">
+          <div className="flex items-start gap-3">
+            <KeyRound className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+            <div>
+              <div className="font-black text-amber-900">
+                Protocole de Provisioning Universel (Zero-Trust)
               </div>
-              <div className="text-slate-500 font-mono text-[11px]">
-                Type : {p.type} • Connexion : {p.connectionType} • IP/Port : {p.address}:{p.port || 9100}
-              </div>
+              <p className="text-[11px] text-amber-800 mt-0.5 leading-relaxed">
+                Pour déployer un nouvel ordinateur de caisse, une tablette de serveur, un écran KDS cuisine ou une TV de retrait, installez RestoMaster OS sur l'appareil et saisissez simplement son <strong>Code d'Activation</strong> ci-dessous. Le poste sera automatiquement verrouillé sur son rôle et ses périphériques.
+              </p>
             </div>
-          ))}
-        </div>
-      </div>
-    );
-  }
-
-  // 5. TERMINAUX & CAISSES
-  if (subTab === 'terminaux') {
-    return (
-      <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-6">
-        <div className="border-b border-slate-100 pb-4">
-          <h3 className="text-sm font-bold text-slate-900">Terminaux, Caisses & Postes de Travail</h3>
-          <p className="text-xs text-slate-500">
-            Affectation des caisses fixes, tablettes serveurs et écrans KDS par établissement
-          </p>
+          </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-          {terminals.map((t) => (
-            <div key={t.id} className="p-4 rounded-xl border border-slate-200 bg-slate-50 space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="font-bold text-slate-900">{t.name}</span>
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
-                  En ligne
-                </span>
+        {/* Terminals Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {terminals.map((t) => {
+            const Icon = getTerminalIcon(t.type);
+            const isCopied = copiedTerminalId === t.id;
+
+            return (
+              <div
+                key={t.id}
+                className="p-5 rounded-2xl border border-slate-200 hover:border-amber-400 bg-slate-50/70 hover:bg-white transition-all flex flex-col justify-between space-y-4 shadow-2xs group"
+              >
+                <div>
+                  {/* Top line with Icon and Status */}
+                  <div className="flex items-start justify-between gap-2 mb-3">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-9 h-9 rounded-xl bg-white border border-slate-200 shadow-2xs flex items-center justify-center text-slate-700 group-hover:text-amber-600 group-hover:border-amber-300 transition-colors">
+                        <Icon className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <h4 className="font-black text-xs text-slate-900 leading-tight">
+                          {t.name}
+                        </h4>
+                        <span className="text-[10px] text-slate-400 uppercase font-semibold">
+                          {t.type.replace('_', ' ')}
+                        </span>
+                      </div>
+                    </div>
+
+                    <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200 flex items-center gap-1 shrink-0">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                      En ligne
+                    </span>
+                  </div>
+
+                  {/* Metadata Specs */}
+                  <div className="space-y-1.5 text-[11px] bg-white p-3 rounded-xl border border-slate-200/80">
+                    <div className="flex items-center justify-between text-slate-600">
+                      <span className="text-slate-400">Rôle assigné :</span>
+                      <strong className="text-slate-800 uppercase font-bold">{t.assignedRole}</strong>
+                    </div>
+                    <div className="flex items-center justify-between text-slate-600">
+                      <span className="text-slate-400">Zone restaurant :</span>
+                      <span className="font-semibold text-slate-700">{t.assignedZone || 'Générale'}</span>
+                    </div>
+                    {t.assignedTableId && (
+                      <div className="flex items-center justify-between text-slate-600">
+                        <span className="text-slate-400">Table assignée :</span>
+                        <strong className="text-amber-700 font-bold">Table {t.assignedTableId}</strong>
+                      </div>
+                    )}
+                    {t.kdsStation && (
+                      <div className="flex items-center justify-between text-slate-600">
+                        <span className="text-slate-400">Poste KDS :</span>
+                        <strong className="text-indigo-700 font-bold uppercase">{t.kdsStation}</strong>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Pairing Code & Controls */}
+                <div className="pt-2 border-t border-slate-200 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                      Code d'Activation :
+                    </span>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        const newCode = await generateTerminalPairingCode(t.id);
+                        showToast({
+                          type: 'info',
+                          title: 'Nouveau Code Généré',
+                          message: `Code d'activation ${newCode} prêt pour ${t.name}.`,
+                        });
+                      }}
+                      className="text-[10px] font-bold text-amber-700 hover:text-amber-800 hover:underline flex items-center gap-1"
+                    >
+                      <RefreshCw className="w-2.5 h-2.5" /> Régénérer
+                    </button>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1 bg-slate-900 text-amber-400 font-mono font-black text-sm text-center py-2 px-3 rounded-xl border border-slate-800 tracking-wider select-all shadow-inner">
+                      {t.pairingCode || 'NON DÉFINI'}
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (t.pairingCode) {
+                          navigator.clipboard.writeText(t.pairingCode);
+                          setCopiedTerminalId(t.id);
+                          setTimeout(() => setCopiedTerminalId(null), 2000);
+                          showToast({
+                            type: 'success',
+                            title: 'Code copié',
+                            message: `Code ${t.pairingCode} copié dans le presse-papiers.`,
+                          });
+                        }
+                      }}
+                      className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 transition-colors shadow-2xs"
+                      title="Copier le code d'activation"
+                    >
+                      {isCopied ? (
+                        <Check className="w-4 h-4 text-emerald-600" />
+                      ) : (
+                        <Copy className="w-4 h-4" />
+                      )}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        if (t.pairingCode) {
+                          await pairDeviceWithCode(t.pairingCode);
+                          showToast({
+                            type: 'success',
+                            title: 'Poste Activé Immédiatement',
+                            message: `Ce navigateur est désormais appairé sous le profil "${t.name}".`,
+                          });
+                        }
+                      }}
+                      className="px-2.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-[11px] transition-colors shadow-2xs active:scale-95 whitespace-nowrap"
+                      title="Tester et verrouiller cet écran immédiatement sur ce terminal"
+                    >
+                      Activer Ici
+                    </button>
+                  </div>
+                </div>
               </div>
-              <div className="text-slate-500 font-mono text-[11px]">
-                Type : {t.type} • Zone : {t.assignedZone} • Rôle affecté : <strong className="uppercase">{t.assignedRole}</strong>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     );
@@ -300,26 +465,103 @@ export const HardwareAndSecuritySection: React.FC<Props> = ({ subTab }) => {
 
   // 6. NOTIFICATIONS
   if (subTab === 'notifications') {
+    const notifRules = [
+      {
+        key: 'notif_stock_critique',
+        label: 'Alerte stock critique sous seuil minimum',
+        description: 'Alerte visuelle et sonore dès franchissement du stock de sécurité',
+        icon: AlertTriangle,
+      },
+      {
+        key: 'notif_peremption_lot',
+        label: 'Alerte péremption de lot (J-7)',
+        description: 'Notification anticipée 7 jours avant la date limite d’utilisation',
+        icon: Clock,
+      },
+      {
+        key: 'notif_ecart_caisse',
+        label: 'Alerte écart de caisse (> 5 000 FCFA)',
+        description: 'Avertissement immédiat au gérant lors du comptage de fermeture',
+        icon: Calculator,
+      },
+      {
+        key: 'notif_rappel_fiscal',
+        label: 'Rappel fiscal télédéclaration TVA / CGI',
+        description: 'Alerte calendaire le 10 de chaque mois pour la déclaration DGI',
+        icon: FileText,
+      },
+      {
+        key: 'notif_retard_cuisine',
+        label: 'Alerte retard commande cuisine (> 20 min)',
+        description: 'Signal visuel d’urgence sur l’écran passe et le KDS Cuisine',
+        icon: UtensilsCrossed,
+      },
+      {
+        key: 'notif_rupture_bar',
+        label: 'Alerte rupture bouteilles au bar',
+        description: 'Avertissement dès épuisement des spiritueux ou vins en réserve',
+        icon: Wine,
+      },
+    ];
+
     return (
-      <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-4 text-xs">
-        <div className="border-b border-slate-100 pb-3">
-          <h3 className="text-sm font-bold text-slate-900">Notifications & Alertes Système</h3>
-          <p className="text-slate-500">Canaux de diffusion pour les alertes stocks, caisse et fiscales</p>
+      <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-xs space-y-6">
+        <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+          <div className="flex items-center gap-3">
+            <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-amber-500 to-yellow-400 text-slate-950 flex items-center justify-center shadow-md shadow-amber-500/20">
+              <Bell className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm sm:text-base font-black text-slate-900">
+                  Notifications & Alertes Système
+                </h3>
+                <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">
+                  Section 26
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Canaux et déclencheurs d’alertes pour les stocks critiques, écarts caisse et échéances fiscales
+              </p>
+            </div>
+          </div>
+          {savedSuccess && (
+            <span className="flex items-center gap-1.5 text-xs font-bold text-emerald-700 bg-emerald-50 px-3.5 py-1.5 rounded-xl border border-emerald-200 shadow-xs">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600" /> Paramètres enregistrés
+            </span>
+          )}
         </div>
 
-        <div className="space-y-3">
-          {[
-            { label: 'Alerte stock critique sous le seuil minimum (immédiate)' },
-            { label: 'Alerte péremption de lot (7 jours avant expiration)' },
-            { label: 'Alerte écart de caisse > 5 000 FCFA lors du comptage' },
-            { label: 'Rappel fiscal déclaration TVA / CGI (le 10 de chaque mois)' },
-            { label: 'Notification commande en retard en cuisine (> 20 min)' },
-          ].map((n, i) => (
-            <label key={i} className="flex items-center gap-3 p-3 rounded-xl border border-slate-200 bg-slate-50 cursor-pointer">
-              <input type="checkbox" defaultChecked={true} className="w-4 h-4 rounded text-amber-600" />
-              <span className="font-semibold text-slate-800">{n.label}</span>
-            </label>
-          ))}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+          {notifRules.map((rule) => {
+            const isChecked = (operationRules as any)?.[rule.key] ?? true;
+            return (
+              <ModernRuleToggle
+                key={rule.key}
+                id={rule.key}
+                label={rule.label}
+                description={rule.description}
+                icon={rule.icon}
+                checked={isChecked}
+                onChange={() => updateOperationRules({ [rule.key]: !isChecked })}
+              />
+            );
+          })}
+        </div>
+
+        <div className="pt-4 border-t border-slate-100 flex justify-end">
+          <button
+            type="button"
+            onClick={() => {
+              setSavedSuccess(true);
+              addAuditLog('Alertes système', 'Paramètres', 'Configuration des alertes mise à jour');
+              setTimeout(() => setSavedSuccess(false), 2000);
+            }}
+            className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-slate-900 text-white font-bold text-xs hover:bg-slate-800 shadow-xs transition-colors"
+          >
+            <Save className="w-4 h-4" />
+            <span>Enregistrer les notifications</span>
+          </button>
         </div>
       </div>
     );

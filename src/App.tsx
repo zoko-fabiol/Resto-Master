@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { RestaurantProvider, useRestaurant } from './context/RestaurantContext';
-import { Sidebar } from './components/layout/Sidebar';
+import { ToastProvider, useToast } from './context/ToastContext';
+import { Sidebar, ITEM_RULE_MAP } from './components/layout/Sidebar';
 import { Header } from './components/layout/Header';
 import { GlobalSearchModal } from './components/layout/GlobalSearchModal';
 
@@ -29,34 +30,152 @@ import { FiscalCenterView } from './components/fiscal/FiscalCenterView';
 import { EventsView } from './components/events/EventsView';
 import { DeliveryView } from './components/delivery/DeliveryView';
 import { HygieneView } from './components/hygiene/HygieneView';
+import { TableKioskView } from './components/kiosk/TableKioskView';
+import { CustomerOrderDisplayView } from './components/kds/CustomerOrderDisplayView';
+import { DevicePairingScreen } from './components/auth/DevicePairingScreen';
+import { PinLockScreen } from './components/auth/PinLockScreen';
+import { UserGuideModal } from './components/common/UserGuideModal';
+import { UserRole } from './types/restaurant';
 
 // Modals
 import { PaymentModal } from './components/pos/PaymentModal';
 
+const ROLE_DEFAULT_TAB: Record<UserRole, string> = {
+  direction: 'dashboard',
+  manager: 'dashboard',
+  serveur: 'tables',
+  caisse: 'caisse',
+  cuisine: 'kitchen_kds',
+  bar: 'bar_kds',
+  stock: 'stock',
+  rh: 'staff',
+  finance: 'finance',
+  comptable: 'fiscal',
+  auditeur: 'audit',
+  tablette: 'kiosk',
+};
+
+const TAB_FEATURE_MAP: Record<string, string> = {
+  reservations: 'table_reservations',
+  delivery: 'delivery_orders',
+  events: 'events_banquets',
+  kitchen_kds: 'kds_kitchen',
+  bar_kds: 'kds_bar',
+  stock: 'stock_lots_fefo',
+  purchases: 'purchases_suppliers',
+  hygiene: 'haccp_hygiene',
+  caisse: 'cash_register_z',
+  fiscal: 'cameroon_fiscal_framework',
+  main_courante: 'hotelpro_maincourante',
+  tables: 'tables_management',
+};
+
 const AppContent: React.FC = () => {
-  const { canAccess, currentUser } = useAuth();
-  const { seatReservation } = useRestaurant();
+  const { canAccess, currentUser, isSessionLocked, switchRole } = useAuth();
+  const {
+    seatReservation,
+    isFeatureEnabled,
+    isRuleEnabled,
+    currentDeviceProfile,
+    unpairCurrentDevice,
+  } = useRestaurant();
 
   const [currentTab, setCurrentTab] = useState<string>('dashboard');
+  const [kioskTableId, setKioskTableId] = useState<string | undefined>(undefined);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isComplianceOpen, setIsComplianceOpen] = useState(false);
+  const [isPairingOpen, setIsPairingOpen] = useState(false);
+  const [isDisplayTvOpen, setIsDisplayTvOpen] = useState(false);
+  const [isUserGuideOpen, setIsUserGuideOpen] = useState(false);
+
+  // Auto-route to role's default landing screen on login or role switch (Section 2 & 3 du Guide Genesis)
+  const prevRoleRef = React.useRef<UserRole | null>(null);
+  useEffect(() => {
+    if (currentUser.role === 'tablette' || currentUser.accountType === 'tablette') {
+      return;
+    }
+    if (prevRoleRef.current !== currentUser.role) {
+      prevRoleRef.current = currentUser.role;
+      const roleDefault = ROLE_DEFAULT_TAB[currentUser.role] || 'dashboard';
+      if (canAccess(roleDefault)) {
+        setCurrentTab(roleDefault);
+      }
+    }
+  }, [currentUser.role, currentUser.accountType, canAccess]);
+
+  // Sidebar collapsible state with localStorage persistence
+  const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('restomaster_sidebar_collapsed') === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  const handleSetCollapsed = (collapsed: boolean) => {
+    setSidebarCollapsed(collapsed);
+    try {
+      localStorage.setItem('restomaster_sidebar_collapsed', String(collapsed));
+    } catch {
+      // ignore
+    }
+  };
 
   // Cross-module states
   const [posInitialTableId, setPosInitialTableId] = useState<string | undefined>(undefined);
   const [paymentOrderId, setPaymentOrderId] = useState<string | null>(null);
 
-  // Switch tab if permission restricts currentTab
+  // Global keyboard shortcut for search (Ctrl+K or Cmd+K)
   useEffect(() => {
-    if (!canAccess(currentTab)) {
-      if (canAccess('pos')) setCurrentTab('pos');
-      else if (canAccess('kitchen_kds')) setCurrentTab('kitchen_kds');
-      else if (canAccess('bar_kds')) setCurrentTab('bar_kds');
-      else if (canAccess('stock')) setCurrentTab('stock');
-      else if (canAccess('tables')) setCurrentTab('tables');
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setIsSearchOpen((prev) => !prev);
+      }
+    };
+    window.addEventListener('keydown', handleGlobalKeyDown);
+    return () => window.removeEventListener('keydown', handleGlobalKeyDown);
+  }, []);
+
+  // Tablet accounts or table tablet hardware profiles auto-route to kiosk mode bound to their assigned table
+  const [isTabletKioskUnlocked, setIsTabletKioskUnlocked] = useState(false);
+
+  useEffect(() => {
+    const isTabletRole = currentUser.role === 'tablette' || currentUser.accountType === 'tablette';
+    const isTableDevice = currentDeviceProfile?.type === 'tablette_table';
+
+    if ((isTabletRole || isTableDevice) && !isTabletKioskUnlocked) {
+      if (currentTab !== 'kiosk') {
+        setCurrentTab('kiosk');
+      }
+      const targetTableId = currentDeviceProfile?.assignedTableId || currentUser.assignedTableId;
+      if (targetTableId && kioskTableId !== targetTableId) {
+        setKioskTableId(targetTableId);
+      }
+    }
+  }, [currentUser, currentDeviceProfile, currentTab, kioskTableId, isTabletKioskUnlocked]);
+
+  // Switch tab if permission restricts currentTab or feature is disabled or module rule is disabled
+  useEffect(() => {
+    if (currentUser.role === 'tablette' || currentUser.accountType === 'tablette') {
+      return;
+    }
+
+    const requiredFeature = TAB_FEATURE_MAP[currentTab];
+    const isFeatureDisabled = requiredFeature && !isFeatureEnabled(requiredFeature);
+    const requiredRule = ITEM_RULE_MAP[currentTab];
+    const isRuleDisabled = requiredRule && !isRuleEnabled(requiredRule, true);
+
+    if (!canAccess(currentTab) || isFeatureDisabled || isRuleDisabled) {
+      if (canAccess('pos') && isFeatureEnabled('pos_core') && isRuleEnabled('mod_pos', true)) setCurrentTab('pos');
+      else if (canAccess('kitchen_kds') && isFeatureEnabled('kds_kitchen') && isRuleEnabled('mod_cuisine', true)) setCurrentTab('kitchen_kds');
+      else if (canAccess('bar_kds') && isFeatureEnabled('kds_bar') && isRuleEnabled('mod_bar', true)) setCurrentTab('bar_kds');
+      else if (canAccess('stock') && isFeatureEnabled('stock_lots_fefo') && isRuleEnabled('mod_stock', true)) setCurrentTab('stock');
+      else if (canAccess('tables') && isFeatureEnabled('tables_management') && isRuleEnabled('mod_tables', true)) setCurrentTab('tables');
       else setCurrentTab('dashboard');
     }
-  }, [currentUser.role, currentTab, canAccess]);
+  }, [currentUser.role, currentUser.accountType, currentTab, canAccess, isFeatureEnabled, isRuleEnabled]);
 
   const handleOpenOrderOnTable = (tableId: string) => {
     setPosInitialTableId(tableId);
@@ -72,34 +191,92 @@ const AppContent: React.FC = () => {
     setCurrentTab('tables');
   };
 
+  // Mode Écran TV Retrait Client (QSR / Fast-Food)
+  if (currentDeviceProfile?.type === 'ecran_retrait' || isDisplayTvOpen) {
+    return (
+      <CustomerOrderDisplayView
+        onExit={async () => {
+          setIsDisplayTvOpen(false);
+          if (currentDeviceProfile?.type === 'ecran_retrait') {
+            await unpairCurrentDevice();
+          }
+        }}
+      />
+    );
+  }
+
+  // Mode Tablette Kiosk Plein Écran Dédié : Suppression totale de la Sidebar et du Header d'administration (Exigence Audio & Screenshot)
+  if (currentTab === 'kiosk' && !isTabletKioskUnlocked) {
+    return (
+      <div className="fixed inset-0 z-50 bg-slate-900 text-slate-100 overflow-hidden w-screen h-screen select-none">
+        <TableKioskView
+          initialTableId={kioskTableId}
+          onExit={async (shouldUnpair?: boolean) => {
+            setIsTabletKioskUnlocked(true);
+            if (shouldUnpair && currentDeviceProfile?.type === 'tablette_table') {
+              await unpairCurrentDevice();
+            }
+            if (currentUser.role === 'tablette') {
+              switchRole('direction');
+            }
+            setCurrentTab('tables');
+          }}
+        />
+        {/* Tactile PIN Lock Screen Overlay si verrouillage activé */}
+        {isSessionLocked && <PinLockScreen />}
+      </div>
+    );
+  }
+
+  const handleSelectTab = (tab: string) => {
+    if (tab === 'kiosk') {
+      setIsTabletKioskUnlocked(false);
+    }
+    setCurrentTab(tab);
+  };
+
   return (
     <div className="min-h-screen bg-slate-100 text-slate-900 flex font-sans antialiased selection:bg-amber-500 selection:text-white max-w-full overflow-x-hidden">
       {/* Sidebar Navigation */}
       <Sidebar
         currentTab={currentTab}
-        setCurrentTab={setCurrentTab}
+        setCurrentTab={handleSelectTab}
         mobileOpen={mobileOpen}
         setMobileOpen={setMobileOpen}
+        collapsed={sidebarCollapsed}
+        setCollapsed={handleSetCollapsed}
       />
 
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col lg:pl-72 min-w-0 max-w-full overflow-x-hidden">
+      <div
+        className={`flex-1 flex flex-col min-w-0 max-w-full overflow-x-hidden transition-all duration-200 ${
+          sidebarCollapsed ? 'lg:pl-[76px]' : 'lg:pl-72'
+        }`}
+      >
         {/* Header Bar */}
         <Header
           currentTab={currentTab}
-          setCurrentTab={setCurrentTab}
+          setCurrentTab={handleSelectTab}
           setMobileOpen={setMobileOpen}
           openSearch={() => setIsSearchOpen(true)}
           openComplianceModal={() => setIsComplianceOpen(true)}
+          openPairingModal={() => setIsPairingOpen(true)}
+          openCustomerDisplay={() => setIsDisplayTvOpen(true)}
+          openUserGuide={() => setIsUserGuideOpen(true)}
         />
 
         {/* Dynamic View Body */}
         <main className="flex-1 p-3 sm:p-5 lg:p-7 max-w-7xl w-full mx-auto min-w-0">
-          {currentTab === 'dashboard' && <DashboardView navigateTo={setCurrentTab} />}
+          {currentTab === 'dashboard' && <DashboardView navigateTo={handleSelectTab} />}
           {currentTab === 'tables' && (
             <TablesView
               onOpenOrder={handleOpenOrderOnTable}
               onPayOrder={handleOpenPayment}
+              onOpenKiosk={(tId) => {
+                setIsTabletKioskUnlocked(false);
+                setKioskTableId(tId);
+                setCurrentTab('kiosk');
+              }}
             />
           )}
           {currentTab === 'pos' && (
@@ -119,7 +296,7 @@ const AppContent: React.FC = () => {
           {currentTab === 'stock' && <StockView />}
           {currentTab === 'purchases' && <PurchasesView />}
           {currentTab === 'hygiene' && <HygieneView />}
-          {currentTab === 'caisse' && <CashRegisterView />}
+          {currentTab === 'caisse' && <CashRegisterView onOpenPayment={handleOpenPayment} />}
           {currentTab === 'main_courante' && <MainCouranteView />}
           {currentTab === 'fiscal' && <FiscalCenterView />}
           {currentTab === 'finance' && <FinanceView />}
@@ -152,6 +329,24 @@ const AppContent: React.FC = () => {
         isOpen={isComplianceOpen}
         onClose={() => setIsComplianceOpen(false)}
       />
+
+      {/* Hardware Device Pairing & Provisioning Modal */}
+      {isPairingOpen && (
+        <DevicePairingScreen
+          onSuccess={() => setIsPairingOpen(false)}
+          onCancel={() => setIsPairingOpen(false)}
+        />
+      )}
+
+      {/* Guide d'Utilisation Officiel Genesis Digital Agency Modal */}
+      <UserGuideModal
+        isOpen={isUserGuideOpen}
+        onClose={() => setIsUserGuideOpen(false)}
+        initialRole={currentUser.role}
+      />
+
+      {/* Tactile PIN Lock Screen Overlay */}
+      {isSessionLocked && <PinLockScreen />}
     </div>
   );
 };
@@ -160,7 +355,9 @@ export default function App() {
   return (
     <AuthProvider>
       <RestaurantProvider>
-        <AppContent />
+        <ToastProvider>
+          <AppContent />
+        </ToastProvider>
       </RestaurantProvider>
     </AuthProvider>
   );

@@ -13,6 +13,7 @@ import {
   Loader2,
   FileSpreadsheet,
   Image as ImageIcon,
+  Check,
 } from 'lucide-react';
 
 interface MediaUploaderProps {
@@ -195,8 +196,9 @@ export const MediaUploader: React.FC<MediaUploaderProps> = ({
               {lastUploadedAsset.originalName} ({Math.round(lastUploadedAsset.size / 1024)} Ko)
             </span>
           </div>
-          <span className="text-[10px] font-mono text-emerald-700 bg-emerald-100/70 px-2 py-0.5 rounded-full shrink-0">
-            Cloudinary ✓
+          <span className="text-[10px] font-mono text-emerald-700 bg-emerald-100/70 px-2 py-0.5 rounded-full shrink-0 flex items-center gap-1">
+            <span>Cloudinary</span>
+            <Check className="w-3 h-3 text-emerald-700" />
           </span>
         </div>
       )}

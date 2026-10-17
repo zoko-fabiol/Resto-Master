@@ -1,5 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { useRestaurant } from '../../context/RestaurantContext';
+import { useToast } from '../../context/ToastContext';
 import { DocumentItem } from '../../types/restaurant';
 import { formatCurrency } from '../../lib/utils';
 import {
@@ -21,6 +22,7 @@ interface ScannerModalProps {
 
 export const ScannerModal: React.FC<ScannerModalProps> = ({ isOpen, onClose }) => {
   const { addDocument, suppliers, settings } = useRestaurant();
+  const { showToast } = useToast();
 
   const [step, setStep] = useState<'capture' | 'preview_ocr' | 'confirm'>('capture');
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
@@ -79,7 +81,11 @@ export const ScannerModal: React.FC<ScannerModalProps> = ({ isOpen, onClose }) =
   const handleSaveDocument = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!docTitle) {
-      alert('Veuillez renseigner un titre pour le document.');
+      showToast({
+        type: 'warning',
+        title: 'Titre manquant',
+        message: 'Veuillez renseigner un titre pour le document numérisé.',
+      });
       return;
     }
 

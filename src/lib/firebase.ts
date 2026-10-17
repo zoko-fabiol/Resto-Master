@@ -1,5 +1,11 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getFirestore, Firestore } from 'firebase/firestore';
+import {
+  initializeFirestore,
+  persistentLocalCache,
+  persistentMultipleTabManager,
+  getFirestore,
+  Firestore,
+} from 'firebase/firestore';
 import { getAuth, Auth } from 'firebase/auth';
 import { getStorage, FirebaseStorage } from 'firebase/storage';
 import firebaseConfigData from '../../firebase-applet-config.json';
@@ -22,7 +28,18 @@ const customDbId =
     ? firebaseConfigData.firestoreDatabaseId
     : undefined;
 
-export const db: Firestore = customDbId ? getFirestore(app, customDbId) : getFirestore(app);
+let firestoreInstance: Firestore;
+try {
+  firestoreInstance = initializeFirestore(app, {
+    localCache: persistentLocalCache({
+      tabManager: persistentMultipleTabManager(),
+    }),
+  }, customDbId);
+} catch {
+  firestoreInstance = customDbId ? getFirestore(app, customDbId) : getFirestore(app);
+}
+
+export const db: Firestore = firestoreInstance;
 export const auth: Auth = getAuth(app);
 export const storage: FirebaseStorage = getStorage(app);
 

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useRestaurant } from '../../context/RestaurantContext';
+import { useToast } from '../../context/ToastContext';
 import { formatCurrency } from '../../lib/utils';
 import {
   CalendarDays,
@@ -15,11 +16,17 @@ import {
   FileText,
   MapPin,
   Calendar,
+  Printer,
 } from 'lucide-react';
 import { RestaurantEvent } from '../../types/restaurant';
 
 export const EventsView: React.FC = () => {
-  const { events, createEvent, updateEventStatus, settings } = useRestaurant();
+  const { events, createEvent, updateEventStatus, settings, isRuleEnabled } = useRestaurant();
+  const { showToast } = useToast();
+
+  // Règles Opérationnelles (Section 17 Événements & Banquets)
+  const isDepositMandatory = isRuleEnabled('event_deposit', true);
+  const isQuotesAllowed = isRuleEnabled('event_quotes', true);
 
   const [modalOpen, setModalOpen] = useState(false);
   const [filterType, setFilterType] = useState<string>('all');
@@ -54,7 +61,20 @@ export const EventsView: React.FC = () => {
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title || !clientName || quoteAmount <= 0) {
-      alert('Veuillez renseigner le titre, le client et un montant de devis valide.');
+      showToast({
+        type: 'warning',
+        title: 'Formulaire incomplet',
+        message: 'Veuillez renseigner le titre de l’événement, le client et un montant de devis supérieur à zéro.',
+      });
+      return;
+    }
+
+    if (isDepositMandatory && depositAmount <= 0) {
+      showToast({
+        type: 'warning',
+        title: 'Acompte obligatoire',
+        message: 'Selon les règles opérationnelles (Section 17), un acompte est obligatoire pour confirmer la réservation événementielle.',
+      });
       return;
     }
 
@@ -254,14 +274,33 @@ export const EventsView: React.FC = () => {
                 {evt.notes || 'Aucune note particulière'}
               </span>
 
-              {evt.status !== 'termine' && (
-                <button
-                  onClick={() => updateEventStatus(evt.id, 'termine')}
-                  className="px-2.5 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-[11px] font-bold border border-emerald-200 transition-colors"
-                >
-                  Clôturer l'événement
-                </button>
-              )}
+              <div className="flex items-center gap-1.5">
+                {isQuotesAllowed && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      showToast({
+                        type: 'info',
+                        title: 'Devis Événementiel Officiel',
+                        message: `Devis proforma généré pour ${evt.clientName} (${evt.eventNumber}) - ${formatCurrency(evt.quoteAmount, settings.currency)}.`,
+                      });
+                    }}
+                    className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] font-bold border border-slate-200 flex items-center gap-1 cursor-pointer transition-colors"
+                  >
+                    <Printer className="w-3 h-3 text-slate-600" />
+                    <span>Devis</span>
+                  </button>
+                )}
+
+                {evt.status !== 'termine' && (
+                  <button
+                    onClick={() => updateEventStatus(evt.id, 'termine')}
+                    className="px-2.5 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-[11px] font-bold border border-emerald-200 transition-colors cursor-pointer"
+                  >
+                    Clôturer
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         ))}

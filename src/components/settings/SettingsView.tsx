@@ -1,5 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { useRestaurant } from '../../context/RestaurantContext';
+import { useToast } from '../../context/ToastContext';
 import { RestaurantSettings } from '../../types/restaurant';
 import {
   Settings,
@@ -19,6 +20,7 @@ import {
 
 export const SettingsView: React.FC = () => {
   const { settings, updateSettings, resetToDemoData } = useRestaurant();
+  const { showToast } = useToast();
 
   // General Identity
   const [name, setName] = useState(settings.name);
@@ -420,21 +422,35 @@ export const SettingsView: React.FC = () => {
             Automatisations Métier
           </h3>
 
-          <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-200">
-            <div>
-              <div className="text-xs font-bold text-slate-800">
-                Déduction automatique des stocks lors de la prise de commande
+          <div
+            onClick={() => setEnableStockAutoDeduction(!enableStockAutoDeduction)}
+            className="flex items-center justify-between p-4 rounded-2xl bg-white border border-slate-200 hover:border-amber-300 shadow-xs transition-all cursor-pointer"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-600 flex items-center justify-center">
+                <Layers className="w-5 h-5" />
               </div>
-              <div className="text-[11px] text-slate-500 mt-0.5">
-                Consomme automatiquement les ingrédients définis dans les fiches techniques des plats vendus
+              <div>
+                <div className="text-xs font-bold text-slate-900">
+                  Déduction automatique des stocks lors de la commande
+                </div>
+                <div className="text-[11px] text-slate-500 mt-0.5">
+                  Consomme automatiquement les ingrédients des fiches techniques lors de la vente
+                </div>
               </div>
             </div>
-            <input
-              type="checkbox"
-              checked={enableStockAutoDeduction}
-              onChange={(e) => setEnableStockAutoDeduction(e.target.checked)}
-              className="w-5 h-5 rounded text-amber-600 focus:ring-amber-500 cursor-pointer"
-            />
+            <button
+              type="button"
+              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out ${
+                enableStockAutoDeduction ? 'bg-amber-500 shadow-sm shadow-amber-500/30' : 'bg-slate-300'
+              }`}
+            >
+              <span
+                className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
+                  enableStockAutoDeduction ? 'translate-x-5' : 'translate-x-0'
+                }`}
+              />
+            </button>
           </div>
         </div>
 
@@ -464,7 +480,11 @@ export const SettingsView: React.FC = () => {
             onClick={() => {
               if (window.confirm('Êtes-vous sûr de vouloir réinitialiser toutes les données de test ?')) {
                 resetToDemoData();
-                alert('Données réinitialisées avec succès !');
+                showToast({
+                  type: 'success',
+                  title: 'Données réinitialisées',
+                  message: 'La base de démonstration a été restaurée avec succès.',
+                });
               }
             }}
             className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold shadow-xs"

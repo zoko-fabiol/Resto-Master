@@ -9,7 +9,39 @@ export type UserRole =
   | 'rh'
   | 'finance'
   | 'comptable'
-  | 'auditeur';
+  | 'auditeur'
+  | 'tablette';
+
+export type AccountType = 'staff' | 'tablette';
+
+export interface TabPermission {
+  view: boolean;   // Droit de consulter / accéder à l'onglet
+  create: boolean; // Droit d'ajouter des éléments
+  edit: boolean;   // Droit de modifier
+  delete: boolean; // Droit de supprimer / annuler
+}
+
+export interface UserAccount {
+  id: string;
+  name: string;
+  email: string;
+  pinCode: string;
+  role: UserRole;
+  accountType: AccountType;
+  active: boolean;
+  avatar?: string;
+  phone?: string;
+  matricule?: string;
+  // Spécifique aux comptes de tablettes tactiles (Mode Kiosk)
+  assignedTableId?: string;
+  assignedTableName?: string;
+  // Matrice des permissions granulaires personnalisées par onglet (CRUD)
+  tabPermissions?: Record<string, TabPermission>;
+  // Onglets additionnels explicitement accordés hors rôle par défaut
+  additionalTabs?: string[];
+  createdAt: string;
+  updatedAt: string;
+}
 
 export interface UserProfile {
   id: string;
@@ -19,7 +51,14 @@ export interface UserProfile {
   avatar?: string;
   phone?: string;
   active: boolean;
+  pinCode?: string;
+  badgeNumber?: string;
   permissions?: string[];
+  accountType?: AccountType;
+  assignedTableId?: string;
+  assignedTableName?: string;
+  tabPermissions?: Record<string, TabPermission>;
+  additionalTabs?: string[];
   organizationId?: string;
   accessibleRestaurantIds?: string[];
   defaultRestaurantId?: string;
@@ -83,6 +122,10 @@ export interface RestaurantSettings {
   mtnMoMoMerchantCode: string; // Code Marchand MTN MoMo (ex: 456789)
   mtnMoMoPhone: string; // Numéro de réception direct MTN MoMo (ex: 677112233)
   mtnMoMoQrUrl?: string; // QR code officiel importé MTN MoMo
+
+  // Mode Opérationnel Cuisine (Guide Genesis Digital Agency 2026)
+  kitchenOperationMode: 'ecran_cuisine' | 'sans_compte';
+  defaultReceiptWidth: '58mm' | '80mm';
 }
 
 export interface Organization {
@@ -163,6 +206,17 @@ export interface RestaurantTable {
   mergedWithTableId?: string;
   createdAt?: string;
   updatedAt?: string;
+
+  // Tablette Kiosk Client & Verrouillage à distance
+  tabletKioskEnabled?: boolean;
+  tabletLocked?: boolean;
+  tabletLockedReason?: string;
+  tabletLockedAt?: string;
+  tabletLockedBy?: string;
+  tabletDeviceName?: string;
+  tabletAllowSelfOrdering?: boolean;
+  tabletCallWaiterPending?: boolean;
+  tabletBillRequested?: boolean;
 }
 
 export interface CashRegister {
@@ -250,20 +304,26 @@ export interface Product {
   ingredients: RecipeIngredient[];
   taxApplicable: boolean;
   mealCategory?: 'pdj' | 'dejeuner' | 'diner' | 'bar' | 'cave' | 'divers';
+  category?: string;
 }
 
 export interface OrderItem {
   id: string;
   productId: string;
   productName: string;
+  name?: string;
   unitPrice: number;
   quantity: number;
   destination: 'cuisine' | 'bar';
   notes?: string;
   status: 'en_attente' | 'en_preparation' | 'pret' | 'servi';
   preparedAt?: string;
+  servedAt?: string;
   folio?: number; // 1: Société/Prise en charge, 2: Extra/Personnel
   mealCategory?: 'pdj' | 'dejeuner' | 'diner' | 'bar' | 'cave' | 'divers';
+  seatNumber?: number; // 0 = Partagé/Table, 1 = Couvert 1, 2 = Couvert 2, etc.
+  seatLabel?: string; // Ex: "Couvert 1", "Couvert 2", "Table"
+  selectedModifiers?: string[];
 }
 
 export type OrderStatus =
@@ -300,6 +360,7 @@ export interface Order {
   customerName?: string;
   serverId: string;
   serverName: string;
+  guestCount?: number; // Nombre de personnes / couverts
   items: OrderItem[];
   subtotal: number;
   tax: number;
@@ -308,9 +369,14 @@ export interface Order {
   status: OrderStatus;
   paymentStatus: 'non_paye' | 'partiel' | 'paye';
   paidAmount: number;
+  paymentMethod?: PaymentMethod;
+  tip?: number;
   notes?: string;
   createdAt: string;
   updatedAt: string;
+  preparedAt?: string;
+  servedAt?: string;
+  paidAt?: string;
   payments?: Payment[];
   // Spécificités Cameroun & Entreprises
   isProforma?: boolean;
@@ -483,10 +549,26 @@ export interface Customer {
   createdAt: string;
 }
 
+export type ShiftType = 'midi' | 'soir' | 'journee_continue' | 'repos' | 'conge';
+
+export interface WeeklyDaySchedule {
+  day?: string;
+  active?: boolean;
+  shift: ShiftType | string;
+  startTime?: string;
+  endTime?: string;
+  isOff?: boolean;
+  notes?: string;
+}
+
+export type WeeklySchedule = Record<string, WeeklyDaySchedule>;
+
 export interface Employee {
   id: string;
   fullName: string;
   role: UserRole;
+  pinCode?: string;
+  matricule?: string;
   department: 'Salle' | 'Cuisine' | 'Bar' | 'Administration' | 'Logistique';
   phone: string;
   email: string;
@@ -494,6 +576,7 @@ export interface Employee {
   salary: number;
   hireDate: string;
   status: 'actif' | 'conge' | 'archive';
+  weeklySchedule?: WeeklySchedule;
 }
 
 export interface Attendance {

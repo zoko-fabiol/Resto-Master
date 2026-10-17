@@ -18,10 +18,51 @@
 }
 
 @media print {
-  aside, header, button, select, input {
+  aside, header, button, select, input, nav {
     display: none !important;
   }
   body {
+    background: white !important;
+    color: black !important;
+  }
+
+  /* Thermal Receipt 80mm Isolation */
+  body:has(#thermal-receipt-80mm) * {
+    visibility: hidden;
+  }
+  body:has(#thermal-receipt-80mm) #thermal-receipt-80mm,
+  body:has(#thermal-receipt-80mm) #thermal-receipt-80mm * {
+    visibility: visible;
+  }
+  body:has(#thermal-receipt-80mm) #thermal-receipt-80mm {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 76mm !important;
+    max-width: 76mm !important;
+    margin: 0 !important;
+    padding: 2mm 3mm !important;
+    box-shadow: none !important;
+    border: none !important;
+    background: white !important;
+    color: black !important;
+  }
+
+  /* Cameroon A5 Invoice Sheet Isolation */
+  body:has(#cameroon-invoice-sheet) * {
+    visibility: hidden;
+  }
+  body:has(#cameroon-invoice-sheet) #cameroon-invoice-sheet,
+  body:has(#cameroon-invoice-sheet) #cameroon-invoice-sheet * {
+    visibility: visible;
+  }
+  body:has(#cameroon-invoice-sheet) #cameroon-invoice-sheet {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100% !important;
+    box-shadow: none !important;
+    border: none !important;
     background: white !important;
     color: black !important;
   }

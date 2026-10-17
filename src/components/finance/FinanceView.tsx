@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useRestaurant } from '../../context/RestaurantContext';
+import { useToast } from '../../context/ToastContext';
 import { Expense, PaymentMethod } from '../../types/restaurant';
 import { formatCurrency, formatDateTime } from '../../lib/utils';
 import {
@@ -18,6 +19,7 @@ import {
 
 export const FinanceView: React.FC = () => {
   const { expenses, orders, createExpense, approveExpense, settings } = useRestaurant();
+  const { showToast } = useToast();
 
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
@@ -53,7 +55,11 @@ export const FinanceView: React.FC = () => {
   const handleCreateExpense = async (e: React.FormEvent) => {
     e.preventDefault();
     if (amount <= 0 || !beneficiary || !reason) {
-      alert('Veuillez remplir tous les champs obligatoires.');
+      showToast({
+        type: 'warning',
+        title: 'Champs obligatoires',
+        message: 'Veuillez renseigner le montant, le bénéficiaire et le motif de la dépense.',
+      });
       return;
     }
 

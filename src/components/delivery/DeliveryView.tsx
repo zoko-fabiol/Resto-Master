@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useRestaurant } from '../../context/RestaurantContext';
+import { useToast } from '../../context/ToastContext';
 import { formatCurrency } from '../../lib/utils';
 import {
   Bike,
@@ -17,9 +18,17 @@ import {
 import { DeliveryOrder } from '../../types/restaurant';
 
 export const DeliveryView: React.FC = () => {
-  const { deliveries, createDelivery, updateDeliveryStatus, settings } = useRestaurant();
+  const { deliveries, createDelivery, updateDeliveryStatus, settings, isRuleEnabled } = useRestaurant();
+  const { showToast } = useToast();
+
+  // Règles Opérationnelles (Section 15 Livraison & Courses)
+  const isProofRequired = isRuleEnabled('delivery_proof', true);
+  const isDriverAssignmentAllowed = isRuleEnabled('delivery_driver_assignment', true);
+  const isDeliveryFeesAllowed = isRuleEnabled('delivery_fees', true);
 
   const [modalOpen, setModalOpen] = useState(false);
+  const [proofModalDeliveryId, setProofModalDeliveryId] = useState<string | null>(null);
+  const [momoRef, setMomoRef] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('all');
 
@@ -49,7 +58,11 @@ export const DeliveryView: React.FC = () => {
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!clientName || !clientPhone || !repere) {
-      alert('Veuillez renseigner le nom, le téléphone et un repère / lieu-dit précis.');
+      showToast({
+        type: 'warning',
+        title: 'Champs obligatoires',
+        message: 'Veuillez renseigner le nom, le téléphone et un repère / lieu-dit précis pour le coursier.',
+      });
       return;
     }
 
@@ -211,13 +224,16 @@ export const DeliveryView: React.FC = () => {
 
               {deliv.status !== 'LIVREE' && (
                 <button
-                  onClick={() =>
-                    updateDeliveryStatus(
-                      deliv.id,
-                      deliv.status === 'CONFIRMEE' ? 'EN_COURS_LIVRAISON' : 'LIVREE'
-                    )
-                  }
-                  className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] transition-colors"
+                  onClick={() => {
+                    if (deliv.status === 'CONFIRMEE') {
+                      updateDeliveryStatus(deliv.id, 'EN_COURS_LIVRAISON');
+                    } else if (isProofRequired) {
+                      setProofModalDeliveryId(deliv.id);
+                    } else {
+                      updateDeliveryStatus(deliv.id, 'LIVREE');
+                    }
+                  }}
+                  className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] transition-colors cursor-pointer"
                 >
                   {deliv.status === 'CONFIRMEE' ? 'Départ coursier' : 'Confirmer livrée'}
                 </button>
@@ -314,30 +330,34 @@ export const DeliveryView: React.FC = () => {
               </div>
 
               <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="font-bold text-slate-700 block mb-1">Livreur Assigné :</label>
-                  <select
-                    value={deliveryPersonName}
-                    onChange={(e) => setDeliveryPersonName(e.target.value)}
-                    className="w-full p-2 border border-slate-300 rounded-lg"
-                  >
-                    <option value="Alain Mbarga (Moto 1)">Alain Mbarga (Moto 1)</option>
-                    <option value="Serge Nono (Moto 2)">Serge Nono (Moto 2)</option>
-                    <option value="Partenaire Coursier Express">Partenaire Coursier Express</option>
-                  </select>
-                </div>
+                {isDriverAssignmentAllowed && (
+                  <div>
+                    <label className="font-bold text-slate-700 block mb-1">Livreur Assigné :</label>
+                    <select
+                      value={deliveryPersonName}
+                      onChange={(e) => setDeliveryPersonName(e.target.value)}
+                      className="w-full p-2 border border-slate-300 rounded-lg"
+                    >
+                      <option value="Alain Mbarga (Moto 1)">Alain Mbarga (Moto 1)</option>
+                      <option value="Serge Nono (Moto 2)">Serge Nono (Moto 2)</option>
+                      <option value="Partenaire Coursier Express">Partenaire Coursier Express</option>
+                    </select>
+                  </div>
+                )}
 
-                <div>
-                  <label className="font-bold text-slate-700 block mb-1">Frais de Course (FCFA) :</label>
-                  <input
-                    type="number"
-                    min={500}
-                    step={500}
-                    value={deliveryFee}
-                    onChange={(e) => setDeliveryFee(Number(e.target.value))}
-                    className="w-full p-2 border border-slate-300 rounded-lg font-bold font-mono"
-                  />
-                </div>
+                {isDeliveryFeesAllowed && (
+                  <div>
+                    <label className="font-bold text-slate-700 block mb-1">Frais de Course (FCFA) :</label>
+                    <input
+                      type="number"
+                      min={0}
+                      step={500}
+                      value={deliveryFee}
+                      onChange={(e) => setDeliveryFee(Number(e.target.value))}
+                      className="w-full p-2 border border-slate-300 rounded-lg font-bold font-mono"
+                    />
+                  </div>
+                )}
               </div>
 
               <div>
@@ -368,6 +388,56 @@ export const DeliveryView: React.FC = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Preuve de Livraison Obligatoire */}
+      {proofModalDeliveryId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+          <div className="bg-white w-full max-w-sm rounded-2xl shadow-xl border border-slate-200 p-5 space-y-4">
+            <h3 className="text-sm font-bold text-slate-900 pb-2 border-b border-slate-100 flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+              Preuve de Livraison Obligatoire
+            </h3>
+            <p className="text-xs text-slate-500">
+              Selon les règles opérationnelles (Section 15), veuillez saisir la référence de transaction MoMo/OM ou le code signature du client.
+            </p>
+            <input
+              type="text"
+              required
+              placeholder="Ex: Réf MoMo CI260929.1234..."
+              value={momoRef}
+              onChange={(e) => setMomoRef(e.target.value)}
+              className="w-full p-2.5 border border-slate-300 rounded-xl text-xs font-mono font-bold"
+            />
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setProofModalDeliveryId(null)}
+                className="px-3 py-1.5 text-xs text-slate-600"
+              >
+                Annuler
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (proofModalDeliveryId) {
+                    updateDeliveryStatus(proofModalDeliveryId, 'LIVREE');
+                    showToast({
+                      type: 'success',
+                      title: 'Livraison clôturée',
+                      message: `Preuve enregistrée (${momoRef || 'Code validé'}).`,
+                    });
+                    setProofModalDeliveryId(null);
+                    setMomoRef('');
+                  }
+                }}
+                className="px-3.5 py-1.5 rounded-xl bg-emerald-600 text-white font-bold text-xs cursor-pointer"
+              >
+                Valider la livraison
+              </button>
+            </div>
           </div>
         </div>
       )}

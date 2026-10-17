@@ -15,24 +15,28 @@ import { offlineSyncService } from './offlineSyncService';
 
 export const ordersFirestoreService = {
   /**
-   * Save or update an order with offline sync fallback
+   * Save or update an order with robust serialization (no undefined fields)
    */
   async saveOrder(order: Order): Promise<void> {
-    const orderDoc = {
-      ...order,
-      updatedAt: new Date().toISOString(),
-    };
-
-    if (!navigator.onLine) {
-      offlineSyncService.enqueue('orders', 'CREATE', order.id, orderDoc, `order_create_${order.id}`);
-      return;
-    }
-
     try {
+      // Nettoyage strict des clés 'undefined' que Firestore rejette systématiquement
+      const cleanOrder = JSON.parse(
+        JSON.stringify({
+          ...order,
+          restaurantId: order.restaurantId || 'out-1',
+          updatedAt: new Date().toISOString(),
+        })
+      );
+
       const docRef = doc(db, 'orders', order.id);
-      await setDoc(docRef, orderDoc, { merge: true });
-    } catch {
-      offlineSyncService.enqueue('orders', 'CREATE', order.id, orderDoc, `order_create_${order.id}`);
+      await setDoc(docRef, cleanOrder, { merge: true });
+      console.log('✅ Commande synchronisée dans Firestore avec succès:', cleanOrder.orderNumber, cleanOrder.id);
+    } catch (err: any) {
+      console.error('🔥 Erreur lors de l\'enregistrement de la commande dans Firestore:', err);
+      try {
+        const cleanOrder = JSON.parse(JSON.stringify(order));
+        offlineSyncService.enqueue('orders', 'CREATE', order.id, cleanOrder, `order_create_${order.id}`);
+      } catch {}
     }
   },
 
@@ -45,15 +49,11 @@ export const ordersFirestoreService = {
       updatedAt: new Date().toISOString(),
     };
 
-    if (!navigator.onLine) {
-      offlineSyncService.enqueue('orders', 'UPDATE', orderId, payload, `order_status_${orderId}_${status}`);
-      return;
-    }
-
     try {
       const docRef = doc(db, 'orders', orderId);
       await updateDoc(docRef, payload);
-    } catch {
+    } catch (err) {
+      console.warn('Erreur updateOrderStatus Firestore:', err);
       offlineSyncService.enqueue('orders', 'UPDATE', orderId, payload, `order_status_${orderId}_${status}`);
     }
   },
@@ -70,21 +70,19 @@ export const ordersFirestoreService = {
       item.id === itemId ? { ...item, status: itemStatus } : item
     );
 
-    const payload = {
-      items: updatedItems,
-      updatedAt: new Date().toISOString(),
-    };
-
-    if (!navigator.onLine) {
-      offlineSyncService.enqueue('orders', 'UPDATE', order.id, payload);
-      return;
-    }
+    const cleanPayload = JSON.parse(
+      JSON.stringify({
+        items: updatedItems,
+        updatedAt: new Date().toISOString(),
+      })
+    );
 
     try {
       const docRef = doc(db, 'orders', order.id);
-      await updateDoc(docRef, payload);
-    } catch {
-      offlineSyncService.enqueue('orders', 'UPDATE', order.id, payload);
+      await updateDoc(docRef, cleanPayload);
+    } catch (err) {
+      console.warn('Erreur updateOrderItemStatus Firestore:', err);
+      offlineSyncService.enqueue('orders', 'UPDATE', order.id, cleanPayload);
     }
   },
 
@@ -97,22 +95,22 @@ export const ordersFirestoreService = {
     const totalPaid = newPayments.reduce((sum, p) => sum + p.amount, 0);
     const newStatus: OrderStatus = totalPaid >= order.total ? 'payee' : order.status;
 
-    const payload = {
-      payments: newPayments,
-      status: newStatus,
-      updatedAt: new Date().toISOString(),
-    };
-
-    if (!navigator.onLine) {
-      offlineSyncService.enqueue('orders', 'UPDATE', order.id, payload, `order_pay_${payment.id}`);
-      return;
-    }
+    const cleanPayload = JSON.parse(
+      JSON.stringify({
+        payments: newPayments,
+        status: newStatus,
+        paymentStatus: totalPaid >= order.total ? 'paye' : totalPaid > 0 ? 'partiel' : 'non_paye',
+        paidAmount: totalPaid,
+        updatedAt: new Date().toISOString(),
+      })
+    );
 
     try {
       const docRef = doc(db, 'orders', order.id);
-      await updateDoc(docRef, payload);
-    } catch {
-      offlineSyncService.enqueue('orders', 'UPDATE', order.id, payload, `order_pay_${payment.id}`);
+      await updateDoc(docRef, cleanPayload);
+    } catch (err) {
+      console.warn('Erreur recordOrderPayment Firestore:', err);
+      offlineSyncService.enqueue('orders', 'UPDATE', order.id, cleanPayload, `order_pay_${payment.id}`);
     }
   },
 
@@ -127,15 +125,11 @@ export const ordersFirestoreService = {
       updatedAt: new Date().toISOString(),
     };
 
-    if (!navigator.onLine) {
-      offlineSyncService.enqueue('orders', 'UPDATE', orderId, payload, `order_cancel_${orderId}`);
-      return;
-    }
-
     try {
       const docRef = doc(db, 'orders', orderId);
       await updateDoc(docRef, payload);
-    } catch {
+    } catch (err) {
+      console.warn('Erreur cancelOrder Firestore:', err);
       offlineSyncService.enqueue('orders', 'UPDATE', orderId, payload, `order_cancel_${orderId}`);
     }
   },
@@ -144,29 +138,30 @@ export const ordersFirestoreService = {
    * Real-time subscription to orders filtered by restaurant
    */
   subscribeToRestaurantOrders(
-    restaurantId: string,
+    restaurantId: string | undefined,
     callback: (orders: Order[]) => void
   ): () => void {
     try {
       const colRef = collection(db, 'orders');
-      const q = query(colRef, where('restaurantId', '==', restaurantId));
+      const q = restaurantId && restaurantId !== 'all'
+        ? query(colRef, where('restaurantId', '==', restaurantId))
+        : query(colRef);
 
       return onSnapshot(
         q,
         (snapshot) => {
-          if (!snapshot.empty) {
-            const list = snapshot.docs.map((d) => d.data() as Order);
-            list.sort(
-              (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-            );
-            callback(list);
-          }
+          const list = snapshot.docs.map((d) => d.data() as Order);
+          list.sort(
+            (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+          );
+          callback(list);
         },
-        () => {
-          // offline listener fallback
+        (err) => {
+          console.warn('Écoute temps réel des commandes (mode offline ou attente réseau):', err);
         }
       );
-    } catch {
+    } catch (err) {
+      console.error('Erreur lors de la création de la souscription aux commandes:', err);
       return () => {};
     }
   },

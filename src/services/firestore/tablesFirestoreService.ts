@@ -17,21 +17,22 @@ export const tablesFirestoreService = {
    * Save or update a table in Firestore
    */
   async saveTable(table: RestaurantTable): Promise<void> {
-    const payload = {
-      ...table,
-      updatedAt: new Date().toISOString(),
-    };
-
-    if (!navigator.onLine) {
-      offlineSyncService.enqueue('tables', 'CREATE', table.id, payload);
-      return;
-    }
-
     try {
+      const payload = JSON.parse(
+        JSON.stringify({
+          ...table,
+          restaurantId: table.restaurantId || 'out-1',
+          updatedAt: new Date().toISOString(),
+        })
+      );
       const docRef = doc(db, 'tables', table.id);
       await setDoc(docRef, payload, { merge: true });
-    } catch {
-      offlineSyncService.enqueue('tables', 'CREATE', table.id, payload);
+    } catch (err) {
+      console.warn('Erreur saveTable Firestore:', err);
+      try {
+        const cleanPayload = JSON.parse(JSON.stringify(table));
+        offlineSyncService.enqueue('tables', 'CREATE', table.id, cleanPayload);
+      } catch {}
     }
   },
 
@@ -49,6 +50,56 @@ export const tablesFirestoreService = {
       return;
     }
 
+    try {
+      const docRef = doc(db, 'tables', tableId);
+      await updateDoc(docRef, payload);
+    } catch {
+      offlineSyncService.enqueue('tables', 'UPDATE', tableId, payload);
+    }
+  },
+
+  /**
+   * Lock or unlock table tablet
+   */
+  async updateTableTabletLock(
+    tableId: string,
+    locked: boolean,
+    reason?: string,
+    lockedBy?: string
+  ): Promise<void> {
+    const payload = {
+      tabletLocked: locked,
+      tabletLockedReason: locked ? (reason || 'Verrouillée à distance par la Direction') : null,
+      tabletLockedAt: locked ? new Date().toISOString() : null,
+      tabletLockedBy: locked ? (lockedBy || 'Admin') : null,
+      updatedAt: new Date().toISOString(),
+    };
+
+    if (!navigator.onLine) {
+      offlineSyncService.enqueue('tables', 'UPDATE', tableId, payload);
+      return;
+    }
+
+    try {
+      const docRef = doc(db, 'tables', tableId);
+      await updateDoc(docRef, payload);
+    } catch {
+      offlineSyncService.enqueue('tables', 'UPDATE', tableId, payload);
+    }
+  },
+
+  /**
+   * Set or dismiss call waiter status
+   */
+  async updateCallWaiterStatus(tableId: string, pending: boolean): Promise<void> {
+    const payload = {
+      tabletCallWaiterPending: pending,
+      updatedAt: new Date().toISOString(),
+    };
+    if (!navigator.onLine) {
+      offlineSyncService.enqueue('tables', 'UPDATE', tableId, payload);
+      return;
+    }
     try {
       const docRef = doc(db, 'tables', tableId);
       await updateDoc(docRef, payload);
@@ -114,20 +165,20 @@ export const tablesFirestoreService = {
    * Real-time listeners
    */
   subscribeToRestaurantTables(
-    restaurantId: string,
+    restaurantId: string | undefined,
     callback: (tables: RestaurantTable[]) => void
   ): () => void {
     try {
       const colRef = collection(db, 'tables');
-      const q = query(colRef, where('restaurantId', '==', restaurantId));
+      const q = restaurantId && restaurantId !== 'all'
+        ? query(colRef, where('restaurantId', '==', restaurantId))
+        : query(colRef);
 
       return onSnapshot(
         q,
         (snapshot) => {
-          if (!snapshot.empty) {
-            const list = snapshot.docs.map((d) => d.data() as RestaurantTable);
-            callback(list);
-          }
+          const list = snapshot.docs.map((d) => d.data() as RestaurantTable);
+          callback(list);
         },
         () => {}
       );
@@ -137,20 +188,20 @@ export const tablesFirestoreService = {
   },
 
   subscribeToRestaurantZones(
-    restaurantId: string,
+    restaurantId: string | undefined,
     callback: (zones: Zone[]) => void
   ): () => void {
     try {
       const colRef = collection(db, 'zones');
-      const q = query(colRef, where('restaurantId', '==', restaurantId));
+      const q = restaurantId && restaurantId !== 'all'
+        ? query(colRef, where('restaurantId', '==', restaurantId))
+        : query(colRef);
 
       return onSnapshot(
         q,
         (snapshot) => {
-          if (!snapshot.empty) {
-            const list = snapshot.docs.map((d) => d.data() as Zone);
-            callback(list);
-          }
+          const list = snapshot.docs.map((d) => d.data() as Zone);
+          callback(list);
         },
         () => {}
       );
