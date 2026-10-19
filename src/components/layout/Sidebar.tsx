@@ -55,10 +55,13 @@ interface NavSection {
 }
 
 export const ITEM_RULE_MAP: Record<string, string> = {
+  dashboard: 'mod_dashboard',
   pos: 'mod_pos',
+  bar_pos: 'mod_bar_pos',
   tables: 'mod_tables',
   kitchen_kds: 'mod_cuisine',
   bar_kds: 'mod_bar',
+  menu: 'mod_menu',
   caisse: 'mod_caisse',
   stock: 'mod_stock',
   purchases: 'mod_purchases',
@@ -72,7 +75,9 @@ export const ITEM_RULE_MAP: Record<string, string> = {
   staff: 'mod_staff',
   documents: 'mod_documents',
   reports: 'mod_reports',
+  audit: 'mod_audit',
   reservations: 'res_management',
+  settings: 'mod_settings',
 };
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -140,6 +145,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
           featureKey: 'pos_core',
         },
         {
+          id: 'bar_pos',
+          label: 'Espace Bar (100% Boissons)',
+          icon: Wine,
+          badge: 'Comptoir',
+          badgeColor: 'bg-emerald-100 text-emerald-800 font-bold',
+          featureKey: 'bar_pos_exclusive',
+        },
+        {
           id: 'reservations',
           label: 'Réservations',
           icon: CalendarDays,
@@ -185,6 +198,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           id: 'menu',
           label: 'Carte & Recettes',
           icon: MenuSquare,
+          featureKey: 'recipes_bom_yield',
         },
         {
           id: 'hygiene',
@@ -273,11 +287,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
           id: 'documents',
           label: 'Documents & Scanner GED',
           icon: FolderLock,
+          featureKey: 'documents_scanner_ged',
         },
         {
           id: 'audit',
           label: 'Journal d’Audit',
           icon: ShieldAlert,
+          featureKey: 'audit_trail_immutable',
         },
         {
           id: 'settings',

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useRestaurant } from '../../../context/RestaurantContext';
 import { useToast } from '../../../context/ToastContext';
+import { useAuth } from '../../../context/AuthContext';
 import { UserRole } from '../../../types/restaurant';
 import {
   PermissionModule,
@@ -36,6 +37,8 @@ import {
   Tablet,
   ChefHat,
   Check,
+  Crown,
+  Sparkles,
 } from 'lucide-react';
 import { ModernRuleToggle } from './ModernRuleToggle';
 
@@ -74,6 +77,8 @@ export const HardwareAndSecuritySection: React.FC<Props> = ({ subTab }) => {
     pairDeviceWithCode,
   } = useRestaurant();
   const { showToast } = useToast();
+  const { currentUser } = useAuth();
+  const isSuperAdmin = currentUser?.role === 'direction';
 
   const [savedSuccess, setSavedSuccess] = useState(false);
   const [copiedTerminalId, setCopiedTerminalId] = useState<string | null>(null);
@@ -687,49 +692,145 @@ export const HardwareAndSecuritySection: React.FC<Props> = ({ subTab }) => {
   }
 
   // 10. AVANCÉ & PROFILS PRÉDÉFINIS (Section 31)
+  const handleApplyProfile = async (id: ConfigurationProfileType, title: string) => {
+    if (!isSuperAdmin) {
+      showToast({
+        title: 'Action Réservée',
+        message: 'Seul le Super Administrateur (Direction) peut appliquer un profil d’exploitation.',
+        type: 'warning',
+      });
+      return;
+    }
+    if (confirm(`Voulez-vous appliquer le profil "${title}" ? Cette action ajustera l’activation des modules et des règles métier.`)) {
+      await applyConfigProfile(id);
+      showToast({
+        title: 'Profil Déployé',
+        message: `Le profil "${title}" a été activé avec succès.`,
+        type: 'success',
+      });
+    }
+  };
+
+  const handleResetFactory = async () => {
+    if (!isSuperAdmin) {
+      showToast({
+        title: 'Action Réservée',
+        message: 'Seul le Super Administrateur (Direction) peut réinitialiser le système.',
+        type: 'error',
+      });
+      return;
+    }
+    if (confirm('Réinitialiser toutes les données aux valeurs de démonstration ?')) {
+      resetToDemoData();
+      showToast({
+        title: 'Système Réinitialisé',
+        message: 'Données de démonstration restaurées avec succès.',
+        type: 'info',
+      });
+    }
+  };
+
   return (
     <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-6 text-xs">
-      <div className="border-b border-slate-100 pb-3">
-        <h3 className="text-sm font-bold text-slate-900">Paramètres Avancés & Profils Métier (1-Clic)</h3>
-        <p className="text-slate-500">Déployez instantanément un modèle d'exploitation adapté à votre établissement</p>
+      <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+        <div>
+          <h3 className="text-sm font-bold text-slate-900">Paramètres Avancés & Profils Métier (1-Clic)</h3>
+          <p className="text-slate-500">Déployez instantanément un modèle d'exploitation adapté à votre établissement</p>
+        </div>
+        {isSuperAdmin && (
+          <span className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-100 text-amber-900 font-bold text-[11px] border border-amber-300">
+            <Crown className="w-3.5 h-3.5 text-amber-700" />
+            Super Admin
+          </span>
+        )}
       </div>
+
+      {!isSuperAdmin && (
+        <div className="flex items-center gap-2.5 px-4 py-2.5 rounded-xl bg-slate-100 border border-slate-200 text-slate-700 text-xs font-medium">
+          <Lock className="w-4 h-4 text-slate-500 shrink-0" />
+          <span>
+            <strong>Mode Consultation :</strong> L’application des profils et la réinitialisation sont réservées au Super Administrateur.
+          </span>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {[
           {
+            id: 'depart_essentiel' as ConfigurationProfileType,
+            title: '🎯 Profil Essentiel Restaurant (Resto #1)',
+            desc: 'Configuration ciblée 12 modules : Tableau de bord, POS, Cuisine KDS, Carte & Recettes, Stocks, Achats, Caisse, Personnel, GED, Audit, Rapports et Paramètres.',
+            badge: 'Recommandé Resto #1',
+            highlight: true,
+          },
+          {
             id: 'restaurant_classique' as ConfigurationProfileType,
             title: 'Restaurant Classique & Grillades',
             desc: 'Service à table, cuisine chaude, bar lounge, facturation TVA et clôture de caisse standard.',
+            badge: 'Généraliste',
+            highlight: false,
           },
           {
             id: 'bar_lounge' as ConfigurationProfileType,
             title: 'Bar Lounge & Cave à Vins',
             desc: 'Cocktails, gestion bouteilles/verres, cartes boissons et ambiance lounge.',
+            badge: 'Boissons',
+            highlight: false,
           },
           {
             id: 'fast_food' as ConfigurationProfileType,
             title: 'Fast-Food & Vente à Emporter',
             desc: 'Commandes rapides au comptoir, click & collect et livraisons moto.',
+            badge: 'Rapide',
+            highlight: false,
           },
           {
             id: 'evenementiel_traiteur' as ConfigurationProfileType,
             title: 'Traiteur, Banquets & Cérémonies',
             desc: 'Devis complets, gestion des acomptes et factures laser A5 entreprises.',
+            badge: 'Banquets',
+            highlight: false,
           },
         ].map((p) => (
-          <div key={p.id} className="p-4 rounded-xl border border-slate-200 bg-slate-50 flex flex-col justify-between space-y-3">
+          <div
+            key={p.id}
+            className={`p-4 rounded-xl border flex flex-col justify-between space-y-3 transition-all ${
+              p.highlight
+                ? 'bg-amber-50/60 border-amber-300 ring-2 ring-amber-400/20'
+                : 'border-slate-200 bg-slate-50'
+            }`}
+          >
             <div>
-              <h4 className="font-bold text-slate-900 text-sm">{p.title}</h4>
-              <p className="text-slate-600 mt-1 leading-relaxed">{p.desc}</p>
+              <div className="flex items-center justify-between gap-2 mb-1">
+                <h4 className="font-bold text-slate-900 text-sm flex items-center gap-1.5">
+                  {p.highlight && <Sparkles className="w-4 h-4 text-amber-600 shrink-0" />}
+                  <span>{p.title}</span>
+                </h4>
+                {p.badge && (
+                  <span
+                    className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
+                      p.highlight
+                        ? 'bg-amber-200 text-amber-900 border border-amber-300'
+                        : 'bg-slate-200 text-slate-700'
+                    }`}
+                  >
+                    {p.badge}
+                  </span>
+                )}
+              </div>
+              <p className="text-slate-600 mt-1 leading-relaxed text-xs">{p.desc}</p>
             </div>
             <button
               type="button"
-              onClick={() => {
-                if (confirm(`Appliquer le profil "${p.title}" ?`)) {
-                  applyConfigProfile(p.id);
-                }
-              }}
-              className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-slate-900 text-white font-bold hover:bg-slate-800"
+              disabled={!isSuperAdmin}
+              onClick={() => handleApplyProfile(p.id, p.title)}
+              className={`flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl font-bold transition-colors ${
+                isSuperAdmin
+                  ? p.highlight
+                    ? 'bg-amber-600 text-white hover:bg-amber-700 shadow-xs'
+                    : 'bg-slate-900 text-white hover:bg-slate-800'
+                  : 'bg-slate-200 text-slate-400 cursor-not-allowed'
+              }`}
             >
               <span>Appliquer ce profil</span>
               <ArrowRight className="w-3.5 h-3.5" />
@@ -741,12 +842,13 @@ export const HardwareAndSecuritySection: React.FC<Props> = ({ subTab }) => {
       <div className="pt-4 border-t border-slate-100 flex items-center justify-between">
         <button
           type="button"
-          onClick={() => {
-            if (confirm('Réinitialiser toutes les données aux valeurs de démonstration ?')) {
-              resetToDemoData();
-            }
-          }}
-          className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-rose-50 text-rose-700 font-bold hover:bg-rose-100 border border-rose-200"
+          disabled={!isSuperAdmin}
+          onClick={handleResetFactory}
+          className={`flex items-center gap-1.5 px-4 py-2 rounded-xl font-bold border transition-colors ${
+            isSuperAdmin
+              ? 'bg-rose-50 text-rose-700 hover:bg-rose-100 border-rose-200'
+              : 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed'
+          }`}
         >
           <RefreshCw className="w-3.5 h-3.5" />
           <span>Réinitialisation d'usine</span>

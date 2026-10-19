@@ -767,6 +767,85 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     addAuditLog('Mise à jour paramètres restaurant', 'Paramètres', 'Modification configuration générale');
   };
 
+  // Déduction atomique de stock avec gestion du négatif réel et lots FEFO
+  const deductStockForOrderItems = async (
+    items: OrderItem[],
+    orderNumber: string,
+    orderId: string
+  ) => {
+    if (!settings.enableStockAutoDeduction) return;
+    const now = new Date().toISOString();
+
+    for (const item of items) {
+      const prod = products.find((p) => p.id === item.productId);
+      if (prod && prod.ingredients && prod.ingredients.length > 0) {
+        for (const ing of prod.ingredients) {
+          const consumedQty = ing.quantityRequired * item.quantity;
+          const delta = -consumedQty;
+
+          // État local pré-calculé (autorise le stock négatif réel sans clamp Math.max)
+          const currentItem = stockItems.find((s) => s.id === ing.stockItemId);
+          const previousQuantity = currentItem ? currentItem.currentQuantity : 0;
+          const newQuantity = Math.round((previousQuantity + delta) * 100) / 100;
+
+          setStockItems((prevStk) =>
+            prevStk.map((s) =>
+              s.id === ing.stockItemId
+                ? { ...s, currentQuantity: newQuantity, lastUpdated: now }
+                : s
+            )
+          );
+
+          const movement: StockMovement = {
+            id: generateSecureId('mv'),
+            stockItemId: ing.stockItemId,
+            stockItemName: ing.stockItemName,
+            type: 'sortie_consommation',
+            quantityChange: delta,
+            previousQuantity,
+            newQuantity,
+            unit: ing.unit,
+            reason: `Vente commande ${orderNumber} (${item.quantity}x ${item.productName})`,
+            referenceId: orderId,
+            userName: currentUser.name,
+            timestamp: now,
+          };
+          setStockMovements((prev) => [movement, ...prev]);
+
+          // Déduction atomique Firestore par transaction avec increment()
+          stockFirestoreService
+            .deductStockItemAtomically(ing.stockItemId, delta, {
+              type: 'sortie_consommation',
+              reason: `Vente commande ${orderNumber} (${item.quantity}x ${item.productName})`,
+              unit: ing.unit,
+              referenceId: orderId,
+              userId: currentUser.id,
+              userName: currentUser.name,
+            })
+            .then((res) => {
+              if (res.isNegative) {
+                addNotification(
+                  'Alerte Stock Négatif Critique',
+                  `L'article "${ing.stockItemName}" est en rupture / stock négatif (${res.newQuantity} ${ing.unit}). Réapprovisionnement urgent requis.`,
+                  'alert',
+                  'Stock',
+                  'haute'
+                );
+              }
+            })
+            .catch((err) => {
+              handleSyncError('Déduction stock atomique', err);
+            });
+
+          // Déstockage des lots en FEFO
+          stockFirestoreService.deductLotsFEFO(ing.stockItemId, consumedQty).catch((err) => {
+            console.warn('[RestaurantContext] Erreur déduction FEFO lots:', err);
+          });
+        }
+      }
+    }
+  };
+
   // 1. Create Order
   const createOrder = async (orderData: Partial<Order>): Promise<Order> => {
     const now = new Date().toISOString();
@@ -878,49 +957,9 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       });
     }
 
-    // Deduct stock if enabled
-    if (settings.enableStockAutoDeduction) {
-      newOrder.items.forEach((item) => {
-        const prod = products.find((p) => p.id === item.productId);
-        if (prod && prod.ingredients && prod.ingredients.length > 0) {
-          prod.ingredients.forEach((ing) => {
-            const consumedQty = ing.quantityRequired * item.quantity;
-            setStockItems((prevStk) =>
-              prevStk.map((s) => {
-                if (s.id === ing.stockItemId) {
-                  const newQ = Math.max(0, s.currentQuantity - consumedQty);
-                  const updatedItem = { ...s, currentQuantity: Math.round(newQ * 100) / 100, lastUpdated: now };
-                  stockFirestoreService.saveStockItem(updatedItem).catch((err) => {
-                    handleSyncError('Déduction stock article', err);
-                  });
-                  return updatedItem;
-                }
-                return s;
-              })
-            );
-
-            // record stock movement
-            const newMovement: StockMovement = {
-              id: generateSecureId('mv'),
-              stockItemId: ing.stockItemId,
-              stockItemName: ing.stockItemName,
-              type: 'sortie_consommation',
-              quantityChange: -consumedQty,
-              previousQuantity: 0,
-              newQuantity: 0,
-              unit: ing.unit,
-              reason: `Vente commande ${newOrder.orderNumber} (${item.quantity}x ${item.productName})`,
-              referenceId: newOrder.id,
-              userName: currentUser.name,
-              timestamp: now,
-            };
-            setStockMovements((prev) => [newMovement, ...prev]);
-            stockFirestoreService.saveStockMovement(newMovement).catch((err) => {
-              handleSyncError('Mouvement de stock consommation', err);
-            });
-          });
-        }
-      });
+    // Déduction atomique de stock si configurée à l'envoi en cuisine
+    if (settings.enableStockAutoDeduction && settings.stockDeductionTiming !== 'encaissement') {
+      deductStockForOrderItems(newOrder.items, newOrder.orderNumber, newOrder.id);
     }
 
     addAuditLog(
@@ -1007,48 +1046,9 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       );
     }
 
-    // Déduction des stocks si activée
-    if (settings.enableStockAutoDeduction) {
-      newItems.forEach((item) => {
-        const prod = products.find((p) => p.id === item.productId);
-        if (prod && prod.ingredients && prod.ingredients.length > 0) {
-          prod.ingredients.forEach((ing) => {
-            const consumedQty = ing.quantityRequired * item.quantity;
-            setStockItems((prevStk) =>
-              prevStk.map((s) => {
-                if (s.id === ing.stockItemId) {
-                  const newQ = Math.max(0, s.currentQuantity - consumedQty);
-                  const updatedItem = { ...s, currentQuantity: Math.round(newQ * 100) / 100, lastUpdated: now };
-                  stockFirestoreService.saveStockItem(updatedItem).catch((err) => {
-                    handleSyncError('Déduction stock article additionnel', err);
-                  });
-                  return updatedItem;
-                }
-                return s;
-              })
-            );
-
-            const newMovement: StockMovement = {
-              id: generateSecureId('mv'),
-              stockItemId: ing.stockItemId,
-              stockItemName: ing.stockItemName,
-              type: 'sortie_consommation',
-              quantityChange: -consumedQty,
-              previousQuantity: 0,
-              newQuantity: 0,
-              unit: ing.unit,
-              reason: `Rajout commande ${targetOrder.orderNumber} (${item.quantity}x ${item.productName})`,
-              referenceId: targetOrder.id,
-              userName: currentUser.name,
-              timestamp: now,
-            };
-            setStockMovements((prev) => [newMovement, ...prev]);
-            stockFirestoreService.saveStockMovement(newMovement).catch((err) => {
-              handleSyncError('Mouvement de stock consommation rajout', err);
-            });
-          });
-        }
-      });
+    // Déduction atomique de stock si configurée à l'envoi en cuisine
+    if (settings.enableStockAutoDeduction && settings.stockDeductionTiming !== 'encaissement') {
+      deductStockForOrderItems(newItems, targetOrder.orderNumber, targetOrder.id);
     }
 
     addAuditLog(
@@ -1345,6 +1345,11 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
           return c;
         })
       );
+    }
+
+    // Déduction stock à l'encaissement si configuré
+    if (settings.enableStockAutoDeduction && settings.stockDeductionTiming === 'encaissement' && isFullyPaid) {
+      deductStockForOrderItems(targetOrder.items, targetOrder.orderNumber, targetOrder.id);
     }
 
     addAuditLog(
@@ -2313,6 +2318,60 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       `Commande ${targetOrder.orderNumber} annulée. Motif: "${reason}". Validé par: ${log.approvedBy}. Montant: ${targetOrder.total} ${settings.currency}`,
       targetOrder.id
     );
+
+    // Remise en stock atomique des ingrédients si la commande avait été déstockée
+    const itemsToRestock: Array<{
+      stockItemId: string;
+      stockItemName: string;
+      quantityToRestore: number;
+      unit: string;
+    }> = [];
+
+    for (const item of targetOrder.items) {
+      const prod = products.find((p) => p.id === item.productId);
+      if (prod && prod.ingredients && prod.ingredients.length > 0) {
+        for (const ing of prod.ingredients) {
+          const qtyToRestore = (ing.quantityRequired || 0) * (item.quantity || 1);
+          if (qtyToRestore > 0) {
+            const existing = itemsToRestock.find((x) => x.stockItemId === ing.stockItemId);
+            if (existing) {
+              existing.quantityToRestore = Math.round((existing.quantityToRestore + qtyToRestore) * 100) / 100;
+            } else {
+              itemsToRestock.push({
+                stockItemId: ing.stockItemId,
+                stockItemName: ing.stockItemName,
+                quantityToRestore: Math.round(qtyToRestore * 100) / 100,
+                unit: ing.unit,
+              });
+            }
+          }
+        }
+      }
+    }
+
+    if (itemsToRestock.length > 0) {
+      stockFirestoreService.restockItemsAtomically(
+        itemsToRestock,
+        targetOrder.orderNumber,
+        currentUser.name
+      ).catch((err) => {
+        console.warn('[RestaurantContext] Erreur restockItemsAtomically:', err);
+      });
+
+      setStockItems((prev) =>
+        prev.map((item) => {
+          const restock = itemsToRestock.find((r) => r.stockItemId === item.id);
+          if (restock) {
+            return {
+              ...item,
+              currentQuantity: Math.round((item.currentQuantity + restock.quantityToRestore) * 100) / 100,
+              lastUpdated: now.toISOString(),
+            };
+          }
+          return item;
+        })
+      );
+    }
 
     await ordersFirestoreService.cancelOrder(orderId, reason, log.approvedBy);
   };

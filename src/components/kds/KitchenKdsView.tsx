@@ -11,6 +11,7 @@ import {
   Flame,
   Check,
   Volume2,
+  VolumeX,
   Undo2,
   Calendar,
   Search,
@@ -44,6 +45,24 @@ export const KitchenKdsView: React.FC = () => {
 
   const [modal86Open, setModal86Open] = useState(false);
   const [search86, setSearch86] = useState('');
+  const [soundEnabled, setSoundEnabled] = useState<boolean>(true);
+  const previousKitchenOrdersCount = React.useRef<number | null>(null);
+
+  // Alerte sonore automatique lors de l'arrivée d'une nouvelle commande en cuisine
+  React.useEffect(() => {
+    const kitchenOrdersCount = orders.filter(
+      (o) =>
+        o.items.some((i) => i.destination === 'cuisine') &&
+        (o.status === 'envoye' || o.status === 'en_preparation' || o.status === 'nouveau')
+    ).length;
+
+    if (previousKitchenOrdersCount.current !== null && kitchenOrdersCount > previousKitchenOrdersCount.current) {
+      if (soundEnabled) {
+        playAudioChime('kitchen');
+      }
+    }
+    previousKitchenOrdersCount.current = kitchenOrdersCount;
+  }, [orders, soundEnabled, playAudioChime]);
 
   // Règles Opérationnelles (Section 9 Cuisine & KDS)
   const isPrepTimerAllowed = isRuleEnabled('cuisine_prep_timer', true);
@@ -364,13 +383,22 @@ export const KitchenKdsView: React.FC = () => {
             )}
           </button>
 
-          {/* Sound test button */}
+          {/* Sound toggle & chime button */}
           <button
-            onClick={() => playAudioChime('kitchen')}
-            className="p-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 transition-colors shadow-2xs"
-            title="Tester la sonnette de cuisine"
+            onClick={() => {
+              const nextState = !soundEnabled;
+              setSoundEnabled(nextState);
+              if (nextState) playAudioChime('kitchen');
+            }}
+            className={`px-3 py-2 rounded-xl border transition-colors shadow-2xs flex items-center gap-1.5 text-xs font-bold ${
+              soundEnabled
+                ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 hover:bg-amber-500/30'
+                : 'bg-slate-800 text-slate-500 border-slate-700 hover:text-slate-400'
+            }`}
+            title={soundEnabled ? 'Sonnette de cuisine active (Cliquer pour couper)' : 'Sonnette coupée (Cliquer pour réactiver)'}
           >
-            <Volume2 className="w-4 h-4 text-amber-400" />
+            {soundEnabled ? <Volume2 className="w-4 h-4 text-amber-400" /> : <VolumeX className="w-4 h-4 text-slate-500" />}
+            <span className="text-[11px] font-bold hidden sm:inline">{soundEnabled ? 'Sonnette Active' : 'Sonnette Muette'}</span>
           </button>
 
           {/* Prep Categories Filter */}

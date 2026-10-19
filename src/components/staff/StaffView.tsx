@@ -4,40 +4,31 @@ import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import {
   Attendance,
-  Employee,
   WeeklySchedule,
   WeeklyDaySchedule,
   ShiftType,
 } from '../../types/restaurant';
-import { formatCurrency, ROLE_LABELS } from '../../lib/utils';
+import { ROLE_LABELS } from '../../lib/utils';
 import {
-  UserCheck,
   Clock,
-  Briefcase,
-  Phone,
-  Mail,
   Calendar,
-  CheckCircle2,
-  AlertTriangle,
-  XCircle,
-  Plus,
   X,
   ShieldCheck,
   Users,
-  Download,
-  Key,
-  Edit2,
-  ChevronRight,
   Sun,
   Moon,
   Coffee,
   Check,
   Zap,
   Palmtree,
-  Sparkles,
-  AlertCircle,
+  LayoutDashboard,
+  Coins,
 } from 'lucide-react';
 import { UserAccountsSection } from './UserAccountsSection';
+import { DashboardRH } from './DashboardRH';
+import { Employees } from './Employees';
+import { Attendance as AttendanceComponent } from './Attendance';
+import { Salaires } from './Salaires';
 
 const DAYS_OF_WEEK: { key: keyof WeeklySchedule; label: string; short: string }[] = [
   { key: 'lundi', label: 'Lundi', short: 'Lun' },
@@ -91,19 +82,16 @@ const SHIFT_PRESETS: Record<
 };
 
 export const StaffView: React.FC = () => {
-  const { currentUser, updateCurrentUserPin } = useAuth();
+  const { currentUser } = useAuth();
   const {
     employees,
-    attendances,
     addAttendanceRecord,
     updateEmployeeWeeklySchedule,
-    settings,
     userAccounts,
-    updateUserAccount,
   } = useRestaurant();
   const { showToast } = useToast();
 
-  const [activeTab, setActiveTab] = useState<'accounts' | 'plannings' | 'attendance' | 'employees'>('plannings');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'employees' | 'attendance' | 'plannings' | 'salaires' | 'accounts'>('dashboard');
   const [clockInModalOpen, setClockInModalOpen] = useState(false);
 
   // Shift Edit Modal State
@@ -115,42 +103,10 @@ export const StaffView: React.FC = () => {
     currentSchedule: WeeklyDaySchedule;
   } | null>(null);
 
-  // PIN Reset Modal State
-  const [pinResetModalOpen, setPinResetModalOpen] = useState(false);
-  const [selectedUserForPin, setSelectedUserForPin] = useState<{ id: string; name: string } | null>(null);
-  const [newPinCode, setNewPinCode] = useState('');
-
-  // Générateur de PIN unique aléatoire
-  const generateUniquePin = (excludeUserId?: string): string => {
-    const existingPins = new Set(
-      userAccounts
-        .filter((a) => a.id !== excludeUserId)
-        .map((a) => a.pinCode)
-    );
-    for (let attempts = 0; attempts < 1000; attempts++) {
-      const candidate = Math.floor(1000 + Math.random() * 9000).toString();
-      if (!existingPins.has(candidate)) {
-        return candidate;
-      }
-    }
-    return Math.floor(1000 + Math.random() * 9000).toString();
-  };
-
-  // Détection de collision de PIN
-  const pinCollision = useMemo(() => {
-    if (!newPinCode || newPinCode.length < 4) return null;
-    return userAccounts.find(
-      (a) => a.id !== selectedUserForPin?.id && a.pinCode === newPinCode
-    );
-  }, [newPinCode, userAccounts, selectedUserForPin]);
-
   // Clock in form
   const [selectedEmpId, setSelectedEmpId] = useState(employees[0]?.id || '');
   const [status, setStatus] = useState<Attendance['status']>('present');
   const [justification, setJustification] = useState('');
-
-  const todayStr = new Date().toISOString().slice(0, 10);
-  const todayAttendances = attendances.filter((a) => a.date === todayStr);
 
   // Current logged in employee
   const currentLoggedInEmployee = useMemo(() => {
@@ -209,119 +165,64 @@ export const StaffView: React.FC = () => {
     });
   };
 
-  const handleResetPin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedUserForPin || !newPinCode || newPinCode.length !== 4) {
-      showToast({
-        type: 'warning',
-        title: 'Code PIN invalide',
-        message: 'Le code PIN doit comporter exactement 4 chiffres.',
-      });
-      return;
-    }
-
-    if (pinCollision) {
-      showToast({
-        type: 'warning',
-        title: 'Code PIN déjà attribué',
-        message: `Ce code PIN est déjà utilisé par ${pinCollision.name}. Choisissez un code unique.`,
-      });
-      return;
-    }
-
-    await updateUserAccount(selectedUserForPin.id, { pinCode: newPinCode });
-
-    if (
-      currentUser.id === selectedUserForPin.id ||
-      currentUser.name.toLowerCase() === selectedUserForPin.name.toLowerCase()
-    ) {
-      await updateCurrentUserPin(newPinCode);
-    }
-
-    setPinResetModalOpen(false);
-    setNewPinCode('');
-    showToast({
-      type: 'success',
-      title: 'Code PIN Réinitialisé',
-      message: `Le code PIN de ${selectedUserForPin.name} a été mis à jour avec succès.`,
-    });
-  };
-
-  // Export payroll summary to CSV
-  const handleExportPayrollCsv = () => {
-    const headers = ['Matricule', 'Nom & Prénom', 'Rôle', 'Département', 'Salaire de Base', 'Jours Présents', 'Retards'];
-    const rows = employees.map((emp) => {
-      const empAttendances = attendances.filter((a) => a.employeeId === emp.id);
-      const presentCount = empAttendances.filter((a) => a.status === 'present').length;
-      const retardCount = empAttendances.filter((a) => a.status === 'retard').length;
-
-      return [
-        emp.id,
-        `"${emp.fullName}"`,
-        emp.role,
-        emp.department,
-        emp.salary,
-        presentCount,
-        retardCount,
-      ].join(';');
-    });
-
-    const csvContent = 'data:text/csv;charset=utf-8,\uFEFF' + [headers.join(';'), ...rows].join('\n');
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement('a');
-    link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `recapitulatif_paie_restomaster_${todayStr}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-
-    showToast({
-      type: 'success',
-      title: 'Export Réussi',
-      message: 'Fichier récapitulatif de la paie téléchargé en CSV.',
-    });
-  };
-
   return (
     <div className="space-y-6 pb-12">
       {/* Top Header Navigation */}
       <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-4">
-        <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl text-xs font-bold border border-slate-200 overflow-x-auto max-w-full">
+        <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-900 p-1 rounded-xl text-xs font-bold border border-slate-200 dark:border-slate-800 overflow-x-auto max-w-full">
           <button
-            onClick={() => setActiveTab('plannings')}
-            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg transition-all whitespace-nowrap ${
-              activeTab === 'plannings' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+            onClick={() => setActiveTab('dashboard')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all whitespace-nowrap ${
+              activeTab === 'dashboard' ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-xs font-extrabold' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
             }`}
           >
-            <Calendar className="w-3.5 h-3.5 text-amber-600" />
-            <span>Plannings Hebdomadaires</span>
+            <LayoutDashboard className="w-3.5 h-3.5 text-amber-600" />
+            <span>Tableau de Bord</span>
+          </button>
+          <button
+            onClick={() => setActiveTab('employees')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all whitespace-nowrap ${
+              activeTab === 'employees' ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-xs font-extrabold' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+            }`}
+          >
+            <Users className="w-3.5 h-3.5 text-blue-600" />
+            <span>Personnel & Registre ({employees.length})</span>
+          </button>
+          <button
+            onClick={() => setActiveTab('attendance')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all whitespace-nowrap ${
+              activeTab === 'attendance' ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-xs font-extrabold' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+            }`}
+          >
+            <Clock className="w-3.5 h-3.5 text-emerald-600" />
+            <span>Pointages & Présences</span>
+          </button>
+          <button
+            onClick={() => setActiveTab('plannings')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all whitespace-nowrap ${
+              activeTab === 'plannings' ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-xs font-extrabold' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+            }`}
+          >
+            <Calendar className="w-3.5 h-3.5 text-purple-600" />
+            <span>Planning Hebdo</span>
+          </button>
+          <button
+            onClick={() => setActiveTab('salaires')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all whitespace-nowrap ${
+              activeTab === 'salaires' ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-xs font-extrabold' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+            }`}
+          >
+            <Coins className="w-3.5 h-3.5 text-emerald-600" />
+            <span>Salaires & Paie</span>
           </button>
           <button
             onClick={() => setActiveTab('accounts')}
-            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg transition-all whitespace-nowrap ${
-              activeTab === 'accounts' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all whitespace-nowrap ${
+              activeTab === 'accounts' ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-xs font-extrabold' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
             }`}
           >
             <ShieldCheck className="w-3.5 h-3.5 text-indigo-600" />
             <span>Comptes & Droits ({userAccounts.length})</span>
-          </button>
-          <button
-            onClick={() => setActiveTab('attendance')}
-            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg transition-all whitespace-nowrap ${
-              activeTab === 'attendance' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            <Clock className="w-3.5 h-3.5 text-emerald-600" />
-            <span>Pointages & Paie ({todayAttendances.length})</span>
-          </button>
-          <button
-            onClick={() => setActiveTab('employees')}
-            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg transition-all whitespace-nowrap ${
-              activeTab === 'employees' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            <Users className="w-3.5 h-3.5 text-blue-600" />
-            <span>Fiches Salariés ({employees.length})</span>
           </button>
         </div>
 
@@ -335,6 +236,26 @@ export const StaffView: React.FC = () => {
           </button>
         </div>
       </div>
+
+      {/* TAB: TABLEAU DE BORD RH */}
+      {activeTab === 'dashboard' && (
+        <DashboardRH onNavigateToTransactions={() => setActiveTab('salaires')} />
+      )}
+
+      {/* TAB: PERSONNEL & REGISTRE COMPLET */}
+      {activeTab === 'employees' && (
+        <Employees />
+      )}
+
+      {/* TAB: POINTAGES & PRÉSENCES AVANCÉ */}
+      {activeTab === 'attendance' && (
+        <AttendanceComponent />
+      )}
+
+      {/* TAB: SALAIRES, PRIMES & BULLETINS */}
+      {activeTab === 'salaires' && (
+        <Salaires />
+      )}
 
       {/* TAB: PLANNINGS HEBDOMADAIRES (Section 9 du Guide) */}
       {activeTab === 'plannings' && (
@@ -488,190 +409,6 @@ export const StaffView: React.FC = () => {
       {/* TAB: COMPTES & DROITS GRANULAIRES */}
       {activeTab === 'accounts' && <UserAccountsSection />}
 
-      {/* TAB: POINTAGES DU JOUR & SUIVI PAIE */}
-      {activeTab === 'attendance' && (
-        <div className="space-y-6">
-          {/* Payroll KPI Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
-              <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-                Masse Salariale Mensuelle
-              </span>
-              <div className="text-2xl font-black text-slate-900 mt-2">
-                {formatCurrency(
-                  employees.reduce((acc, e) => acc + (e.salary || 0), 0),
-                  settings.currency
-                )}
-              </div>
-              <div className="text-[11px] text-slate-400 mt-1">Salaires de base du personnel actif</div>
-            </div>
-
-            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
-              <span className="text-xs font-bold text-emerald-700 uppercase tracking-wider">
-                Présents Aujourd'hui
-              </span>
-              <div className="text-2xl font-black text-emerald-700 mt-2">
-                {todayAttendances.filter((a) => a.status === 'present').length} / {employees.length}
-              </div>
-              <div className="text-[11px] text-slate-400 mt-1">Équipe en salle, cuisine et caisse</div>
-            </div>
-
-            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
-              <span className="text-xs font-bold text-amber-700 uppercase tracking-wider">
-                Retards Constatés
-              </span>
-              <div className="text-2xl font-black text-amber-700 mt-2">
-                {todayAttendances.filter((a) => a.status === 'retard').length}
-              </div>
-              <div className="text-[11px] text-slate-400 mt-1">Justifications enregistrées</div>
-            </div>
-          </div>
-
-          {/* Today Attendance Table with CSV Export */}
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
-            <div className="p-4 sm:p-5 border-b border-slate-100 flex items-center justify-between">
-              <div>
-                <h3 className="font-bold text-sm text-slate-900">
-                  Registre des Pointages — {todayStr}
-                </h3>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  Pointages réels par code PIN pour le calcul de la paie et des heures supplémentaires.
-                </p>
-              </div>
-
-              <button
-                onClick={handleExportPayrollCsv}
-                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold shadow-xs transition-colors"
-                title="Télécharger le fichier récapitulatif pour la comptabilité"
-              >
-                <Download className="w-3.5 h-3.5" />
-                <span>Exporter Paie (CSV)</span>
-              </button>
-            </div>
-
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse text-xs">
-                <thead>
-                  <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase text-[10px]">
-                    <th className="py-3 px-4">Salarié</th>
-                    <th className="py-3 px-4">Heure Arrivée</th>
-                    <th className="py-3 px-4">Heure Départ</th>
-                    <th className="py-3 px-4">Statut</th>
-                    <th className="py-3 px-4">Justification</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {todayAttendances.length === 0 ? (
-                    <tr>
-                      <td colSpan={5} className="py-8 text-center text-slate-400">
-                        Aucun pointage enregistré pour cette journée.
-                      </td>
-                    </tr>
-                  ) : (
-                    todayAttendances.map((att) => (
-                      <tr key={att.id} className="hover:bg-slate-50/70">
-                        <td className="py-3 px-4 font-bold text-slate-900">{att.employeeName}</td>
-                        <td className="py-3 px-4 font-mono text-slate-700">{att.checkIn}</td>
-                        <td className="py-3 px-4 font-mono text-slate-500">{att.checkOut || 'En service'}</td>
-                        <td className="py-3 px-4">
-                          <span
-                            className={`text-[10px] font-bold px-2 py-0.5 rounded-full capitalize ${
-                              att.status === 'present'
-                                ? 'bg-emerald-100 text-emerald-800'
-                                : att.status === 'retard'
-                                ? 'bg-amber-100 text-amber-800'
-                                : 'bg-rose-100 text-rose-800'
-                            }`}
-                          >
-                            {att.status}
-                          </span>
-                        </td>
-                        <td className="py-3 px-4 text-slate-500">{att.justification || '—'}</td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* TAB: FICHES SALARIÉS & RÉINITIALISATION PIN */}
-      {activeTab === 'employees' && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {employees.map((emp) => {
-            const roleInfo = ROLE_LABELS[emp.role] || { label: emp.role, color: 'bg-gray-100 text-gray-800' };
-            const linkedAccount = userAccounts.find(
-              (u) =>
-                u.email?.toLowerCase() === emp.email?.toLowerCase() ||
-                u.phone === emp.phone ||
-                u.name?.toLowerCase() === emp.fullName.toLowerCase()
-            );
-
-            return (
-              <div
-                key={emp.id}
-                className="bg-white rounded-2xl border border-slate-200 shadow-xs p-5 flex flex-col justify-between space-y-4"
-              >
-                <div>
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <h3 className="font-bold text-sm text-slate-900">{emp.fullName}</h3>
-                      <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border inline-block mt-1 ${roleInfo.color}`}>
-                        {roleInfo.label}
-                      </span>
-                    </div>
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-700 uppercase">
-                      {emp.department}
-                    </span>
-                  </div>
-
-                  <div className="mt-4 space-y-1.5 text-xs text-slate-600">
-                    <div className="flex items-center gap-2">
-                      <Phone className="w-3.5 h-3.5 text-slate-400" />
-                      <span>{emp.phone}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Mail className="w-3.5 h-3.5 text-slate-400" />
-                      <span className="truncate">{emp.email}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Briefcase className="w-3.5 h-3.5 text-slate-400" />
-                      <span>Contrat : {emp.contractType}</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="pt-3 border-t border-slate-100 space-y-2.5">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="text-slate-500">Rémunération :</span>
-                    <span className="font-black text-slate-900">
-                      {formatCurrency(emp.salary, settings.currency)} / mois
-                    </span>
-                  </div>
-
-                  {/* Reset PIN in 1 click (Section 9 du Guide) */}
-                  {linkedAccount && (
-                    <button
-                      onClick={() => {
-                        setSelectedUserForPin({ id: linkedAccount.id, name: emp.fullName });
-                        setNewPinCode('');
-                        setPinResetModalOpen(true);
-                      }}
-                      className="w-full py-2 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold transition-all flex items-center justify-center gap-1.5 border border-slate-200"
-                    >
-                      <Key className="w-3.5 h-3.5 text-amber-600" />
-                      <span>Réinitialiser Mot de passe / PIN</span>
-                    </button>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
-
       {/* SHIFT SELECTION MODAL */}
       {editingShift && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150">
@@ -724,84 +461,6 @@ export const StaffView: React.FC = () => {
         </div>
       )}
 
-      {/* PIN RESET MODAL */}
-      {pinResetModalOpen && selectedUserForPin && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150">
-          <div className="bg-white w-full max-w-sm rounded-2xl shadow-2xl border border-slate-200 p-5 space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <h3 className="font-bold text-sm text-slate-900 flex items-center gap-2">
-                <Key className="w-4 h-4 text-amber-600" />
-                <span>Nouveau PIN : {selectedUserForPin.name}</span>
-              </h3>
-              <button onClick={() => setPinResetModalOpen(false)} className="text-slate-400 hover:text-slate-700">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <form onSubmit={handleResetPin} className="space-y-3.5">
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="text-xs font-bold text-slate-700 block">
-                    Nouveau code PIN à 4 chiffres *
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => setNewPinCode(generateUniquePin(selectedUserForPin.id))}
-                    className="text-[10px] text-amber-700 hover:text-amber-800 font-bold flex items-center gap-1 hover:underline cursor-pointer"
-                  >
-                    <Sparkles className="w-3 h-3 text-amber-600" />
-                    <span>Générer un PIN</span>
-                  </button>
-                </div>
-                <input
-                  type="text"
-                  maxLength={4}
-                  placeholder="Ex: 1234"
-                  required
-                  value={newPinCode}
-                  onChange={(e) => setNewPinCode(e.target.value.replace(/\D/g, ''))}
-                  className={`w-full px-3 py-2 text-center text-lg font-black tracking-widest rounded-xl border outline-hidden transition-colors ${
-                    pinCollision ? 'border-red-400 bg-red-50/20 text-red-900' : 'border-slate-300 focus:border-amber-500'
-                  }`}
-                />
-                {pinCollision ? (
-                  <div className="mt-1.5 flex items-center gap-1.5 p-2 rounded-xl bg-red-50 border border-red-200 text-red-700 text-[11px] font-medium leading-tight">
-                    <AlertCircle className="w-3.5 h-3.5 shrink-0 text-red-600" />
-                    <span>
-                      Déjà utilisé par <strong>{pinCollision.name}</strong>.
-                    </span>
-                  </div>
-                ) : (
-                  <p className="text-[11px] text-slate-400 mt-1">
-                    Ce code permettra à l'employé de pointer et de déverrouiller son écran.
-                  </p>
-                )}
-              </div>
-
-              <div className="flex items-center justify-end gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setPinResetModalOpen(false)}
-                  className="px-4 py-2 text-xs font-semibold text-slate-600"
-                >
-                  Annuler
-                </button>
-                <button
-                  type="submit"
-                  disabled={newPinCode.length !== 4 || !!pinCollision}
-                  className={`px-4 py-2 rounded-xl text-white text-xs font-bold shadow-xs transition-all ${
-                    newPinCode.length !== 4 || !!pinCollision
-                      ? 'bg-slate-300 cursor-not-allowed'
-                      : 'bg-amber-600 hover:bg-amber-700'
-                  }`}
-                >
-                  Mettre à jour le PIN
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
 
       {/* CLOCK IN MODAL */}
       {clockInModalOpen && (

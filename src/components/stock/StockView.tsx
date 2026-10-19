@@ -4,6 +4,7 @@ import { useToast } from '../../context/ToastContext';
 import { StockItem, StockMovement } from '../../types/restaurant';
 import { formatCurrency, formatDateTime } from '../../lib/utils';
 import { InventoryModal } from './InventoryModal';
+import { RecipesYieldTab } from './RecipesYieldTab';
 import {
   Package,
   Plus,
@@ -17,12 +18,16 @@ import {
   History,
   CheckCircle2,
   X,
+  ChefHat,
 } from 'lucide-react';
 
 export const StockView: React.FC = () => {
   const {
     stockItems,
     stockMovements,
+    products,
+    orders,
+    updateProduct,
     addStockMovement,
     quickReceiveStock,
     settings,
@@ -30,7 +35,7 @@ export const StockView: React.FC = () => {
   } = useRestaurant();
   const { showToast } = useToast();
 
-  const [activeTab, setActiveTab] = useState<'inventory' | 'history' | 'reorder' | 'transfers'>('inventory');
+  const [activeTab, setActiveTab] = useState<'inventory' | 'recipes_yield' | 'reorder' | 'history' | 'transfers'>('inventory');
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [inventoryModalOpen, setInventoryModalOpen] = useState(false);
@@ -218,6 +223,17 @@ export const StockView: React.FC = () => {
             }`}
           >
             État des Stocks
+          </button>
+          <button
+            onClick={() => setActiveTab('recipes_yield')}
+            className={`px-3.5 py-1.5 rounded-lg transition-all flex items-center gap-1.5 ${
+              activeTab === 'recipes_yield'
+                ? 'bg-white text-slate-900 shadow-xs'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <ChefHat className="w-3.5 h-3.5 text-amber-600" />
+            <span>Fiches Techniques & Rendement</span>
           </button>
           <button
             onClick={() => setActiveTab('reorder')}
@@ -502,6 +518,17 @@ export const StockView: React.FC = () => {
             </table>
           </div>
         </div>
+      )}
+
+      {/* Tab 4: Fiches Techniques & Rendement Couverts (BOM) */}
+      {activeTab === 'recipes_yield' && (
+        <RecipesYieldTab
+          products={products}
+          stockItems={stockItems}
+          orders={orders}
+          currency={settings.currency}
+          onUpdateProduct={updateProduct}
+        />
       )}
 
       {/* Movement Modal */}

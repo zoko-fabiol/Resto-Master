@@ -251,7 +251,8 @@ export const configFirestoreService = {
   async appendAuditLog(log: AuditLog): Promise<void> {
     try {
       const docRef = doc(db, 'audit_logs', log.id);
-      await setDoc(docRef, log, { merge: true });
+      const clean = JSON.parse(JSON.stringify(log));
+      await setDoc(docRef, clean, { merge: true });
     } catch (err) {
       console.warn('Erreur appendAuditLog Firestore:', err);
     }

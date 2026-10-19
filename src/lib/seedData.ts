@@ -126,6 +126,8 @@ export const INITIAL_SETTINGS: RestaurantSettings = {
   // Mode Opérationnel Cuisine & Largeur Ticket (Guide Genesis Digital Agency)
   kitchenOperationMode: 'ecran_cuisine',
   defaultReceiptWidth: '80mm',
+  stockDeductionTiming: 'envoi_cuisine',
+  priceDisplayMode: 'TTC',
 };
 
 export const INITIAL_CATEGORIES: Category[] = [

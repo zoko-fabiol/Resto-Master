@@ -18,6 +18,7 @@ import {
   CheckCheck,
   Undo2,
   Volume2,
+  VolumeX,
   Printer,
   BookOpen,
   AlertTriangle,
@@ -40,6 +41,24 @@ export const BarKdsView: React.FC = () => {
   const [lossQuantity, setLossQuantity] = useState(1);
 
   const [cocktailsModalOpen, setCocktailsModalOpen] = useState(false);
+  const [soundEnabled, setSoundEnabled] = useState<boolean>(true);
+  const previousBarOrdersCount = React.useRef<number | null>(null);
+
+  // Alerte sonore automatique lors de l'arrivée d'une nouvelle commande au bar
+  React.useEffect(() => {
+    const barOrdersCount = orders.filter(
+      (o) =>
+        o.items.some((i) => i.destination === 'bar') &&
+        (o.status === 'envoye' || o.status === 'en_preparation' || o.status === 'nouveau')
+    ).length;
+
+    if (previousBarOrdersCount.current !== null && barOrdersCount > previousBarOrdersCount.current) {
+      if (soundEnabled) {
+        playAudioChime('kitchen');
+      }
+    }
+    previousBarOrdersCount.current = barOrdersCount;
+  }, [orders, soundEnabled, playAudioChime]);
 
   const [filterState, setFilterState] = useState<'active' | 'in_prep' | 'ready' | 'servi' | 'history'>('active');
 
@@ -304,6 +323,24 @@ export const BarKdsView: React.FC = () => {
               <span>Fiches Cocktails</span>
             </button>
           )}
+
+          {/* Sound toggle & chime button */}
+          <button
+            onClick={() => {
+              const nextState = !soundEnabled;
+              setSoundEnabled(nextState);
+              if (nextState) playAudioChime('kitchen');
+            }}
+            className={`px-3 py-1.5 rounded-xl border transition-colors shadow-2xs flex items-center gap-1.5 text-xs font-bold cursor-pointer ${
+              soundEnabled
+                ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 hover:bg-emerald-500/30'
+                : 'bg-slate-800 text-slate-500 border-slate-700 hover:text-slate-400'
+            }`}
+            title={soundEnabled ? 'Alerte sonore bar active (Cliquer pour couper)' : 'Alerte sonore bar coupée (Cliquer pour réactiver)'}
+          >
+            {soundEnabled ? <Volume2 className="w-3.5 h-3.5 text-emerald-400" /> : <VolumeX className="w-3.5 h-3.5 text-slate-500" />}
+            <span className="text-[11px] font-bold hidden sm:inline">{soundEnabled ? 'Sonnette Active' : 'Sonnette Muette'}</span>
+          </button>
 
           <div className="flex flex-wrap items-center gap-1.5 bg-slate-800/90 p-1.5 rounded-xl border border-slate-700 text-xs font-semibold">
           <button

@@ -124,9 +124,11 @@ export interface RestaurantSettings {
   mtnMoMoPhone: string; // Numéro de réception direct MTN MoMo (ex: 677112233)
   mtnMoMoQrUrl?: string; // QR code officiel importé MTN MoMo
 
-  // Mode Opérationnel Cuisine (Guide Genesis Digital Agency 2026)
+  // Mode Opérationnel Cuisine & Stocks
   kitchenOperationMode: 'ecran_cuisine' | 'sans_compte';
   defaultReceiptWidth: '58mm' | '80mm';
+  stockDeductionTiming?: 'envoi_cuisine' | 'encaissement'; // Déstockage à l'envoi ou au paiement
+  priceDisplayMode?: 'TTC' | 'HT'; // Affichage prix TTC ou HT
 }
 
 export interface Organization {

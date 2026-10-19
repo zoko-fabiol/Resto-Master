@@ -9,6 +9,9 @@ import {
   where,
   orderBy,
   limit,
+  runTransaction,
+  increment,
+  getDocs,
 } from 'firebase/firestore';
 import {
   StockItem,
@@ -18,6 +21,7 @@ import {
   PurchaseOrder,
   HygieneCheck,
 } from '../../types/restaurant';
+import { generateSecureId } from '../../lib/utils';
 
 export const stockFirestoreService = {
   // --- ARTICLES DE STOCK ---
@@ -27,6 +31,182 @@ export const stockFirestoreService = {
       await setDoc(docRef, { ...item, lastUpdated: new Date().toISOString() }, { merge: true });
     } catch (err) {
       console.warn('Erreur saveStockItem Firestore:', err);
+    }
+  },
+
+  /**
+   * Déduction atomique d'un article de stock par transaction avec increment()
+   * Enregistre le stock négatif réel (sans Math.max) et alerte si nécessaire.
+   */
+  async deductStockItemAtomically(
+    itemId: string,
+    deltaQuantity: number, // Valeur négative (ex: -2.5)
+    movementMeta: {
+      type: StockMovement['type'];
+      reason: string;
+      unit: string;
+      referenceId?: string;
+      userId: string;
+      userName: string;
+    }
+  ): Promise<{ previousQuantity: number; newQuantity: number; isNegative: boolean; movement: StockMovement }> {
+    const itemRef = doc(db, 'stock_items', itemId);
+    const movementId = generateSecureId('mv');
+    const movementRef = doc(db, 'stock_movements', movementId);
+    const now = new Date().toISOString();
+
+    const result = await runTransaction(db, async (transaction) => {
+      const itemSnap = await transaction.get(itemRef);
+      if (!itemSnap.exists()) {
+        throw new Error(`Article de stock ${itemId} introuvable pour la transaction.`);
+      }
+
+      const itemData = itemSnap.data() as StockItem;
+      const previousQuantity = itemData.currentQuantity || 0;
+      const newQuantity = Math.round((previousQuantity + deltaQuantity) * 100) / 100;
+
+      // Mise à jour atomique avec increment()
+      transaction.update(itemRef, {
+        currentQuantity: increment(deltaQuantity),
+        lastUpdated: now,
+      });
+
+      const movement: StockMovement = {
+        id: movementId,
+        stockItemId: itemId,
+        stockItemName: itemData.name,
+        type: movementMeta.type,
+        quantityChange: deltaQuantity,
+        previousQuantity,
+        newQuantity,
+        unit: movementMeta.unit || itemData.unit,
+        reason: movementMeta.reason,
+        referenceId: movementMeta.referenceId,
+        userName: movementMeta.userName,
+        timestamp: now,
+      };
+
+      transaction.set(movementRef, movement);
+
+      return {
+        previousQuantity,
+        newQuantity,
+        isNegative: newQuantity < 0,
+        movement,
+      };
+    });
+
+    return result;
+  },
+
+  /**
+   * Déstockage des lots en FEFO (First Expired, First Out)
+   */
+  async deductLotsFEFO(
+    stockItemId: string,
+    quantityToDeduct: number
+  ): Promise<Array<{ lotId: string; lotNumber: string; deducted: number; remainingLotQty: number }>> {
+    if (quantityToDeduct <= 0) return [];
+    try {
+      const lotsCol = collection(db, 'stock_lots');
+      const q = query(
+        lotsCol,
+        where('stockItemId', '==', stockItemId),
+        where('remainingQuantity', '>', 0),
+        orderBy('expiryDate', 'asc')
+      );
+
+      const snapshot = await getDocs(q);
+      let remainingToDeduct = quantityToDeduct;
+      const deductions: Array<{ lotId: string; lotNumber: string; deducted: number; remainingLotQty: number }> = [];
+
+      for (const lotDoc of snapshot.docs) {
+        if (remainingToDeduct <= 0) break;
+        const lot = lotDoc.data() as StockLot;
+        const deductFromThisLot = Math.min(lot.remainingQuantity, remainingToDeduct);
+        const newLotQty = Math.round((lot.remainingQuantity - deductFromThisLot) * 100) / 100;
+
+        await setDoc(
+          lotDoc.ref,
+          {
+            remainingQuantity: newLotQty,
+            status: newLotQty === 0 ? 'epuise' : lot.status,
+          },
+          { merge: true }
+        );
+
+        deductions.push({
+          lotId: lot.id,
+          lotNumber: lot.lotNumber,
+          deducted: deductFromThisLot,
+          remainingLotQty: newLotQty,
+        });
+
+        remainingToDeduct -= deductFromThisLot;
+      }
+
+      return deductions;
+    } catch (err) {
+      console.warn('Erreur deductLotsFEFO Firestore:', err);
+      return [];
+    }
+  },
+
+  /**
+   * Remise en stock atomique lors de l'annulation d'une commande
+   */
+  async restockItemsAtomically(
+    itemsToRestock: Array<{
+      stockItemId: string;
+      stockItemName: string;
+      quantityToRestore: number;
+      unit: string;
+    }>,
+    orderNumber: string,
+    userName: string
+  ): Promise<void> {
+    const now = new Date().toISOString();
+
+    for (const item of itemsToRestock) {
+      if (item.quantityToRestore <= 0) continue;
+      try {
+        const itemRef = doc(db, 'stock_items', item.stockItemId);
+        const movementId = generateSecureId('mv-rst');
+        const movementRef = doc(db, 'stock_movements', movementId);
+
+        await runTransaction(db, async (transaction) => {
+          const itemSnap = await transaction.get(itemRef);
+          if (!itemSnap.exists()) return;
+
+          const itemData = itemSnap.data() as StockItem;
+          const previousQuantity = itemData.currentQuantity || 0;
+          const newQuantity = Math.round((previousQuantity + item.quantityToRestore) * 100) / 100;
+
+          transaction.update(itemRef, {
+            currentQuantity: increment(item.quantityToRestore),
+            lastUpdated: now,
+          });
+
+          const movement: StockMovement = {
+            id: movementId,
+            stockItemId: item.stockItemId,
+            stockItemName: item.stockItemName,
+            type: 'inventaire_correction',
+            quantityChange: item.quantityToRestore,
+            previousQuantity,
+            newQuantity,
+            unit: item.unit,
+            reason: `Restock automatique suite annulation commande ${orderNumber}`,
+            referenceId: orderNumber,
+            userName,
+            timestamp: now,
+          };
+
+          transaction.set(movementRef, movement);
+        });
+      } catch (err) {
+        console.warn('Erreur restockItemsAtomically:', err);
+      }
     }
   },
 

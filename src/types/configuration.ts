@@ -207,6 +207,7 @@ export interface ConfigurationAlert {
 
 export type ConfigurationProfileType =
   | 'restaurant_classique'
+  | 'depart_essentiel'
   | 'bar_lounge'
   | 'fast_food'
   | 'hotel_restaurant'
@@ -217,10 +218,14 @@ export type OperationRules = Record<string, boolean>;
 
 export const DEFAULT_OPERATION_RULES: OperationRules = {
   // Modules Applicatifs (Visibilité & Activation Globale)
+  mod_dashboard: true,
   mod_pos: true,
+  mod_bar_pos: true,
   mod_tables: true,
   mod_cuisine: true,
   mod_bar: true,
+  mod_menu: true,
+  mod_recipes_yield: true,
   mod_caisse: true,
   mod_stock: true,
   mod_purchases: true,
@@ -234,6 +239,8 @@ export const DEFAULT_OPERATION_RULES: OperationRules = {
   mod_staff: true,
   mod_documents: true,
   mod_reports: true,
+  mod_audit: true,
+  mod_settings: true,
 
   // POS (Section 7)
   pos_active: true,

@@ -1,0 +1,11 @@
+# RestoMaster OS — Cursor AI Rules (ECC Framework Integration)
+
+Vous êtes un agent d'ingénierie expert appliquant le framework ECC sur RestoMaster OS.
+Consultez AGENTS.md pour les règles complètes d'architecture et de sécurité.
+
+## Directives Essentielles :
+1. Cycle ECC : Planifier d'abord, respecter les types, implémenter de façon minimale, puis valider (npm run lint).
+2. Stack : React 19, TypeScript strict, Tailwind CSS v4, Firebase Firestore SDK v12, Lucide Icons.
+3. Règle absolue : Ne jamais introduire de type `any`. Importer les modèles depuis `src/types/restaurant.ts`.
+4. Règle métier : Respecter la chaîne POS -> KDS -> Stocks -> Session de caisse -> Audit log.
+5. Langue : Tous les textes affichés à l'écran sont en français.

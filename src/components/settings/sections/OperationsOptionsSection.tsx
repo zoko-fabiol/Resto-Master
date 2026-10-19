@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useRestaurant } from '../../../context/RestaurantContext';
+import { useAuth } from '../../../context/AuthContext';
+import { useToast } from '../../../context/ToastContext';
 import {
   ShoppingBag,
   Coins,
@@ -68,6 +70,7 @@ import {
   Building2,
   BarChart3,
   Package,
+  Crown,
 } from 'lucide-react';
 import { ModernRuleToggle } from './ModernRuleToggle';
 
@@ -86,6 +89,10 @@ interface Props {
 
 export const OperationsOptionsSection: React.FC<Props> = ({ subTab }) => {
   const { operationRules, updateOperationRules, settings, updateSettings } = useRestaurant();
+  const { currentUser } = useAuth();
+  const { showToast } = useToast();
+  const isSuperAdmin = currentUser?.role === 'direction';
+
   const [savedSuccess, setSavedSuccess] = useState(false);
   const [options, setOptions] = useState<Record<string, boolean>>(operationRules);
   const [kitchenMode, setKitchenMode] = useState<'ecran_cuisine' | 'sans_compte'>(
@@ -103,14 +110,35 @@ export const OperationsOptionsSection: React.FC<Props> = ({ subTab }) => {
   }, [settings.kitchenOperationMode]);
 
   const toggleOption = (key: string) => {
+    if (!isSuperAdmin) {
+      showToast({
+        title: 'Action Restreinte',
+        message: 'Seul le Super Administrateur (Direction) peut modifier les modules et règles système.',
+        type: 'warning',
+      });
+      return;
+    }
     setOptions((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
   const handleSave = async () => {
+    if (!isSuperAdmin) {
+      showToast({
+        title: 'Accès Refusé',
+        message: 'Droits insuffisants pour sauvegarder la configuration opérationnelle.',
+        type: 'error',
+      });
+      return;
+    }
     await updateOperationRules(options);
     if (subTab === 'cuisine') {
       await updateSettings({ kitchenOperationMode: kitchenMode });
     }
+    showToast({
+      title: 'Configuration Enregistrée',
+      message: 'Les règles opérationnelles et modules ont été mis à jour avec succès.',
+      type: 'success',
+    });
     setSavedSuccess(true);
     setTimeout(() => setSavedSuccess(false), 2500);
   };
@@ -126,10 +154,14 @@ export const OperationsOptionsSection: React.FC<Props> = ({ subTab }) => {
           icon: Layers,
           gradient: 'from-slate-700 to-zinc-800',
           items: [
-            { key: 'mod_pos', label: 'Prise de commande / POS', description: 'Caisse tactile et prise de commandes en salle', icon: ShoppingBag },
+            { key: 'mod_dashboard', label: 'Tableau de bord exécutif', description: 'Vue consolidée du chiffre d’affaires, alertes et indicateurs clés en direct', icon: BarChart3 },
+            { key: 'mod_pos', label: 'Prise de commande / POS', description: 'Caisse tactile et prise de commandes en salle et comptoir', icon: ShoppingBag },
             { key: 'mod_tables', label: 'Plan des tables & Salles', description: 'Plan visuel, gestion terrasse, salle et salons VIP', icon: Utensils },
             { key: 'mod_cuisine', label: 'Cuisine KDS', description: 'Écran de production cuisine chaud, froid et grillades', icon: ChefHat },
             { key: 'mod_bar', label: 'Bar & Boissons', description: 'Comptoir boissons, fiches cocktails et gestion doses', icon: Wine },
+            { key: 'mod_bar_pos', label: 'Espace Bar Dédié (100% Boissons)', description: 'Interface POS ultra-rapide réservée aux barmans et mixologues', icon: GlassWater },
+            { key: 'mod_menu', label: 'Carte & Recettes', description: 'Catalogue complet des articles, cocktails, plats et tarifs', icon: BookOpen },
+            { key: 'mod_recipes_yield', label: 'Fiches Techniques & Rendement (BOM)', description: 'Coût portion, grammages des recettes et fiches techniques', icon: Calculator },
             { key: 'mod_caisse', label: 'Gestion de caisse & Rapport Z', description: 'Ouverture, clôture, fond de caisse et audit Z', icon: Coins },
             { key: 'mod_stock', label: 'Stocks & Lots (FEFO/FIFO)', description: 'Inventaires, alertes DLC et denrées périssables', icon: Package },
             { key: 'mod_purchases', label: 'Achats & Fournisseurs', description: 'Bons de commande, réceptions et factures fournisseurs', icon: Truck },
@@ -138,10 +170,12 @@ export const OperationsOptionsSection: React.FC<Props> = ({ subTab }) => {
             { key: 'mod_fiscal', label: 'Fiscalité & E-Billing (CGI 2026)', description: 'TVA 19,25%, retenues AIR et télétransmission DGI', icon: Receipt },
             { key: 'mod_finance', label: 'Finances & Décaissements', description: 'Approbations des charges et suivi de trésorerie', icon: CreditCard },
             { key: 'mod_clients', label: 'Clients & Fidélité CRM', description: 'Fiches NIU, comptes crédit et barème de points', icon: Users },
+            { key: 'res_management', label: 'Cahier de Réservations & Tables', description: 'Prise de réservations et gestion du plan d’occupation', icon: Calendar },
             { key: 'mod_delivery', label: 'Courses & Livraisons Moto', description: 'Gestion des zones urbaines et coursiers moto', icon: Bike },
             { key: 'mod_events', label: 'Événements & Banquets', description: 'Devis traiteur, séminaires et mariages avec acomptes', icon: Sparkles },
             { key: 'mod_staff', label: 'Personnel & Présences', description: 'Pointage, fiches employés et planning de service', icon: UserCheck },
             { key: 'mod_documents', label: 'Documents & Scanner GED', description: 'Classeur numérique et factures scannées', icon: FileText },
+            { key: 'mod_audit', label: 'Journal d’Audit & Traçabilité', description: 'Registre inaltérable de tous les événements et annulations', icon: ShieldAlert },
             { key: 'mod_reports', label: 'Rapports & Statistiques', description: 'Chiffre d’affaires, marges et exports SYSCOHADA', icon: BarChart3 },
           ],
         };
@@ -368,6 +402,23 @@ export const OperationsOptionsSection: React.FC<Props> = ({ subTab }) => {
         )}
       </div>
 
+      {/* Super Admin Status Banner */}
+      {isSuperAdmin ? (
+        <div className="flex items-center gap-2.5 px-4 py-2.5 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-900 text-xs font-medium">
+          <Crown className="w-4 h-4 text-amber-600 shrink-0" />
+          <span>
+            <strong>Contrôle Super-Administrateur actif :</strong> Vous disposez des autorisations complètes pour activer/désactiver les modules et règles métier.
+          </span>
+        </div>
+      ) : (
+        <div className="flex items-center gap-2.5 px-4 py-2.5 rounded-2xl bg-slate-100 border border-slate-200 text-slate-700 text-xs font-medium">
+          <Lock className="w-4 h-4 text-slate-500 shrink-0" />
+          <span>
+            <strong>Mode Consultation :</strong> La modification des règles et modules applicatifs est strictement réservée au Super Administrateur (Direction).
+          </span>
+        </div>
+      )}
+
       {/* Mode de fonctionnement de la cuisine (Guide Genesis Digital Agency - Section 3, 6, 12) */}
       {subTab === 'cuisine' && (
         <div className="bg-gradient-to-br from-amber-50 to-orange-50/50 p-5 rounded-2xl border border-amber-200 space-y-3">
@@ -389,12 +440,13 @@ export const OperationsOptionsSection: React.FC<Props> = ({ subTab }) => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
             <button
               type="button"
-              onClick={() => setKitchenMode('ecran_cuisine')}
+              disabled={!isSuperAdmin}
+              onClick={() => isSuperAdmin && setKitchenMode('ecran_cuisine')}
               className={`p-3.5 rounded-xl border text-left transition-all ${
                 kitchenMode === 'ecran_cuisine'
                   ? 'bg-white border-amber-500 shadow-sm ring-2 ring-amber-400/20'
                   : 'bg-white/60 border-amber-200 hover:bg-white text-slate-600'
-              }`}
+              } ${!isSuperAdmin ? 'opacity-70 cursor-not-allowed' : ''}`}
             >
               <div className="flex items-center justify-between mb-1">
                 <span className="font-bold text-xs text-slate-900">1. Mode Écran Cuisine</span>
@@ -407,12 +459,13 @@ export const OperationsOptionsSection: React.FC<Props> = ({ subTab }) => {
 
             <button
               type="button"
-              onClick={() => setKitchenMode('sans_compte')}
+              disabled={!isSuperAdmin}
+              onClick={() => isSuperAdmin && setKitchenMode('sans_compte')}
               className={`p-3.5 rounded-xl border text-left transition-all ${
                 kitchenMode === 'sans_compte'
                   ? 'bg-white border-amber-500 shadow-sm ring-2 ring-amber-400/20'
                   : 'bg-white/60 border-amber-200 hover:bg-white text-slate-600'
-              }`}
+              } ${!isSuperAdmin ? 'opacity-70 cursor-not-allowed' : ''}`}
             >
               <div className="flex items-center justify-between mb-1">
                 <span className="font-bold text-xs text-slate-900">2. Mode Sans Compte Cuisinier</span>
@@ -450,10 +503,15 @@ export const OperationsOptionsSection: React.FC<Props> = ({ subTab }) => {
         <button
           type="button"
           onClick={handleSave}
-          className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-slate-900 text-white font-bold text-xs hover:bg-slate-800 shadow-xs transition-colors"
+          disabled={!isSuperAdmin}
+          className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-xs shadow-xs transition-colors ${
+            isSuperAdmin
+              ? 'bg-slate-900 text-white hover:bg-slate-800'
+              : 'bg-slate-300 text-slate-500 cursor-not-allowed'
+          }`}
         >
-          <Save className="w-4 h-4" />
-          <span>Enregistrer les règles</span>
+          {isSuperAdmin ? <Save className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
+          <span>{isSuperAdmin ? 'Enregistrer les règles' : 'Modification verrouillée'}</span>
         </button>
       </div>
     </div>

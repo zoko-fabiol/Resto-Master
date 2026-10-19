@@ -1,7 +1,7 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { useRestaurant } from '../../context/RestaurantContext';
 import { useToast } from '../../context/ToastContext';
-import { RestaurantTable, TableStatus, TableShape, Zone, ZoneType } from '../../types/restaurant';
+import { RestaurantTable, TableStatus, TableShape, Zone, ZoneType, OrderItem } from '../../types/restaurant';
 import { TABLE_STATUS_MAP, formatCurrency, getMinutesElapsed } from '../../lib/utils';
 import { TableKioskView } from '../kiosk/TableKioskView';
 import {
@@ -141,11 +141,22 @@ export const TablesView: React.FC<TablesViewProps> = ({ onOpenOrder, onPayOrder,
     );
   }, [tables, selectedZoneId]);
 
-  // Trouver la commande active d'une table
-  const getTableOrder = (table: RestaurantTable) => {
-    if (!table.currentOrderId) return null;
-    return orders.find((o) => o.id === table.currentOrderId);
-  };
+  // Index O(1) des commandes pour éliminer les latences de recherche
+  const ordersMap = useMemo(() => {
+    const map = new Map<string, typeof orders[0]>();
+    for (let i = 0; i < orders.length; i++) {
+      map.set(orders[i].id, orders[i]);
+    }
+    return map;
+  }, [orders]);
+
+  const getTableOrder = useCallback(
+    (table: RestaurantTable) => {
+      if (!table.currentOrderId) return null;
+      return ordersMap.get(table.currentOrderId) || null;
+    },
+    [ordersMap]
+  );
 
   const currentOrder = selectedTable ? getTableOrder(selectedTable) : null;
 
@@ -991,7 +1002,7 @@ export const TablesView: React.FC<TablesViewProps> = ({ onOpenOrder, onPayOrder,
                   <div>
                     <div className="text-xs font-bold text-slate-700 mb-2">Articles en cours :</div>
                     <div className="space-y-1.5 divide-y divide-slate-100 bg-slate-50 p-3 rounded-2xl border border-slate-100">
-                      {currentOrder.items.map((item) => (
+                      {currentOrder.items.map((item: OrderItem) => (
                         <div key={item.id} className="pt-1.5 first:pt-0 flex items-center justify-between text-xs">
                           <div className="flex items-center gap-2">
                             <span className="font-bold text-slate-900">{item.quantity}x</span>
