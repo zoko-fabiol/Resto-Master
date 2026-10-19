@@ -45,15 +45,15 @@ export const documentsFirestoreService = {
     };
 
     if (!navigator.onLine) {
-      offlineSyncService.enqueue('mediaAssets', 'CREATE', asset.id, payload);
+      offlineSyncService.enqueue('media_assets', 'CREATE', asset.id, payload);
       return;
     }
 
     try {
-      const docRef = doc(db, 'mediaAssets', asset.id);
+      const docRef = doc(db, 'media_assets', asset.id);
       await setDoc(docRef, payload, { merge: true });
     } catch {
-      offlineSyncService.enqueue('mediaAssets', 'CREATE', asset.id, payload);
+      offlineSyncService.enqueue('media_assets', 'CREATE', asset.id, payload);
     }
   },
 
@@ -79,15 +79,15 @@ export const documentsFirestoreService = {
    */
   async deleteMediaAsset(assetId: string): Promise<void> {
     if (!navigator.onLine) {
-      offlineSyncService.enqueue('mediaAssets', 'DELETE', assetId, {});
+      offlineSyncService.enqueue('media_assets', 'DELETE', assetId, {});
       return;
     }
 
     try {
-      const docRef = doc(db, 'mediaAssets', assetId);
+      const docRef = doc(db, 'media_assets', assetId);
       await deleteDoc(docRef);
     } catch {
-      offlineSyncService.enqueue('mediaAssets', 'DELETE', assetId, {});
+      offlineSyncService.enqueue('media_assets', 'DELETE', assetId, {});
     }
   },
 
@@ -122,7 +122,7 @@ export const documentsFirestoreService = {
     callback: (assets: MediaAsset[]) => void
   ): () => void {
     try {
-      const colRef = collection(db, 'mediaAssets');
+      const colRef = collection(db, 'media_assets');
       const q = query(colRef, where('organizationId', '==', organizationId));
 
       return onSnapshot(

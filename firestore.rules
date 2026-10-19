@@ -2,202 +2,364 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // ==========================================
-    // HELPER FUNCTIONS & RBAC SECURITY CHECKS
-    // ==========================================
+    // =========================================================================
+    // HELPER FUNCTIONS & RBAC SECURITY CHECKS (CLAIMS-BASED)
+    // Ne dépend d'aucun get() sur users : performance, coût et sécurité optimaux
+    // =========================================================================
     function isAuthenticated() {
       return request.auth != null;
     }
 
-    function getUserData() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
-    }
-
     function isDirection() {
       return isAuthenticated() && (
-        getUserData().role == 'direction' ||
-        request.auth.token.role == 'direction' ||
-        request.auth.token.email.matches('.*@direction\\.cm')
+        request.auth.token.role == 'direction'
       );
     }
 
     function isManager() {
       return isAuthenticated() && (
         isDirection() ||
-        getUserData().role == 'manager' ||
         request.auth.token.role == 'manager'
       );
     }
 
-    function hasRestaurantAccess(restaurantId) {
+    function isRh() {
       return isAuthenticated() && (
         isDirection() ||
-        (getUserData().accessibleRestaurantIds != null && restaurantId in getUserData().accessibleRestaurantIds) ||
-        getUserData().defaultRestaurantId == restaurantId
+        request.auth.token.role == 'rh'
       );
     }
 
-    // ==========================================
-    // ORGANISATIONS & GROUPES
-    // ==========================================
+    function isFinance() {
+      return isAuthenticated() && (
+        isDirection() ||
+        request.auth.token.role == 'finance'
+      );
+    }
+
+    function isComptable() {
+      return isAuthenticated() && (
+        isDirection() ||
+        request.auth.token.role == 'comptable' ||
+        request.auth.token.role == 'finance'
+      );
+    }
+
+    function isStock() {
+      return isAuthenticated() && (
+        isDirection() ||
+        isManager() ||
+        request.auth.token.role == 'stock'
+      );
+    }
+
+    function isAuditeur() {
+      return isAuthenticated() && (
+        isDirection() ||
+        request.auth.token.role == 'auditeur'
+      );
+    }
+
+    // Vérifie l'accès à un restaurant/outlet donné via les custom claims
+    function hasOutletAccess(outletId) {
+      return isAuthenticated() && (
+        isDirection() ||
+        (request.auth.token.outlets != null && outletId in request.auth.token.outlets)
+      );
+    }
+
+    function hasDocRestaurantAccess() {
+      return resource.data.restaurantId == null || hasOutletAccess(resource.data.restaurantId);
+    }
+
+    function hasIncomingRestaurantAccess() {
+      return request.resource.data.restaurantId != null && hasOutletAccess(request.resource.data.restaurantId);
+    }
+
+    // =========================================================================
+    // 1. ORGANISATIONS & GROUPES
+    // =========================================================================
     match /organizations/{orgId} {
       allow read: if isAuthenticated();
       allow write: if isDirection();
     }
 
-    // ==========================================
-    // RESTAURANTS & ÉTABLISSEMENTS
-    // ==========================================
+    // =========================================================================
+    // 2. RESTAURANTS & ÉTABLISSEMENTS
+    // =========================================================================
     match /restaurants/{restaurantId} {
       allow read: if isAuthenticated();
-      allow write: if isDirection() || isManager();
+      allow write: if isDirection();
     }
 
-    match /outlets/{outletId} {
+    match /settings/{docId} {
       allow read: if isAuthenticated();
-      allow write: if isDirection() || isManager();
+      allow write: if isDirection();
     }
 
-    // ==========================================
-    // UTILISATEURS & PERMISSIONS
-    // ==========================================
+    match /system_config/{configId} {
+      allow read: if isAuthenticated();
+      allow write: if isDirection();
+    }
+
+    match /config_history/{historyId} {
+      allow read: if isDirection();
+      allow create: if isDirection();
+      allow update, delete: if false;
+    }
+
+    // =========================================================================
+    // 3. UTILISATEURS & PROFILS (RBAC STRICT)
+    // Protection contre l'auto-attribution de rôle, modif de pinHash ou d'établissements
+    // =========================================================================
     match /users/{userId} {
-      allow read: if isAuthenticated();
-      allow write: if isDirection() || (isAuthenticated() && request.auth.uid == userId);
-    }
-
-    // ==========================================
-    // ZONES & SALLES
-    // ==========================================
-    match /zones/{zoneId} {
-      allow read: if isAuthenticated();
-      allow write: if isManager() || isDirection();
-    }
-
-    // ==========================================
-    // TABLES & PLAN DE SALLE 2D
-    // ==========================================
-    match /tables/{tableId} {
-      allow read: if isAuthenticated();
-      allow write: if isAuthenticated() && (
-        isManager() ||
+      allow read: if isAuthenticated() && (
         isDirection() ||
-        hasRestaurantAccess(resource.data.restaurantId) ||
-        hasRestaurantAccess(request.resource.data.restaurantId)
+        isManager() ||
+        request.auth.uid == userId
+      );
+      allow create: if isDirection();
+      allow delete: if isDirection();
+      allow update: if isDirection() || (
+        isAuthenticated() && request.auth.uid == userId
+        // L'utilisateur ne peut pas modifier ses privilèges critiques
+        && (!('role' in request.resource.data) || request.resource.data.role == resource.data.role)
+        && (!('active' in request.resource.data) || request.resource.data.active == resource.data.active)
+        && (!('pinHash' in request.resource.data) || request.resource.data.pinHash == resource.data.pinHash)
+        && (!('accessibleRestaurantIds' in request.resource.data) || request.resource.data.accessibleRestaurantIds == resource.data.accessibleRestaurantIds)
+        && (!('organizationId' in request.resource.data) || request.resource.data.organizationId == resource.data.organizationId)
       );
     }
 
-    // ==========================================
-    // CAISSES, TERMINAUX & PÉRIPHÉRIQUES
-    // ==========================================
-    match /cashRegisters/{registerId} {
-      allow read: if isAuthenticated();
+    match /user_accounts/{accountId} {
+      // Lecture limitée aux RH, Managers et Direction
+      allow read: if isDirection() || isManager() || isRh();
+      allow write: if isDirection();
+    }
+
+    // =========================================================================
+    // 4. PLAN DE SALLE, ZONES & TABLES
+    // =========================================================================
+    match /zones/{zoneId} {
+      allow read: if isAuthenticated() && hasDocRestaurantAccess();
       allow write: if isManager() || isDirection();
     }
 
-    match /cashSessions/{sessionId} {
-      allow read: if isAuthenticated();
-      allow create, update: if isAuthenticated();
-      allow delete: if isDirection();
+    match /tables/{tableId} {
+      allow read: if isAuthenticated() && hasDocRestaurantAccess();
+      // Création / suppression par les managers / direction
+      allow create, delete: if isManager() || isDirection();
+      // Mise à jour (occupation, statut) par les serveurs autorisés sur l'établissement
+      allow update: if isAuthenticated() && (
+        isManager() ||
+        isDirection() ||
+        hasDocRestaurantAccess()
+      );
+    }
+
+    // =========================================================================
+    // 5. CAISSES, TERMINAUX & PÉRIPHÉRIQUES
+    // =========================================================================
+    match /cash_registers/{registerId} {
+      allow read: if isAuthenticated() && hasDocRestaurantAccess();
+      allow write: if isManager() || isDirection();
+    }
+
+    match /cash_sessions/{sessionId} {
+      allow read: if isAuthenticated() && hasDocRestaurantAccess();
+      allow create, update: if isAuthenticated() && hasIncomingRestaurantAccess();
+      allow delete: if false; // Les sessions de caisse sont inaltérables
+    }
+
+    match /cash_movements/{movementId} {
+      allow read: if isAuthenticated() && hasDocRestaurantAccess();
+      allow create: if isAuthenticated() && hasIncomingRestaurantAccess();
+      allow update, delete: if false; // Mouvements de caisse immuables
     }
 
     match /terminals/{terminalId} {
-      allow read: if isAuthenticated();
+      allow read: if isAuthenticated() && hasDocRestaurantAccess();
       allow write: if isManager() || isDirection();
     }
 
-    // ==========================================
-    // COMMANDES, POS & LIGNES DE VENTE
-    // ==========================================
+    match /peripherals/{peripheralId} {
+      allow read: if isAuthenticated() && hasDocRestaurantAccess();
+      allow write: if isManager() || isDirection();
+    }
+
+    // =========================================================================
+    // 6. COMMANDES & POS
+    // =========================================================================
     match /orders/{orderId} {
-      allow read: if isAuthenticated();
-      allow create, update: if isAuthenticated();
-      // Suppression strictement réservée à la Direction avec trace d'audit
-      allow delete: if isDirection();
+      allow read: if isAuthenticated() && hasDocRestaurantAccess();
+      allow create, update: if isAuthenticated() && hasIncomingRestaurantAccess();
+      allow delete: if false; // Jamais de delete direct : annulation traçable avec avoir
     }
 
-    // ==========================================
-    // FACTURES & FISCALITÉ CAMEROUN (DGI)
-    // Factures inaltérables après émission
-    // ==========================================
+    // =========================================================================
+    // 7. FACTURATION & FISCALITÉ CAMEROUN (DGI) - IMMUABILITÉ ABSOLUE
+    // =========================================================================
     match /invoices/{invoiceId} {
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated();
-      allow update: if isDirection(); // Modifications exceptionnelles avec trace
-      allow delete: if false; // Les factures fiscales ne peuvent jamais être effacées
+      allow read: if isAuthenticated() && (isDirection() || isManager() || isComptable() || hasDocRestaurantAccess());
+      allow create: if isAuthenticated() && hasIncomingRestaurantAccess();
+      allow update, delete: if false; // Facture inaltérable après émission
     }
 
-    match /fiscalJournal/{itemId} {
-      allow read: if isAuthenticated() && (isDirection() || getUserData().role == 'comptable' || isManager());
-      allow create: if isAuthenticated();
+    match /fiscal_journal/{itemId} {
+      allow read: if isDirection() || isManager() || isComptable();
+      allow create: if isAuthenticated() && hasIncomingRestaurantAccess();
       allow update, delete: if false; // Journal fiscal inaltérable
     }
 
-    // ==========================================
-    // STOCKS, LOTS (FEFO) & ACHATS
-    // ==========================================
-    match /stockItems/{itemId} {
-      allow read: if isAuthenticated();
-      allow write: if isAuthenticated() && (isManager() || getUserData().role == 'stock' || isDirection());
+    match /fiscal_withholdings/{itemId} {
+      allow read: if isDirection() || isComptable();
+      allow write: if isDirection() || isComptable();
     }
 
-    match /stockLots/{lotId} {
-      allow read: if isAuthenticated();
-      allow write: if isAuthenticated() && (isManager() || getUserData().role == 'stock' || isDirection());
+    match /fiscal_obligations/{itemId} {
+      allow read: if isDirection() || isComptable();
+      allow write: if isDirection() || isComptable();
     }
 
-    match /stockMovements/{movementId} {
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated();
-      allow update, delete: if isDirection();
+    // =========================================================================
+    // 8. STOCKS, LOTS (FEFO) & ACHATS
+    // =========================================================================
+    match /stock_items/{itemId} {
+      allow read: if isAuthenticated() && hasDocRestaurantAccess();
+      allow write: if isStock() && hasIncomingRestaurantAccess();
     }
 
-    match /purchases/{purchaseId} {
-      allow read: if isAuthenticated();
-      allow write: if isAuthenticated() && (isManager() || isDirection() || getUserData().role == 'stock');
+    match /stock_lots/{lotId} {
+      allow read: if isAuthenticated() && hasDocRestaurantAccess();
+      allow write: if isStock() && hasIncomingRestaurantAccess();
     }
 
-    // ==========================================
-    // CLIENTS & CRÉANCES
-    // ==========================================
+    match /stock_movements/{movementId} {
+      allow read: if isAuthenticated() && hasDocRestaurantAccess();
+      allow create: if isStock() && hasIncomingRestaurantAccess();
+      allow update, delete: if false; // Mouvements de stock immuables
+    }
+
+    match /suppliers/{supplierId} {
+      allow read: if isStock() || isFinance();
+      allow write: if isStock() || isFinance();
+    }
+
+    match /purchase_orders/{poId} {
+      allow read: if isStock() || isFinance();
+      allow write: if isStock() || isFinance();
+    }
+
+    match /hygiene_checks/{checkId} {
+      allow read: if isAuthenticated() && hasDocRestaurantAccess();
+      allow create, update: if isAuthenticated() && hasIncomingRestaurantAccess();
+      allow delete: if isDirection();
+    }
+
+    // =========================================================================
+    // 9. CLIENTS & CRÉANCES
+    // =========================================================================
     match /customers/{customerId} {
-      allow read: if isAuthenticated();
-      allow write: if isAuthenticated();
-    }
-
-    match /clientCredits/{creditId} {
-      allow read: if isAuthenticated();
-      allow write: if isManager() || isDirection();
-    }
-
-    // ==========================================
-    // PERSONNEL & POINTAGES
-    // ==========================================
-    match /employees/{employeeId} {
-      allow read: if isAuthenticated();
-      allow write: if isManager() || isDirection() || getUserData().role == 'rh';
-    }
-
-    match /attendances/{attendanceId} {
       allow read: if isAuthenticated();
       allow create, update: if isAuthenticated();
       allow delete: if isDirection();
     }
 
-    // ==========================================
-    // SÉCURITÉ & AUDIT LOGS (IMMUTABLE)
-    // ==========================================
-    match /auditLogs/{logId} {
-      allow read: if isAuthenticated() && (isDirection() || getUserData().role == 'auditeur');
-      allow create: if isAuthenticated();
-      allow update, delete: if false; // Immuabilité absolue du journal d'audit
+    match /client_credits/{creditId} {
+      allow read: if isAuthenticated() && (isManager() || isFinance());
+      allow write: if isManager() || isFinance();
     }
 
-    // ==========================================
-    // RESTE DU DOCUMENT DATABASE
-    // ==========================================
-    match /{document=**} {
+    // =========================================================================
+    // 10. PRODUITS & RECETTES
+    // =========================================================================
+    match /products/{productId} {
+      allow read: if isAuthenticated();
+      allow write: if isDirection() || isManager() || isStock();
+    }
+
+    match /categories/{categoryId} {
+      allow read: if isAuthenticated();
+      allow write: if isDirection() || isManager();
+    }
+
+    // =========================================================================
+    // 11. PERSONNEL, POINTAGES & RESSOURCES HUMAINES
+    // Lecture des salaires et RH limitée à Direction / Manager / RH
+    // =========================================================================
+    match /employees/{employeeId} {
+      allow read: if isDirection() || isManager() || isRh();
+      allow write: if isDirection() || isRh();
+    }
+
+    match /attendances/{attendanceId} {
+      allow read: if isAuthenticated() && hasDocRestaurantAccess();
+      allow create, update: if isAuthenticated() && hasIncomingRestaurantAccess();
+      allow delete: if isDirection() || isRh();
+    }
+
+    match /rh/{docId} {
+      allow read, write: if isDirection() || isRh();
+    }
+
+    // =========================================================================
+    // 12. DÉPENSES, RÉSERVATIONS, LIVRAISONS & ÉVÉNEMENTS
+    // =========================================================================
+    match /expenses/{expenseId} {
+      allow read: if isFinance() || isManager() || isDirection();
+      allow write: if isFinance() || isDirection();
+    }
+
+    match /reservations/{resId} {
+      allow read: if isAuthenticated() && hasDocRestaurantAccess();
+      allow create, update: if isAuthenticated() && hasIncomingRestaurantAccess();
+      allow delete: if isDirection() || isManager();
+    }
+
+    match /deliveries/{deliveryId} {
+      allow read: if isAuthenticated() && hasDocRestaurantAccess();
+      allow create, update: if isAuthenticated() && hasIncomingRestaurantAccess();
+      allow delete: if isDirection() || isManager();
+    }
+
+    match /events/{eventId} {
+      allow read: if isAuthenticated() && hasDocRestaurantAccess();
+      allow create, update: if isAuthenticated() && hasIncomingRestaurantAccess();
+      allow delete: if isDirection() || isManager();
+    }
+
+    // =========================================================================
+    // 13. SÉCURITÉ, LOGS D'AUDIT & ANNULATIONS (IMMUTABLE)
+    // =========================================================================
+    match /audit_logs/{logId} {
+      allow read: if isDirection() || isAuditeur();
+      allow create: if isAuthenticated();
+      allow update, delete: if false; // Immuabilité absolue
+    }
+
+    match /cancellation_logs/{logId} {
+      allow read: if isDirection() || isManager() || isAuditeur();
+      allow create: if isDirection() || isManager();
+      allow update, delete: if false; // Immuabilité absolue
+    }
+
+    // =========================================================================
+    // 14. DOCUMENTS, MÉDIAS & NOTIFICATIONS
+    // =========================================================================
+    match /documents/{docId} {
+      allow read: if isAuthenticated() && hasDocRestaurantAccess();
+      allow write: if isDirection() || isManager();
+    }
+
+    match /media_assets/{assetId} {
+      allow read: if isAuthenticated();
+      allow write: if isDirection() || isManager();
+    }
+
+    match /notifications/{notifId} {
       allow read, write: if isAuthenticated();
     }
+
+    // AUCUN match /{document=**} : Refus par défaut de toute collection non spécifiée !
   }
 }
