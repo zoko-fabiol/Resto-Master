@@ -2,13 +2,14 @@ export interface QueuedAction {
   id: string;
   idempotencyKey: string;
   collectionName: string;
-  actionType: 'CREATE' | 'UPDATE' | 'DELETE' | 'BATCH';
+  actionType: 'CREATE' | 'UPDATE' | 'DELETE' | 'BATCH' | 'CLOUD_FUNCTION';
   docId: string;
   payload: any;
   timestamp: string;
   retryCount: number;
   status: 'pending' | 'syncing' | 'synced' | 'failed';
   errorMessage?: string;
+  functionName?: string;
 }
 
 class OfflineSyncService {
@@ -107,6 +108,43 @@ class OfflineSyncService {
   }
 
   /**
+   * Enqueue a Cloud Function invocation with an idempotency key to retry upon reconnection
+   */
+  public enqueueCloudFunction(
+    functionName: string,
+    payload: any,
+    customIdempotencyKey?: string
+  ): QueuedAction {
+    const key = customIdempotencyKey || `${functionName}_${Date.now()}`;
+    const existing = this.queue.find((a) => a.idempotencyKey === key);
+    if (existing) {
+      return existing;
+    }
+
+    const action: QueuedAction = {
+      id: `cf-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
+      idempotencyKey: key,
+      collectionName: 'cloud_functions',
+      actionType: 'CLOUD_FUNCTION',
+      functionName,
+      docId: key,
+      payload,
+      timestamp: new Date().toISOString(),
+      retryCount: 0,
+      status: 'pending',
+    };
+
+    this.queue.push(action);
+    this.saveQueue();
+
+    if (navigator.onLine) {
+      this.processQueue();
+    }
+
+    return action;
+  }
+
+  /**
    * Process and synchronize pending actions against Firestore
    */
   public async processQueue(): Promise<void> {
@@ -127,14 +165,31 @@ class OfflineSyncService {
         this.saveQueue();
 
         try {
-          const docRef = doc(db, action.collectionName, action.docId);
+          if (action.actionType === 'CLOUD_FUNCTION' && action.functionName) {
+            const { cloudFunctionsService } = await import('../functions/cloudFunctionsService');
+            if (action.functionName === 'recordPayment') {
+              await cloudFunctionsService.recordPayment(action.payload);
+            } else if (action.functionName === 'createOrder') {
+              await cloudFunctionsService.createOrder(action.payload);
+            } else if (action.functionName === 'cancelOrder') {
+              await cloudFunctionsService.cancelOrder(action.payload);
+            } else if (action.functionName === 'addItemsToOrder') {
+              await cloudFunctionsService.addItemsToOrder(
+                action.payload.orderId,
+                action.payload.items,
+                action.payload.guestCount
+              );
+            }
+          } else {
+            const docRef = doc(db, action.collectionName, action.docId);
 
-          if (action.actionType === 'CREATE') {
-            await setDoc(docRef, action.payload, { merge: true });
-          } else if (action.actionType === 'UPDATE') {
-            await updateDoc(docRef, action.payload);
-          } else if (action.actionType === 'DELETE') {
-            await deleteDoc(docRef);
+            if (action.actionType === 'CREATE') {
+              await setDoc(docRef, action.payload, { merge: true });
+            } else if (action.actionType === 'UPDATE') {
+              await updateDoc(docRef, action.payload);
+            } else if (action.actionType === 'DELETE') {
+              await deleteDoc(docRef);
+            }
           }
 
           action.status = 'synced';

@@ -13,8 +13,7 @@ import { employeeToRhEmployee } from '../services/firestoreService';
 export const useRhAppData = (): RhAppDataPayload => {
   const [data, setData] = useState<RhAppDataPayload>(() => {
     try {
-      const saved = localStorage.getItem('rh_app_data');
-      if (saved) return JSON.parse(saved);
+      localStorage.removeItem('rh_app_data');
     } catch {}
     return {
       employees: [],
@@ -45,9 +44,6 @@ export const useRhAppData = (): RhAppDataPayload => {
             ...val,
             employees: val.employees && val.employees.length > 0 ? val.employees : prev.employees,
           }));
-          try {
-            localStorage.setItem('rh_app_data', JSON.stringify(val));
-          } catch {}
         }
       },
       () => {}
@@ -66,9 +62,6 @@ export const useRhAppData = (): RhAppDataPayload => {
               return existing ? { ...c, ...existing } : c;
             }),
           };
-          try {
-            localStorage.setItem('rh_app_data', JSON.stringify(updated));
-          } catch {}
           return updated;
         });
       }
@@ -85,13 +78,7 @@ export const useRhAppData = (): RhAppDataPayload => {
 };
 
 export const useCollection = <T>(collectionName: string): T[] => {
-  const [items, setItems] = useState<T[]>(() => {
-    try {
-      const saved = localStorage.getItem(`collection_${collectionName}`);
-      if (saved) return JSON.parse(saved);
-    } catch {}
-    return [];
-  });
+  const [items, setItems] = useState<T[]>([]);
 
   useEffect(() => {
     try {
@@ -102,9 +89,6 @@ export const useCollection = <T>(collectionName: string): T[] => {
           if (!snap.empty) {
             const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as unknown as T[];
             setItems(list);
-            try {
-              localStorage.setItem(`collection_${collectionName}`, JSON.stringify(list));
-            } catch {}
           }
         },
         () => {}

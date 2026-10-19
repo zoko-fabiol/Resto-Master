@@ -49,18 +49,61 @@ export const employeeToRhEmployee = (emp: Employee): RhEmployee => {
 };
 
 export const saveRhAppData = async (data: RhAppDataPayload): Promise<void> => {
-  // 1. Sauvegarde locale synchrone immédiate pour réactivité maximale
+  // 1. Élimination stricte de toute fuite de données personnelles RH en clair dans localStorage
   try {
-    localStorage.setItem(RH_STORAGE_KEY, JSON.stringify(data));
+    localStorage.removeItem(RH_STORAGE_KEY);
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('rh-data-updated', { detail: data }));
     }
   } catch (err) {
-    console.warn('Erreur localStorage saveRhAppData:', err);
+    console.warn('Erreur localStorage cleanup saveRhAppData:', err);
   }
 
-  // 2. Persistance Firestore distante
+  // 2. Persistance Firestore segmentée pour éliminer le risque de dépassement de la limite de 1 Mo
   try {
+    const currentMonthKey = new Date().toISOString().slice(0, 7); // YYYY-MM
+
+    // a. Sauvegarde segmentée des pointages
+    if (data.attendance || data.attendanceDetails) {
+      const attRef = doc(db, 'rh_attendances', currentMonthKey);
+      await setDoc(
+        attRef,
+        {
+          attendance: data.attendance || {},
+          attendanceDetails: data.attendanceDetails || {},
+          updatedAt: new Date().toISOString(),
+        },
+        { merge: true }
+      );
+    }
+
+    // b. Sauvegarde segmentée des extras salariaux (primes, retenues, avances)
+    if (data.payrollExtras) {
+      const payRef = doc(db, 'rh_payroll', currentMonthKey);
+      await setDoc(
+        payRef,
+        {
+          payrollExtras: data.payrollExtras || {},
+          updatedAt: new Date().toISOString(),
+        },
+        { merge: true }
+      );
+    }
+
+    // c. Sauvegarde segmentée des notes quotidiennes de service
+    if (data.dailyNotes) {
+      const notesRef = doc(db, 'rh_notes', currentMonthKey);
+      await setDoc(
+        notesRef,
+        {
+          dailyNotes: data.dailyNotes || {},
+          updatedAt: new Date().toISOString(),
+        },
+        { merge: true }
+      );
+    }
+
+    // d. Document parent consolidé allégé (rétro-compatibilité)
     const docRef = doc(db, 'rh', 'app_data');
     await setDoc(docRef, JSON.parse(JSON.stringify(data)), { merge: true });
   } catch (err) {
@@ -81,8 +124,7 @@ export const saveRhAppData = async (data: RhAppDataPayload): Promise<void> => {
 
 export const getRhAppData = async (): Promise<RhAppDataPayload | null> => {
   try {
-    const local = localStorage.getItem(RH_STORAGE_KEY);
-    if (local) return JSON.parse(local);
+    localStorage.removeItem(RH_STORAGE_KEY);
   } catch {}
 
   try {

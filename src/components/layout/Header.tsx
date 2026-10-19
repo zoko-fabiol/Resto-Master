@@ -29,6 +29,7 @@ import {
   Plus,
   Wifi,
   WifiOff,
+  RefreshCw,
 } from 'lucide-react';
 import { ChangeMyPinModal } from '../auth/ChangeMyPinModal';
 
@@ -89,6 +90,7 @@ export const Header: React.FC<HeaderProps> = ({
     settings,
     resetToDemoData,
     isOnline,
+    offlineQueueCount,
     outlets,
     changeActiveRestaurant,
     activeRestaurant,
@@ -511,21 +513,39 @@ export const Header: React.FC<HeaderProps> = ({
 
         {/* Right: Cloud Status, Guide, Compliance, TV Display, Tablet, Pairing */}
         <div className="flex items-center gap-1.5 shrink-0">
-          {/* Online / Offline Status Badge */}
+          {/* Online / Offline Status Badge with Offline Queue Indicator */}
           <div
-            className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold border shrink-0 ${
-              isOnline
-                ? 'bg-white text-emerald-700 border-slate-200'
-                : 'bg-amber-100 text-amber-800 border-amber-300 animate-pulse'
+            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold border shrink-0 transition-colors ${
+              !isOnline
+                ? 'bg-amber-100 text-amber-800 border-amber-300 animate-pulse'
+                : (offlineQueueCount || 0) > 0
+                ? 'bg-blue-50 text-blue-700 border-blue-200'
+                : 'bg-white text-emerald-700 border-slate-200'
             }`}
-            title={isOnline ? 'Connecté au Cloud RestoMaster' : 'Mode Hors Ligne Actif'}
+            title={
+              !isOnline
+                ? `Mode Hors Ligne Actif (${offlineQueueCount || 0} opération(s) en attente)`
+                : (offlineQueueCount || 0) > 0
+                ? `Synchronisation en cours : ${offlineQueueCount} opération(s) en attente`
+                : 'Connecté au Cloud RestoMaster'
+            }
           >
-            {isOnline ? (
-              <Wifi className="w-3 h-3 text-emerald-600" />
+            {!isOnline ? (
+              <>
+                <WifiOff className="w-3.5 h-3.5 text-amber-600" />
+                <span>Hors Ligne {(offlineQueueCount || 0) > 0 ? `(${offlineQueueCount})` : ''}</span>
+              </>
+            ) : (offlineQueueCount || 0) > 0 ? (
+              <>
+                <RefreshCw className="w-3.5 h-3.5 text-blue-600 animate-spin" />
+                <span>Synchro ({offlineQueueCount})</span>
+              </>
             ) : (
-              <WifiOff className="w-3 h-3 text-amber-600" />
+              <>
+                <Wifi className="w-3.5 h-3.5 text-emerald-600" />
+                <span className="hidden lg:inline">En Ligne</span>
+              </>
             )}
-            <span className="hidden lg:inline">{isOnline ? 'Cloud' : 'Hors Ligne'}</span>
           </div>
 
           {/* Guide d'Utilisation Officiel Genesis Digital Agency */}

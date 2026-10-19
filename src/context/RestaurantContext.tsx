@@ -2733,16 +2733,26 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     );
   };
 
-  const addTerminal = async (terminal: Omit<Terminal, 'id'>) => {
-    const chars = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-    let rand = '';
-    for (let i = 0; i < 4; i++) {
-      rand += chars.charAt(Math.floor(Math.random() * chars.length));
+  const generateCsprngPairingToken = (): string => {
+    const chars = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
+    const randomBytes = new Uint8Array(8);
+    if (typeof window !== 'undefined' && window.crypto) {
+      window.crypto.getRandomValues(randomBytes);
     }
+    let rand = '';
+    for (let i = 0; i < 8; i++) {
+      rand += chars[randomBytes[i] % chars.length];
+    }
+    return `${rand.slice(0, 4)}-${rand.slice(4, 8)}`;
+  };
+
+  const addTerminal = async (terminal: Omit<Terminal, 'id'>) => {
+    const code = `TRM-${generateCsprngPairingToken()}`;
     const newTerm: Terminal = {
       ...terminal,
       id: generateSecureId('term'),
-      pairingCode: terminal.pairingCode || `TRM-${rand}`,
+      pairingCode: terminal.pairingCode || code,
+      pairingExpiresAt: terminal.pairingExpiresAt || new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
     };
     setTerminals((prev) => [...prev, newTerm]);
     addAuditLog(
@@ -2753,27 +2763,33 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   };
 
   const generateTerminalPairingCode = async (terminalId: string): Promise<string> => {
-    const chars = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-    let rand = '';
-    for (let i = 0; i < 4; i++) {
-      rand += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    const code = `TRM-${rand}`;
+    const code = `TRM-${generateCsprngPairingToken()}`;
     const expires = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
 
     setTerminals((prev) =>
       prev.map((t) => (t.id === terminalId ? { ...t, pairingCode: code, pairingExpiresAt: expires } : t))
     );
-    addAuditLog('Code Appairage Généré', 'Paramètres', `Code ${code} généré pour terminal ${terminalId}`);
+    addAuditLog('Code Appairage Généré (CSPRNG)', 'Paramètres', `Code ${code} généré pour terminal ${terminalId}`);
     return code;
   };
 
   const pairDeviceWithCode = async (pairingCode: string): Promise<DeviceProfile | null> => {
-    const clean = pairingCode.trim().toUpperCase().replace(/\s+/g, '');
-    const found = terminals.find(
-      (t) => t.pairingCode && t.pairingCode.toUpperCase().replace(/\s+/g, '') === clean
-    );
+    const clean = pairingCode.trim().toUpperCase().replace(/[\s-]+/g, '');
+    const found = terminals.find((t) => {
+      if (!t.pairingCode) return false;
+      const cleanTermCode = t.pairingCode.toUpperCase().replace(/[\s-]+/g, '');
+      return cleanTermCode === clean || cleanTermCode === `TRM${clean}`;
+    });
     if (!found) return null;
+
+    if (found.pairingExpiresAt && new Date(found.pairingExpiresAt).getTime() < Date.now()) {
+      addAuditLog(
+        'Échec Appairage',
+        'Paramètres',
+        `Tentative d'utilisation d'un code expiré pour "${found.name}"`
+      );
+      return null;
+    }
 
     const now = new Date().toISOString();
     const profile: DeviceProfile = {

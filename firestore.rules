@@ -302,6 +302,20 @@ service cloud.firestore {
       allow read, write: if isDirection() || isRh();
     }
 
+    match /rh_attendances/{docId} {
+      allow read: if isDirection() || isManager() || isRh();
+      allow write: if isDirection() || isRh() || isManager();
+    }
+
+    match /rh_payroll/{docId} {
+      allow read, write: if isDirection() || isRh();
+    }
+
+    match /rh_notes/{docId} {
+      allow read: if isDirection() || isManager() || isRh();
+      allow write: if isDirection() || isRh() || isManager();
+    }
+
     // =========================================================================
     // 12. DÉPENSES, RÉSERVATIONS, LIVRAISONS & ÉVÉNEMENTS
     // =========================================================================
