@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
 import { useRestaurant } from '../../context/RestaurantContext';
-import { formatCurrency } from '../../lib/utils';
+import { formatCurrency, numberToFrenchWords } from '../../lib/utils';
 import { AccountingExportService } from '../../services/fiscal/accountingExportService';
+import { FiscalInvoicePdfService } from '../../services/fiscal/fiscalInvoicePdfService';
+import { TaxEngine } from '../../services/fiscal/taxEngine';
 import {
   ShieldCheck,
   Building2,
@@ -18,8 +20,9 @@ import {
   FileCheck2,
   Percent,
   Plus,
+  FileText,
 } from 'lucide-react';
-import { TaxRegime } from '../../types/restaurant';
+import { TaxRegime, Invoice, Order } from '../../types/restaurant';
 
 export const FiscalCenterView: React.FC = () => {
   const {
@@ -30,6 +33,7 @@ export const FiscalCenterView: React.FC = () => {
     expenses,
     cashSession,
     fiscalJournal,
+    invoices,
     withholdings,
     fiscalObligations,
     updateFiscalObligationStatus,
@@ -39,6 +43,8 @@ export const FiscalCenterView: React.FC = () => {
   const [activeTab, setActiveTab] = useState<
     'profil' | 'journal' | 'withholding' | 'ebilling' | 'obligations' | 'syscohada'
   >('profil');
+
+  const [downloadingInvoiceId, setDownloadingInvoiceId] = useState<string | null>(null);
 
   // Modal new withholding
   const [withholdingModalOpen, setWithholdingModalOpen] = useState(false);
@@ -109,6 +115,92 @@ export const FiscalCenterView: React.FC = () => {
       [cashSession]
     );
     AccountingExportService.exportToCsv(entries, `journal_caisse_syscohada_${settings.exerciceFiscal || '2026'}.csv`);
+  };
+
+  const handleExportDgiTeledeclaration = () => {
+    AccountingExportService.exportFiscalJournalDgiCsv(fiscalJournal, settings, invoices);
+  };
+
+  const handleDownloadJournalInvoicePdf = async (item: any) => {
+    setDownloadingInvoiceId(item.id);
+    try {
+      // 1. Chercher dans les factures existantes
+      let targetInvoice = (invoices || []).find(
+        (inv: Invoice) => inv.id === item.invoiceId || inv.invoiceNumber === item.documentNumber
+      );
+      // 2. Chercher dans les commandes correspondantes
+      const targetOrder = (orders || []).find(
+        (o: Order) => o.orderNumber === item.documentNumber || o.id === item.invoiceId
+      );
+
+      if (!targetInvoice && targetOrder) {
+        const created = TaxEngine.createFiscalInvoice(
+          targetOrder,
+          settings,
+          parseInt(item.documentNumber.replace(/[^0-9]/g, '').slice(-6) || '1', 10),
+          {
+            name: targetOrder.companyBillingName || targetOrder.customerName,
+            niu: targetOrder.companyBillingNiu,
+          }
+        );
+        targetInvoice = created.invoice;
+      }
+
+      if (!targetInvoice) {
+        // Reconstitution d'une facture légale conforme à partir de la ligne du journal
+        targetInvoice = {
+          id: item.invoiceId || item.id,
+          invoiceNumber: item.documentNumber,
+          sequenceNumber: parseInt(item.documentNumber.replace(/[^0-9]/g, '').slice(-6) || '1', 10),
+          orderId: item.invoiceId || item.id,
+          orderNumber: item.documentNumber,
+          restaurantId: settings.name,
+          date: item.date,
+          time: item.time,
+          status: item.status === 'VALIDATED' ? 'ISSUED' : 'CANCELLED',
+          emitterRaisonSociale: settings.raisonSociale || settings.name,
+          emitterNiu: settings.niu || 'M012012345678A',
+          emitterRccm: settings.rccm || 'RC/YAO/2024/B/1894',
+          emitterTaxCenter: settings.taxCenter || 'CDI YAOUNDE I',
+          emitterAddress: settings.address || 'Yaoundé',
+          emitterPhone: settings.phone || '',
+          customerName: 'CLIENT AU COMPTANT',
+          items: [
+            {
+              productId: 'p-journal',
+              productName: `Prestation Restauration & Boissons (${item.type})`,
+              quantity: 1,
+              unitPriceHT: item.montantHT,
+              discountAmount: 0,
+              totalHT: item.montantHT,
+              vatRate: 17.5,
+              vatAmount: item.montantTVA,
+              cacAmount: item.montantCAC,
+              totalTTC: item.montantTTC,
+            },
+          ],
+          subtotalHT: item.montantHT,
+          discountTotal: 0,
+          taxableBase: item.montantHT,
+          vatAmount: item.montantTVA,
+          cacAmount: item.montantCAC,
+          totalTaxes: item.montantTVA + item.montantCAC,
+          withholdingAmount: item.montantRetenue || 0,
+          totalTTC: item.montantTTC,
+          netToPay: item.montantTTC - (item.montantRetenue || 0),
+          amountInWords: numberToFrenchWords(item.montantTTC),
+          paymentStatus: 'PAID',
+          securitySignature: item.hashIntegrity,
+          currency: settings.currency || 'XAF',
+        };
+      }
+
+      await FiscalInvoicePdfService.downloadFiscalInvoicePdf(targetInvoice, settings, targetOrder);
+    } catch (err) {
+      console.error('[FiscalCenterView] Erreur téléchargement facture PDF:', err);
+    } finally {
+      setDownloadingInvoiceId(null);
+    }
   };
 
   return (
@@ -395,8 +487,19 @@ export const FiscalCenterView: React.FC = () => {
               <h3 className="text-sm font-bold text-slate-900">Journal des Opérations Fiscales (Immuable)</h3>
               <p className="text-xs text-slate-500">Traçabilité complète des factures émises, TVA collectée, CAC et retenues</p>
             </div>
-            <div className="text-xs font-semibold text-slate-500">
-              Total facturé TTC : <span className="font-black text-slate-900">{formatCurrency(fiscalJournal.reduce((s: number, j: any) => s + j.montantTTC, 0), settings.currency)}</span>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleExportDgiTeledeclaration}
+                disabled={fiscalJournal.length === 0}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs transition-all cursor-pointer disabled:opacity-50"
+                title="Télécharger le fichier CSV officiel de télé-déclaration pour la DGI (Cameroun)"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>Export Télé-déclaration DGI (CSV)</span>
+              </button>
+              <div className="text-xs font-semibold text-slate-500 bg-slate-100 px-3 py-1.5 rounded-xl">
+                Total TTC : <span className="font-black text-slate-900">{formatCurrency(fiscalJournal.reduce((s: number, j: any) => s + j.montantTTC, 0), settings.currency)}</span>
+              </div>
             </div>
           </div>
 
@@ -413,12 +516,13 @@ export const FiscalCenterView: React.FC = () => {
                   <th className="py-2.5 px-3 text-right">Retenue</th>
                   <th className="py-2.5 px-3 text-right">Total TTC</th>
                   <th className="py-2.5 px-3">Statut</th>
+                  <th className="py-2.5 px-3 text-center w-24">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 font-medium">
                 {fiscalJournal.length === 0 ? (
                   <tr>
-                    <td colSpan={9} className="py-6 text-center text-slate-400">
+                    <td colSpan={10} className="py-6 text-center text-slate-400">
                       Aucune écriture fiscale générée pour le moment. Les factures validées apparaissent ici automatiquement.
                     </td>
                   </tr>
@@ -455,6 +559,17 @@ export const FiscalCenterView: React.FC = () => {
                         <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold text-[10px]">
                           {item.status}
                         </span>
+                      </td>
+                      <td className="py-2.5 px-3 text-center whitespace-nowrap">
+                        <button
+                          onClick={() => handleDownloadJournalInvoicePdf(item)}
+                          disabled={downloadingInvoiceId === item.id}
+                          className="px-2 py-1 rounded-lg bg-slate-100 hover:bg-amber-100 text-slate-700 hover:text-amber-900 transition-colors cursor-pointer disabled:opacity-50 inline-flex items-center gap-1 text-[11px] font-bold"
+                          title="Télécharger la Facture Officielle Normée DGI A4 (PDF)"
+                        >
+                          <FileText className="w-3 h-3 text-amber-600" />
+                          <span>{downloadingInvoiceId === item.id ? '...' : 'Facture A4'}</span>
+                        </button>
                       </td>
                     </tr>
                   ))

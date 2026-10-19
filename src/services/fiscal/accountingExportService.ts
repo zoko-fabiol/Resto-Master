@@ -16,7 +16,15 @@
  * - Compte 4472 : État, Retenues à la source (AIR)
  */
 
-import { Order, Expense, Payment, CashRegisterSession } from '../../types/restaurant';
+import {
+  Order,
+  Expense,
+  Payment,
+  CashRegisterSession,
+  FiscalJournalItem,
+  Invoice,
+  RestaurantSettings,
+} from '../../types/restaurant';
 
 export interface OhadaJournalEntry {
   date: string;
@@ -219,6 +227,99 @@ export class AccountingExportService {
     const link = document.createElement('a');
     link.setAttribute('href', encodedUri);
     link.setAttribute('download', filename);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }
+
+  /**
+   * Génère le fichier CSV de télé-déclaration mensuelle au format exigé par la DGI (Cameroun)
+   * et le référentiel DSF (Déclaration Statistique et Fiscale)
+   */
+  public static generateDgiTeledeclarationCsv(
+    fiscalJournal: FiscalJournalItem[],
+    settings: RestaurantSettings,
+    invoices: Invoice[] = []
+  ): string {
+    const headers = [
+      'Date Facture',
+      'Heure',
+      'N° Facture Normalisé DGI',
+      'NIU Déclarant',
+      'Raison Sociale Déclarant',
+      'Centre des Impôts',
+      'Nom / Raison Sociale Client',
+      'NIU Client',
+      'Type Document',
+      'Montant Brut HT (FCFA)',
+      'Taux TVA (%)',
+      'TVA Collectée (FCFA)',
+      'Taux CAC (%)',
+      'CAC Collecté (FCFA)',
+      'Retenue AIR (FCFA)',
+      'Montant Total TTC (FCFA)',
+      'Statut e-Billing',
+      'Sceau Numérique SHA-256',
+    ];
+
+    const invoiceMap = new Map<string, Invoice>();
+    invoices.forEach((inv) => {
+      invoiceMap.set(inv.invoiceNumber, inv);
+      invoiceMap.set(inv.id, inv);
+    });
+
+    const rows = fiscalJournal.map((item) => {
+      const matchedInvoice = invoiceMap.get(item.documentNumber) || invoiceMap.get(item.invoiceId);
+      const clientName = matchedInvoice?.customerName || 'CLIENT AU COMPTANT';
+      const clientNiu = matchedInvoice?.customerNiu || 'NON_RENSEIGNE';
+      const seal = item.hashIntegrity || matchedInvoice?.securitySignature || 'NON_SCELLE';
+
+      return [
+        item.date,
+        item.time,
+        item.documentNumber,
+        settings.niu || 'NON_RENSEIGNE',
+        `"${(settings.raisonSociale || settings.name).replace(/"/g, '""')}"`,
+        `"${(settings.taxCenter || 'CIME / CDI YAOUNDE').replace(/"/g, '""')}"`,
+        `"${clientName.replace(/"/g, '""')}"`,
+        clientNiu,
+        item.type,
+        Math.round(item.montantHT),
+        17.5,
+        Math.round(item.montantTVA),
+        1.75,
+        Math.round(item.montantCAC),
+        Math.round(item.montantRetenue || 0),
+        Math.round(item.montantTTC),
+        item.status === 'VALIDATED' ? 'CONFORME_DGI' : 'ANNULE',
+        seal,
+      ];
+    });
+
+    return (
+      'data:text/csv;charset=utf-8,\uFEFF' +
+      [headers.join(';'), ...rows.map((r) => r.join(';'))].join('\r\n')
+    );
+  }
+
+  /**
+   * Déclenche le téléchargement du fichier CSV officiel pour la télé-déclaration DGI
+   */
+  public static exportFiscalJournalDgiCsv(
+    fiscalJournal: FiscalJournalItem[],
+    settings: RestaurantSettings,
+    invoices: Invoice[] = [],
+    filename?: string
+  ): void {
+    const defaultFilename =
+      filename ||
+      `teledeclaration_dgi_${settings.niu || 'CMR'}_${new Date().toISOString().slice(0, 7)}.csv`;
+
+    const csvContent = this.generateDgiTeledeclarationCsv(fiscalJournal, settings, invoices);
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement('a');
+    link.setAttribute('href', encodedUri);
+    link.setAttribute('download', defaultFilename);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
