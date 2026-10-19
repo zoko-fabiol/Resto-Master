@@ -128,7 +128,9 @@ export function numberToFrenchWords(n: number): string {
         const t = Math.floor(rem / 10);
         const u = rem % 10;
         if (t === 7) {
-          str += 'Soixante-' + units[10 + u] + ' ';
+          str += 'Soixante-' + (u === 1 ? 'et-Onze' : units[10 + u]) + ' ';
+        } else if (t === 8 && u === 0) {
+          str += 'Quatre-Vingts ';
         } else if (t === 9) {
           str += 'Quatre-Vingt-' + units[10 + u] + ' ';
         } else {
@@ -168,7 +170,16 @@ export function numberToFrenchWords(n: number): string {
 
 export const numberToWordsFrench = numberToFrenchWords;
 
+/**
+ * Formule légale obligatoire d'arrêté de facture au Cameroun (Art. L du CGI)
+ */
+export function formatLegalInvoiceNotice(amount: number, currency = 'Francs CFA'): string {
+  const inWords = numberToFrenchWords(Math.round(amount)).toUpperCase();
+  return `Arrêté la présente facture à la somme de : ${inWords} ${currency}.`;
+}
+
 // Calcul fiscal Cameroun (TVA 17.5% + 10% CAC = 19.25%)
+
 export function calculateCameroonTaxes(subtotalHt: number, totalRate: number = 19.25) {
   const combinedTax = Math.round((subtotalHt * totalRate) / 100);
   // Base TVA 17.5% et CAC 1.75%

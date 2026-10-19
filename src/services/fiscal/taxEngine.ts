@@ -12,7 +12,9 @@ import {
 } from '../../types/restaurant';
 import { calculateVatAndCac } from './vatCalculator';
 import { calculateWithholding } from './withholdingCalculator';
-import { numberToWordsFrench, generateSecureId } from '../../lib/utils';
+import { numberToWordsFrench, generateSecureId, formatLegalInvoiceNotice } from '../../lib/utils';
+import { DgiFiscalHelper } from './dgiQrCodeHelper';
+
 
 
 export interface FiscalOrderSummary {
@@ -74,7 +76,7 @@ export class TaxEngine {
       totalTTC: vatResult.totalTTC,
       withholdingAmount,
       netToPay,
-      amountInWords: numberToWordsFrench(netToPay),
+      amountInWords: formatLegalInvoiceNotice(netToPay, settings.currency === 'FCFA' ? 'Francs CFA' : settings.currency),
     };
   }
 
@@ -125,6 +127,31 @@ export class TaxEngine {
     const now = new Date();
     const dateStr = now.toISOString().slice(0, 10);
     const timeStr = now.toTimeString().slice(0, 8);
+    const dateTimeIso = now.toISOString();
+
+    // Calcul du sceau d'intégrité fiscal DGI
+    const securitySignature = DgiFiscalHelper.computeFiscalSeal({
+      emitterNiu: settings.niu || 'M012012345678A',
+      invoiceNumber,
+      dateTimeIso,
+      subtotalHT: fiscalSummary.taxableBaseHT,
+      totalTTC: fiscalSummary.totalTTC,
+    });
+
+    const qrCodeData = DgiFiscalHelper.buildDgiRawString(
+      {
+        emitterNiu: settings.niu || 'M012012345678A',
+        emitterRccm: settings.rccm || 'RC/DLA/2026/B/000',
+        invoiceNumber,
+        dateTimeIso,
+        subtotalHT: fiscalSummary.taxableBaseHT,
+        vatAmount: fiscalSummary.vatAmount,
+        cacAmount: fiscalSummary.cacAmount,
+        totalTTC: fiscalSummary.totalTTC,
+        clientNiu: clientInfo?.niu || order.companyBillingNiu,
+      },
+      securitySignature
+    );
 
     const invoice: Invoice = {
       id: generateSecureId('inv'),
@@ -188,11 +215,17 @@ export class TaxEngine {
       netToPay: fiscalSummary.netToPay,
       amountInWords: fiscalSummary.amountInWords,
 
+      // Sécurité & e-Billing
+      currency: settings.currency || 'FCFA',
+      securitySignature,
+      chainHash: securitySignature,
+      qrCodeData,
+
       paymentMethod: order.payments?.[0]?.method || 'especes',
       paymentReference: order.payments?.[0]?.reference,
       paymentStatus: order.paymentStatus === 'paye' ? 'CONFIRMED' : 'PENDING',
       notes: order.notes,
-      validatedAt: now.toISOString(),
+      validatedAt: dateTimeIso,
       validatedBy: order.serverName,
     };
 
