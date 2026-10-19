@@ -139,7 +139,7 @@ cd repo-backup
 
 # 2. Remplacer l'ancienne clé API dans tout l'historique
 # Créer un fichier de remplacement expressions.txt avec :
-# AIzaSyC2zfdRlJrs0N1vtYvy1qbOK11piNpsQSw==>CLE_RETIREE_DE_L_HISTORIQUE
+# <ANCIENNE_CLE_RETIREE>==>CLE_RETIREE_DE_L_HISTORIQUE
 
 git filter-repo --replace-text expressions.txt
 
