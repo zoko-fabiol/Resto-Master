@@ -385,6 +385,8 @@ export interface Order {
   isProforma?: boolean;
   companyBillingName?: string;
   companyBillingNiu?: string;
+  discountPercentRequested?: number;
+  supervisorToken?: string;
 }
 
 export interface StockTransfer {
@@ -835,6 +837,10 @@ export interface Invoice {
   paymentStatus: MobileMoneyPaymentStatus | 'PAID' | 'UNPAID';
   folio?: number;
   notes?: string;
+  securitySignature?: string;
+  chainHash?: string;
+  qrCodeData?: string;
+  currency?: string;
   
   validatedAt?: string;
   validatedBy?: string;

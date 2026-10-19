@@ -12,7 +12,8 @@ import {
 } from '../../types/restaurant';
 import { calculateVatAndCac } from './vatCalculator';
 import { calculateWithholding } from './withholdingCalculator';
-import { numberToWordsFrench } from '../../lib/utils';
+import { numberToWordsFrench, generateSecureId } from '../../lib/utils';
+
 
 export interface FiscalOrderSummary {
   subtotalHT: number;
@@ -126,7 +127,7 @@ export class TaxEngine {
     const timeStr = now.toTimeString().slice(0, 8);
 
     const invoice: Invoice = {
-      id: `inv-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      id: generateSecureId('inv'),
       invoiceNumber,
       sequenceNumber,
       orderId: order.id,
@@ -196,7 +197,7 @@ export class TaxEngine {
     };
 
     const journalItem: FiscalJournalItem = {
-      id: `fisc-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      id: generateSecureId('fisc'),
       invoiceId: invoice.id,
       documentNumber: invoice.invoiceNumber,
       date: dateStr,

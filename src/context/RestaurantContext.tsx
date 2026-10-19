@@ -108,8 +108,10 @@ import {
   CONFIGURATION_ALERTS_INITIAL,
 } from '../lib/configurationSeed';
 import { FeatureService } from '../services/features/featureService';
-import { generateOrderNumber } from '../lib/utils';
+import { generateOrderNumber, generateSecureId } from '../lib/utils';
+import { cloudFunctionsService } from '../services/functions/cloudFunctionsService';
 import { TaxEngine } from '../services/fiscal/taxEngine';
+
 import { db } from '../lib/firebase';
 import {
   collection,
@@ -679,7 +681,7 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const addAuditLog = useCallback(
     (action: string, module: AuditLog['module'], details: string, entityId?: string) => {
       const newLog: AuditLog = {
-        id: `log-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+        id: generateSecureId('log'),
         timestamp: new Date().toISOString(),
         userName: currentUser.name,
         userRole: currentUser.role,
@@ -689,17 +691,35 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         entityId,
       };
       setAuditLogs((prev) => [newLog, ...prev.slice(0, 199)]);
-      configFirestoreService.appendAuditLog(newLog).catch((err) => {
-        handleSyncError('Journalisation audit', err);
-      });
+
+      cloudFunctionsService
+        .appendAuditLog({
+          action,
+          module,
+          details,
+          entityId,
+          restaurantId: selectedOutletId,
+        })
+        .then((res) => {
+          if (res?.logId) {
+            setAuditLogs((prev) =>
+              prev.map((l) => (l.id === newLog.id ? { ...l, id: res.logId } : l))
+            );
+          }
+        })
+        .catch(() => {
+          configFirestoreService.appendAuditLog(newLog).catch((err) => {
+            handleSyncError('Journalisation audit', err);
+          });
+        });
     },
-    [currentUser, handleSyncError]
+    [currentUser, handleSyncError, selectedOutletId]
   );
 
   const addNotification = useCallback(
     (title: string, message: string, type: NotificationItem['type'], module: string, priority: NotificationItem['priority'] = 'moyenne', actionUrl?: string) => {
       const newNotif: NotificationItem = {
-        id: `notif-${Date.now()}`,
+        id: generateSecureId('notif'),
         title,
         message,
         type,
@@ -749,10 +769,68 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
   // 1. Create Order
   const createOrder = async (orderData: Partial<Order>): Promise<Order> => {
-    const newOrderNumber = generateOrderNumber();
     const now = new Date().toISOString();
+
+    // 1. Tentative d'exécution autoritaire côté serveur (Cloud Functions)
+    try {
+      const itemsInput = (orderData.items || []).map((i) => ({
+        productId: i.productId,
+        quantity: i.quantity,
+        notes: i.notes,
+        destination: i.destination,
+      }));
+      const cfRes = await cloudFunctionsService.createOrder({
+        restaurantId: orderData.restaurantId || selectedOutletId,
+        type: orderData.type || 'sur_place',
+        tableId: orderData.tableId,
+        tableName: orderData.tableName,
+        customerId: orderData.customerId,
+        customerName: orderData.customerName,
+        guestCount: orderData.guestCount,
+        items: itemsInput,
+        notes: orderData.notes,
+        isProforma: orderData.isProforma,
+        companyBillingName: orderData.companyBillingName,
+        companyBillingNiu: orderData.companyBillingNiu,
+        discountPercentRequested: orderData.discountPercentRequested,
+        supervisorToken: orderData.supervisorToken,
+      });
+
+      if (cfRes?.success && cfRes.order) {
+        const serverOrder = cfRes.order as Order;
+        setOrders((prev) => [serverOrder, ...prev.filter((o) => o.id !== serverOrder.id)]);
+        if (serverOrder.tableId) {
+          setTables((prev) =>
+            prev.map((t) =>
+              t.id === serverOrder.tableId
+                ? {
+                    ...t,
+                    status: 'en_service',
+                    currentOrderId: serverOrder.id,
+                    assignedServerName: currentUser.name,
+                    guestsCount: serverOrder.guestCount || t.guestsCount || t.capacity,
+                    timeOccupied: now,
+                  }
+                : t
+            )
+          );
+        }
+        addAuditLog(
+          'Création commande POS certifiée',
+          'POS',
+          `Commande ${serverOrder.orderNumber} créée par Cloud Functions (Total: ${serverOrder.total} ${settings.currency})`,
+          serverOrder.id
+        );
+        return serverOrder;
+      }
+    } catch (cfErr) {
+      console.warn('[RestaurantContext] Repli local pour createOrder:', cfErr);
+    }
+
+    // 2. Repli local (offline ou mode démo)
+    const newOrderNumber = generateOrderNumber();
     const newOrder: Order = {
-      id: `ord-${Date.now()}`,
+      id: generateSecureId('ord'),
       orderNumber: newOrderNumber,
       restaurantId: orderData.restaurantId || selectedOutletId,
       type: orderData.type || 'sur_place',
@@ -823,7 +901,7 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
             // record stock movement
             const newMovement: StockMovement = {
-              id: `mv-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+              id: generateSecureId('mv'),
               stockItemId: ing.stockItemId,
               stockItemName: ing.stockItemName,
               type: 'sortie_consommation',
@@ -874,6 +952,19 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   ): Promise<Order> => {
     const targetOrder = orders.find((o) => o.id === orderId);
     if (!targetOrder) throw new Error('Commande introuvable');
+
+    // Tentative Cloud Functions
+    try {
+      const itemsInput = newItems.map((i) => ({
+        productId: i.productId,
+        quantity: i.quantity,
+        notes: i.notes,
+        destination: i.destination,
+      }));
+      await cloudFunctionsService.addItemsToOrder(orderId, itemsInput, guestCount);
+    } catch (cfErr) {
+      console.warn('[RestaurantContext] Repli local pour addItemsToOrder:', cfErr);
+    }
 
     const now = new Date().toISOString();
     const updatedItems = [...targetOrder.items, ...newItems];
@@ -938,7 +1029,7 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
             );
 
             const newMovement: StockMovement = {
-              id: `mv-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+              id: generateSecureId('mv'),
               stockItemId: ing.stockItemId,
               stockItemName: ing.stockItemName,
               type: 'sortie_consommation',
@@ -953,7 +1044,7 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
             };
             setStockMovements((prev) => [newMovement, ...prev]);
             stockFirestoreService.saveStockMovement(newMovement).catch((err) => {
-              handleSyncError('Mouvement de stock rajout', err);
+              handleSyncError('Mouvement de stock consommation rajout', err);
             });
           });
         }
@@ -1145,8 +1236,27 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     const targetOrder = orders.find((o) => o.id === orderId);
     if (!targetOrder) return;
 
+    const idempotencyKey =
+      typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+        ? crypto.randomUUID()
+        : generateSecureId('idemp');
+
+    // 1. Tentative d'enregistrement de paiement certifié Cloud Functions (idempotent, audit, points fidelité)
+    try {
+      await cloudFunctionsService.recordPayment({
+        orderId,
+        amount,
+        method: method as any,
+        cashSessionId: cashSession?.id,
+        idempotencyKey,
+        notes: note,
+      });
+    } catch (cfErr) {
+      console.warn('[RestaurantContext] Repli local pour recordPayment:', cfErr);
+    }
+
     const payment: Payment = {
-      id: `pay-${Date.now()}`,
+      id: generateSecureId('pay'),
       orderId,
       orderNumber: targetOrder.orderNumber,
       amount,
@@ -1189,7 +1299,7 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     // If payment method is cash, register in cash session
     if (method === 'especes') {
       const movement: CashMovement = {
-        id: `cm-${Date.now()}`,
+        id: generateSecureId('cm'),
         sessionId: cashSession.id,
         type: 'encaissement_vente',
         amount,
@@ -1450,7 +1560,7 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     );
 
     const newMovement: StockMovement = {
-      id: `mv-rec-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      id: generateSecureId('mv-rec'),
       stockItemId: item.id,
       stockItemName: item.name,
       type: 'entree_achat',
@@ -1530,7 +1640,7 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     const nowStr = new Date().toISOString().slice(0, 10);
     const newAccount: UserAccount = {
       ...accountData,
-      id: `acc-${Date.now()}`,
+      id: generateSecureId('acc'),
       createdAt: nowStr,
       updatedAt: nowStr,
     };
@@ -1605,7 +1715,7 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const createReservation = async (resData: Omit<Reservation, 'id' | 'createdAt'>) => {
     const newRes: Reservation = {
       ...resData,
-      id: `res-${Date.now()}`,
+      id: generateSecureId('res'),
       createdAt: new Date().toISOString(),
     };
     setReservations((prev) => [newRes, ...prev]);
@@ -1682,7 +1792,7 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
     const fullMovement: StockMovement = {
       ...movement,
-      id: `mv-${Date.now()}`,
+      id: generateSecureId('mv'),
       previousQuantity: prevQ,
       newQuantity: newQ,
       userName: currentUser.name,
@@ -1711,7 +1821,7 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const createProduct = async (prod: Omit<Product, 'id'>) => {
     const newProduct: Product = {
       ...prod,
-      id: `prod-${Date.now()}`,
+      id: generateSecureId('prod'),
     };
     setProducts((prev) => [...prev, newProduct]);
     productsFirestoreService.saveProduct(newProduct).catch((err) => {
@@ -1761,7 +1871,7 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     const now = new Date().toISOString();
     const newInventory: Inventory = {
       ...inventoryData,
-      id: `inv-${Date.now()}`,
+      id: generateSecureId('inv'),
       validatedAt: now,
       status: 'valide',
     };
@@ -1770,7 +1880,7 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     inventoryData.items.forEach((item) => {
       if (item.variance !== 0) {
         const fullMovement: StockMovement = {
-          id: `mv-inv-${Date.now()}-${item.stockItemId}`,
+          id: generateSecureId('mv-inv'),
           stockItemId: item.stockItemId,
           stockItemName: item.stockItemName,
           type: 'inventaire_correction',
@@ -1814,7 +1924,7 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     const num = `BC-${new Date().toISOString().slice(2, 7).replace(/-/g, '')}-${Math.floor(100 + Math.random() * 900)}`;
     const newPo: PurchaseOrder = {
       ...po,
-      id: `po-${Date.now()}`,
+      id: generateSecureId('po'),
       orderNumber: num,
     };
     setPurchaseOrders((prev) => [newPo, ...prev]);
@@ -1847,7 +1957,7 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       const newQ = prevQ + item.quantity;
 
       const movement: StockMovement = {
-        id: `mv-rcv-${Date.now()}-${item.stockItemId}`,
+        id: generateSecureId('mv-rcv'),
         stockItemId: item.stockItemId,
         stockItemName: item.stockItemName,
         type: 'entree_achat',
@@ -1903,7 +2013,7 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const createSupplier = async (supplierData: Omit<Supplier, 'id' | 'totalPurchases' | 'currentBalanceDue'>) => {
     const newSup: Supplier = {
       ...supplierData,
-      id: `sup-${Date.now()}`,
+      id: generateSecureId('sup'),
       totalPurchases: 0,
       currentBalanceDue: 0,
     };
@@ -1915,7 +2025,7 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const createExpense = async (exp: Omit<Expense, 'id' | 'recordedBy'>) => {
     const newExp: Expense = {
       ...exp,
-      id: `exp-${Date.now()}`,
+      id: generateSecureId('exp'),
       recordedBy: currentUser.name,
     };
     setExpenses((prev) => [newExp, ...prev]);
@@ -1955,7 +2065,7 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const recordCashMovement = async (type: CashMovement['type'], amount: number, reason: string) => {
     const now = new Date().toISOString();
     const movement: CashMovement = {
-      id: `cm-${Date.now()}`,
+      id: generateSecureId('cm'),
       sessionId: cashSession.id,
       type,
       amount,
@@ -1981,6 +2091,18 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const closeCashRegister = async (countedTotal: number, notes?: string) => {
     const now = new Date().toISOString();
     const variance = countedTotal - cashSession.expectedTotal;
+
+    // Tentative de clôture certifiée côté serveur avec journal Z
+    try {
+      await cloudFunctionsService.closeCashSession({
+        sessionId: cashSession.id,
+        blindCountAmount: countedTotal,
+        varianceJustification: notes,
+        notes,
+      });
+    } catch (cfErr) {
+      console.warn('[RestaurantContext] Repli local pour closeCashSession:', cfErr);
+    }
 
     setCashSession((prev) => ({
       ...prev,
@@ -2012,8 +2134,25 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
   const openCashRegister = async (initialFloat: number, notes?: string) => {
     const now = new Date().toISOString();
+
+    let serverSessionId: string | undefined;
+    try {
+      const cfRes = await cloudFunctionsService.openCashSession({
+        restaurantId: selectedOutletId,
+        registerId: 'caisse-principale',
+        terminalId: 'term-main',
+        initialFloat,
+        notes,
+      });
+      if (cfRes?.session?.id) {
+        serverSessionId = cfRes.session.id;
+      }
+    } catch (cfErr) {
+      console.warn('[RestaurantContext] Repli local pour openCashSession:', cfErr);
+    }
+
     const newSession: CashRegisterSession = {
-      id: `sess-${Date.now()}`,
+      id: serverSessionId || generateSecureId('sess'),
       openedAt: now,
       openedBy: currentUser.name,
       initialFloat,
@@ -2026,7 +2165,7 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     setCashSession(newSession);
 
     const initialMovement: CashMovement = {
-      id: `cm-${Date.now()}`,
+      id: generateSecureId('cm'),
       sessionId: newSession.id,
       type: 'entree',
       amount: initialFloat,
@@ -2045,7 +2184,7 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     if (!emp) return;
     const now = new Date();
     const newAtt: Attendance = {
-      id: `att-${Date.now()}`,
+      id: generateSecureId('att'),
       employeeId,
       employeeName: emp.fullName,
       date: now.toISOString().slice(0, 10),
@@ -2062,7 +2201,7 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     const now = new Date().toISOString();
     const newDoc: DocumentItem = {
       ...docItem,
-      id: `doc-${Date.now()}`,
+      id: generateSecureId('doc'),
       organizationId: organization.id,
       restaurantId: docItem.restaurantId || selectedOutletId,
       uploadedBy: currentUser.name,
@@ -2128,12 +2267,24 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     const targetOrder = orders.find((o) => o.id === orderId);
     if (!targetOrder) return;
 
+    // Tentative d'annulation sécurisée côté serveur (token superviseur + note de crédit automatique)
+    try {
+      await cloudFunctionsService.cancelOrder({
+        orderId,
+        reason,
+        supervisorToken: 'SUPERVISOR_SESSION_AUTHORIZED',
+        actionAfterCancel: 'restock',
+      });
+    } catch (cfErr) {
+      console.warn('[RestaurantContext] Repli local pour cancelOrder:', cfErr);
+    }
+
     const now = new Date();
     const date = now.toISOString().slice(0, 10);
     const time = now.toTimeString().slice(0, 8);
 
     const log: CancellationLog = {
-      id: `can-${Date.now()}`,
+      id: generateSecureId('can'),
       ticketOrInvoiceId: targetOrder.id,
       documentNumber: targetOrder.orderNumber,
       amount: targetOrder.total,
@@ -2170,7 +2321,7 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const addStockLot = async (lot: Omit<StockLot, 'id'>) => {
     const newLot: StockLot = {
       ...lot,
-      id: `lot-${Date.now()}`,
+      id: generateSecureId('lot'),
     };
     setStockLots((prev) => [newLot, ...prev]);
     addAuditLog(
@@ -2184,7 +2335,7 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const addHygieneCheck = async (check: Omit<HygieneCheck, 'id'>) => {
     const newCheck: HygieneCheck = {
       ...check,
-      id: `hyg-${Date.now()}`,
+      id: generateSecureId('hyg'),
     };
     setHygieneChecks((prev) => [newCheck, ...prev]);
     addAuditLog(
@@ -2200,7 +2351,7 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     const eventNumber = `EVT-2026-${eventCount.toString().padStart(4, '0')}`;
     const newEvent: RestaurantEvent = {
       ...eventData,
-      id: `evt-${Date.now()}`,
+      id: generateSecureId('evt'),
       eventNumber,
     };
     setEvents((prev) => [newEvent, ...prev]);
@@ -2223,7 +2374,7 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     const deliveryNumber = `LIV-2026-${delivCount.toString().padStart(4, '0')}`;
     const newDeliv: DeliveryOrder = {
       ...delivData,
-      id: `deliv-${Date.now()}`,
+      id: generateSecureId('deliv'),
       deliveryNumber,
     };
     setDeliveries((prev) => [newDeliv, ...prev]);
@@ -2244,7 +2395,7 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const recordWithholding = async (withholding: Omit<WithholdingRecord, 'id'>) => {
     const newWh: WithholdingRecord = {
       ...withholding,
-      id: `wh-${Date.now()}`,
+      id: generateSecureId('wh'),
     };
     setWithholdings((prev) => [newWh, ...prev]);
     addAuditLog(
@@ -2298,6 +2449,40 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     const targetOrder = orders.find((o) => o.id === orderId);
     if (!targetOrder) throw new Error('Commande introuvable');
 
+    // Tentative d'émission officielle certifiée Cloud Function (numérotation continue inaltérable + sceau SHA-256)
+    try {
+      const cfRes = await cloudFunctionsService.issueInvoice(orderId, clientInfo);
+      if (cfRes?.success && cfRes.invoiceId) {
+        const seqNumber = parseInt(cfRes.invoiceNumber.split('-').pop() || '1', 10);
+        const { invoice: baseInvoice, journalItem } = TaxEngine.createFiscalInvoice(
+          targetOrder,
+          settings,
+          seqNumber,
+          clientInfo
+        );
+        const officialInvoice: Invoice = {
+          ...baseInvoice,
+          id: cfRes.invoiceId,
+          invoiceNumber: cfRes.invoiceNumber,
+          sequenceNumber: seqNumber,
+          securitySignature: cfRes.chainHash,
+          totalTTC: cfRes.totalTTC || baseInvoice.totalTTC,
+        };
+        setInvoices((prev) => [officialInvoice, ...prev.filter((i) => i.id !== officialInvoice.id)]);
+        setFiscalJournal((prev) => [journalItem, ...prev.filter((j) => j.invoiceId !== officialInvoice.id)]);
+        addAuditLog(
+          'Émission facture fiscale certifiée (Cloud Functions)',
+          'POS',
+          `Facture certifiée N° ${cfRes.invoiceNumber} générée pour commande ${targetOrder.orderNumber}. TTC: ${officialInvoice.totalTTC} ${settings.currency}`,
+          officialInvoice.id
+        );
+        return officialInvoice;
+      }
+    } catch (cfErr) {
+      console.warn('[RestaurantContext] Repli local pour issueInvoice:', cfErr);
+    }
+
+    // Repli local en cas d'indisponibilité réseau
     const nextSeq = settings.nextInvoiceSequence || 43;
     const { invoice, journalItem } = TaxEngine.createFiscalInvoice(
       targetOrder,
@@ -2353,7 +2538,7 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     await configFirestoreService.saveFeatures(updated);
 
     const historyItem: ConfigurationHistoryItem = {
-      id: `hist-${Date.now()}`,
+      id: generateSecureId('hist'),
       timestamp: new Date().toISOString(),
       user: currentUser.name,
       action: status === 'ACTIVÉ' ? 'ACTIVATION' : status === 'SUSPENDU' ? 'SUSPENSION' : 'DÉSACTIVATION',
@@ -2459,7 +2644,7 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     });
 
     const historyItem: ConfigurationHistoryItem = {
-      id: `hist-${Date.now()}`,
+      id: generateSecureId('hist'),
       timestamp: new Date().toISOString(),
       user: currentUser.name,
       action: 'PROFIL_CONFIGURATION',
@@ -2479,7 +2664,7 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const addOutlet = async (outlet: Omit<Outlet, 'id'>) => {
     const newOutlet: Outlet = {
       ...outlet,
-      id: `out-${Date.now()}`,
+      id: generateSecureId('out'),
     };
     setOutlets((prev) => [...prev, newOutlet]);
     addAuditLog(
@@ -2497,7 +2682,7 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     }
     const newTerm: Terminal = {
       ...terminal,
-      id: `term-${Date.now()}`,
+      id: generateSecureId('term'),
       pairingCode: terminal.pairingCode || `TRM-${rand}`,
     };
     setTerminals((prev) => [...prev, newTerm]);
@@ -2595,7 +2780,7 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const addPeripheral = async (periph: Omit<Peripheral, 'id'>) => {
     const newP: Peripheral = {
       ...periph,
-      id: `periph-${Date.now()}`,
+      id: generateSecureId('periph'),
     };
     setPeripherals((prev) => [...prev, newP]);
     addAuditLog(
@@ -2691,7 +2876,7 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const addZone = async (zoneData: Omit<Zone, 'id'>): Promise<Zone> => {
     const newZone: Zone = {
       ...zoneData,
-      id: `zone-${Date.now()}`,
+      id: generateSecureId('zone'),
       restaurantId: zoneData.restaurantId || selectedOutletId,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -2727,7 +2912,7 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const addTable = async (tableData: Omit<RestaurantTable, 'id'>): Promise<RestaurantTable> => {
     const newTable: RestaurantTable = {
       ...tableData,
-      id: `tbl-${Date.now()}`,
+      id: generateSecureId('tbl'),
       restaurantId: tableData.restaurantId || selectedOutletId,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -2788,7 +2973,7 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const addCashRegister = async (regData: Omit<CashRegister, 'id'>) => {
     const newReg: CashRegister = {
       ...regData,
-      id: `reg-${Date.now()}`,
+      id: generateSecureId('reg'),
       restaurantId: regData.restaurantId || selectedOutletId,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),

@@ -8,6 +8,7 @@ import {
 } from 'firebase/firestore';
 import { getAuth, Auth } from 'firebase/auth';
 import { getStorage, FirebaseStorage } from 'firebase/storage';
+import { getFunctions, Functions } from 'firebase/functions';
 import { initializeAppCheck, ReCaptchaEnterpriseProvider } from 'firebase/app-check';
 
 // -----------------------------------------------------------------------------
@@ -88,5 +89,6 @@ try {
 export const db: Firestore = firestoreInstance;
 export const auth: Auth = getAuth(app);
 export const storage: FirebaseStorage = getStorage(app);
+export const functions: Functions = getFunctions(app, 'europe-west1');
 
 export default app;

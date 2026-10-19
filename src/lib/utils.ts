@@ -69,6 +69,18 @@ export function getMinutesBetween(startIso?: string, endIso?: string): number | 
   }
 }
 
+export function generateSecureId(prefix?: string): string {
+  const uuid =
+    typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID()
+      : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+          const r = (Math.random() * 16) | 0;
+          const v = c === 'x' ? r : (r & 0x3) | 0x8;
+          return v.toString(16);
+        });
+  return prefix ? `${prefix}_${uuid}` : uuid;
+}
+
 export function generateOrderNumber(): string {
   const dateStr = new Date().toISOString().slice(2, 10).replace(/-/g, '');
   const rand = Math.floor(100 + Math.random() * 900);
@@ -86,6 +98,7 @@ export function generateTransferNumber(): string {
   const rand = Math.floor(100 + Math.random() * 900);
   return `TRF-${dateStr}-${rand}`;
 }
+
 
 // Convert Number to French Words (Pour la mention légale d'arrêté de facture obligatoire au Cameroun)
 export function numberToFrenchWords(n: number): string {
