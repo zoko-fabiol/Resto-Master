@@ -1,0 +1,10 @@
+# Compiled JavaScript output
+lib/
+
+# Node dependencies
+node_modules/
+
+# Logs and runtime files
+*.log
+.env*
+!.env.example
