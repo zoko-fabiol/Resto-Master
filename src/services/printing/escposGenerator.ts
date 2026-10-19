@@ -163,11 +163,14 @@ export function buildClientReceiptEscPos(
   builder.textLine(`Tel : ${settings.phone}`);
   builder.divider('-');
   builder.textLine(`NIU : ${settings.niu || 'M012012345678A'}  RCCM : ${settings.rccm || 'RC/YAO/2024/B/1894'}`);
+  if (settings.taxCenter) {
+    builder.textLine(`Centre des Impots : ${settings.taxCenter}`);
+  }
   builder.doubleDivider();
 
   // 3. Metadata
   builder.alignLeft();
-  builder.twoColumns('TICKET DE CAISSE', `N* ${order.orderNumber}`);
+  builder.twoColumns('TICKET FISCAL', `N* ${order.orderNumber}`);
   builder.twoColumns('Date :', formatDateTime(order.createdAt));
   builder.twoColumns('Table :', `${order.tableName || 'Comptoir'} (${order.guestCount || 1} cvts)`);
   builder.twoColumns('Serveur :', order.serverName);
@@ -204,7 +207,8 @@ export function buildClientReceiptEscPos(
   const finalTotal = order.paidAmount > 0 ? order.paidAmount : taxes.totalTtc;
 
   builder.twoColumns('Sous-Total HT :', formatCurrency(taxes.subtotalHt, settings.currency));
-  builder.twoColumns('TVA (19.25%) :', formatCurrency(taxes.combinedTax, settings.currency));
+  builder.twoColumns('TVA (17,50%) :', formatCurrency(taxes.tvaBase, settings.currency));
+  builder.twoColumns('CAC (1,75%) :', formatCurrency(taxes.cacBase, settings.currency));
   builder.doubleDivider();
 
   builder.bold(true).doubleHeight(true);

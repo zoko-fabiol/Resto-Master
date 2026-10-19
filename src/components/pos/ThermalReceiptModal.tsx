@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { Order, RestaurantSettings, PaymentMethod } from '../../types/restaurant';
 import { formatCurrency, formatDateTime, numberToFrenchWords, calculateCameroonTaxes } from '../../lib/utils';
-import { Printer, X, QrCode, Usb, DollarSign } from 'lucide-react';
+import { Printer, X, QrCode, Usb, DollarSign, ShieldCheck } from 'lucide-react';
 import QRCode from 'qrcode';
 import { useRestaurant } from '../../context/RestaurantContext';
 import { useToast } from '../../context/ToastContext';
 import { printerService } from '../../services/printing/printerService';
+import { DgiFiscalHelper } from '../../services/fiscal/dgiQrCodeHelper';
 
 interface ThermalReceiptModalProps {
   order: Order;
@@ -31,6 +32,7 @@ export const ThermalReceiptModal: React.FC<ThermalReceiptModalProps> = ({
   const { peripherals, isFeatureEnabled, isRuleEnabled } = useRestaurant();
   const { showToast, playAudioChime } = useToast();
   const [qrDataUrl, setQrDataUrl] = useState<string>('');
+  const [fiscalSeal, setFiscalSeal] = useState<string>('');
   const [isSendingToHardware, setIsSendingToHardware] = useState(false);
 
   // Règles Opérationnelles d'impression
@@ -68,19 +70,27 @@ export const ThermalReceiptModal: React.FC<ThermalReceiptModalProps> = ({
   };
 
   useEffect(() => {
-    const payload = JSON.stringify({
-      resto: settings.name,
-      niu: settings.niu,
-      order: order.orderNumber,
-      table: order.tableName,
-      total: finalTotal,
-      currency: settings.currency,
-      date: new Date().toISOString(),
-    });
-    QRCode.toDataURL(payload, { width: 130, margin: 1 })
-      .then((url) => setQrDataUrl(url))
-      .catch((err) => console.error('[ThermalReceiptModal] Erreur génération QR code:', err));
-  }, [order, settings, finalTotal]);
+    DgiFiscalHelper.generateQrDataUrl(
+      {
+        emitterNiu: settings.niu || 'M012012345678A',
+        emitterRccm: settings.rccm,
+        invoiceNumber: order.orderNumber,
+        dateTimeIso: order.createdAt || new Date().toISOString(),
+        subtotalHT: taxes.subtotalHt,
+        vatAmount: taxes.tvaBase,
+        cacAmount: taxes.cacBase,
+        totalTTC: finalTotal,
+        clientNiu: order.companyBillingNiu,
+      },
+      undefined,
+      130
+    )
+      .then((res) => {
+        setQrDataUrl(res.dataUrl);
+        setFiscalSeal(res.seal);
+      })
+      .catch((err) => console.error('[ThermalReceiptModal] Erreur QR DGI:', err));
+  }, [order, settings, taxes, finalTotal]);
 
   const handlePrintSystem = () => {
     window.print();
@@ -172,12 +182,15 @@ export const ThermalReceiptModal: React.FC<ThermalReceiptModalProps> = ({
               <div className="text-[10px] font-bold border-y border-dashed border-slate-400 py-1 my-1">
                 NIU : {settings.niu || 'M012012345678A'} • RCCM : {settings.rccm || 'RC/YAO/2024/B/1894'}
               </div>
+              <div className="text-[9px] text-slate-600">
+                Centre : {settings.taxCenter || 'CDI YAOUNDE I'} • Régime Réel
+              </div>
             </div>
 
             {/* Ticket Metadata */}
             <div className="my-2 space-y-0.5 text-[10px]">
               <div className="flex justify-between font-bold">
-                <span>TICKET DE CAISSE</span>
+                <span>TICKET DE CAISSE FISCAL</span>
                 {showTicketNumber && <span>N° {order.orderNumber}</span>}
               </div>
               {showOrderTime && (
@@ -235,15 +248,19 @@ export const ThermalReceiptModal: React.FC<ThermalReceiptModalProps> = ({
 
             <div className="border-t border-dashed border-slate-900 my-2"></div>
 
-            {/* Subtotal, TVA, Net */}
+            {/* Subtotal, TVA, CAC, Net */}
             <div className="space-y-1 text-[11px]">
               <div className="flex justify-between text-slate-700">
                 <span>Sous-Total HT :</span>
                 <span>{formatCurrency(taxes.subtotalHt)}</span>
               </div>
               <div className="flex justify-between text-slate-700">
-                <span>TVA (19.25%) :</span>
-                <span>{formatCurrency(taxes.combinedTax)}</span>
+                <span>TVA (17,50%) :</span>
+                <span>{formatCurrency(taxes.tvaBase)}</span>
+              </div>
+              <div className="flex justify-between text-slate-700">
+                <span>CAC (10% TVA = 1,75%) :</span>
+                <span>{formatCurrency(taxes.cacBase)}</span>
               </div>
 
               <div className="flex justify-between font-black text-sm border-t-2 border-b-2 border-slate-900 py-1.5 my-1">
@@ -281,13 +298,18 @@ export const ThermalReceiptModal: React.FC<ThermalReceiptModalProps> = ({
               « Arrêté le présent reçu à la somme de : {totalInLetters} FRANCS CFA. »
             </div>
 
-            {/* Digital QR Code */}
+            {/* Digital QR Code & DGI Seal */}
             {qrDataUrl && (
-              <div className="flex flex-col items-center justify-center my-3 text-center">
-                <img src={qrDataUrl} alt="QR Reçu" className="w-24 h-24 border border-slate-300 p-1 bg-white" />
-                <span className="text-[8px] text-slate-500 mt-1 uppercase tracking-wider">
-                  Scannez pour Reçu Numérique Sécurisé
+              <div className="flex flex-col items-center justify-center my-3 text-center border border-dashed border-slate-300 p-2 rounded bg-slate-50">
+                <img src={qrDataUrl} alt="QR DGI e-Billing" className="w-24 h-24 border border-slate-200 p-1 bg-white" />
+                <span className="text-[8px] font-bold text-slate-800 mt-1 uppercase tracking-wider">
+                  CERTIFICATION DGI e-Billing (CMR)
                 </span>
+                {fiscalSeal && (
+                  <span className="text-[7px] font-mono text-slate-500 mt-0.5 break-all">
+                    Sceau : {fiscalSeal.slice(0, 16)}...
+                  </span>
+                )}
               </div>
             )}
 

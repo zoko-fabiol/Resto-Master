@@ -1,8 +1,11 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useRestaurant } from '../../context/RestaurantContext';
-import { Order, RestaurantSettings } from '../../types/restaurant';
+import { Order, RestaurantSettings, Invoice } from '../../types/restaurant';
 import { formatCurrency, formatDateTime, numberToFrenchWords, calculateCameroonTaxes } from '../../lib/utils';
-import { Printer, X, Download } from 'lucide-react';
+import { Printer, X, Download, ShieldCheck, QrCode } from 'lucide-react';
+import { FiscalInvoicePdfService } from '../../services/fiscal/fiscalInvoicePdfService';
+import { DgiFiscalHelper } from '../../services/fiscal/dgiQrCodeHelper';
+import { TaxEngine } from '../../services/fiscal/taxEngine';
 
 interface CameroonInvoiceA5Props {
   order: Order;
@@ -18,6 +21,9 @@ export const CameroonInvoiceA5: React.FC<CameroonInvoiceA5Props> = ({
   onClose,
 }) => {
   const { isRuleEnabled } = useRestaurant();
+  const [qrDataUrl, setQrDataUrl] = useState<string>('');
+  const [fiscalSeal, setFiscalSeal] = useState<string>('');
+  const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
 
   // Filter items by folio if requested
   const itemsToPrint = folio
@@ -28,8 +34,49 @@ export const CameroonInvoiceA5: React.FC<CameroonInvoiceA5Props> = ({
   const taxes = calculateCameroonTaxes(subtotalHt, settings.taxRate);
   const totalInLetters = numberToFrenchWords(taxes.totalTtc).toUpperCase();
 
+  useEffect(() => {
+    DgiFiscalHelper.generateQrDataUrl(
+      {
+        emitterNiu: settings.niu || 'M012012345678A',
+        emitterRccm: settings.rccm,
+        invoiceNumber: order.orderNumber,
+        dateTimeIso: order.createdAt || new Date().toISOString(),
+        subtotalHT: taxes.subtotalHt,
+        vatAmount: taxes.tvaBase,
+        cacAmount: taxes.cacBase,
+        totalTTC: taxes.totalTtc,
+        clientNiu: order.companyBillingNiu,
+      },
+      undefined,
+      130
+    ).then((res) => {
+      setQrDataUrl(res.dataUrl);
+      setFiscalSeal(res.seal);
+    });
+  }, [order, settings, taxes]);
+
   const handlePrint = () => {
     window.print();
+  };
+
+  const handleDownloadPdf = async () => {
+    setIsDownloadingPdf(true);
+    try {
+      const { invoice } = TaxEngine.createFiscalInvoice(
+        order,
+        settings,
+        parseInt(order.orderNumber.replace(/[^0-9]/g, '').slice(-6) || '1', 10),
+        {
+          name: order.companyBillingName || order.customerName,
+          niu: order.companyBillingNiu,
+        }
+      );
+      await FiscalInvoicePdfService.downloadFiscalInvoicePdf(invoice, settings, order);
+    } catch (err) {
+      console.error('[CameroonInvoiceA5] Erreur téléchargement PDF:', err);
+    } finally {
+      setIsDownloadingPdf(false);
+    }
   };
 
   return (
@@ -38,7 +85,8 @@ export const CameroonInvoiceA5: React.FC<CameroonInvoiceA5Props> = ({
         {/* Modal Top Controls (Hidden during print) */}
         <div className="p-4 border-b border-slate-200 flex items-center justify-between bg-slate-50 print:hidden">
           <div className="text-xs font-bold text-slate-800 flex items-center gap-2">
-            <span>Facture Formelle Norme Camerounaise (A5 Laser)</span>
+            <ShieldCheck className="w-4 h-4 text-emerald-600" />
+            <span>Facture Formelle Norme Camerounaise (DGI e-Billing)</span>
             {folio && (
               <span className="px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-800 text-[10px] font-bold">
                 {folio === 1 ? 'Folio 1 : Prise en charge Société' : 'Folio 2 : Extras Personnels'}
@@ -48,13 +96,21 @@ export const CameroonInvoiceA5: React.FC<CameroonInvoiceA5Props> = ({
 
           <div className="flex items-center gap-2">
             <button
+              onClick={handleDownloadPdf}
+              disabled={isDownloadingPdf}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold shadow-xs transition-all cursor-pointer disabled:opacity-50"
+            >
+              <Download className="w-4 h-4" />
+              <span>{isDownloadingPdf ? 'Génération...' : 'Télécharger PDF (A4)'}</span>
+            </button>
+            <button
               onClick={handlePrint}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold shadow-xs transition-all"
+              className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold shadow-xs transition-all cursor-pointer"
             >
               <Printer className="w-4 h-4 text-amber-400" />
               <span>Imprimer Format A5</span>
             </button>
-            <button onClick={onClose} className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg">
+            <button onClick={onClose} className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg cursor-pointer">
               <X className="w-5 h-5" />
             </button>
           </div>
@@ -177,7 +233,7 @@ export const CameroonInvoiceA5: React.FC<CameroonInvoiceA5Props> = ({
 
           {/* Legal Formula in Words (OBLIGATOIRE AU CAMEROUN) */}
           {isRuleEnabled('bill_amount_in_words', true) && (
-            <div className="mt-6 p-3 border border-slate-300 rounded-lg bg-slate-50 font-sans text-xs">
+            <div className="mt-4 p-3 border border-slate-300 rounded-lg bg-slate-50 font-sans text-xs">
               <div className="text-[10px] font-bold uppercase text-slate-400">Arrêté de la facture :</div>
               <div className="font-bold text-slate-900 mt-0.5 italic">
                 « ARRETE LA PRESENTE FACTURE A LA SOMME DE : {totalInLetters} FRANCS CFA. »
@@ -185,20 +241,46 @@ export const CameroonInvoiceA5: React.FC<CameroonInvoiceA5Props> = ({
             </div>
           )}
 
+          {/* DGI e-Billing Verification & Cryptographic Seal Box */}
+          <div className="mt-4 p-3 border-2 border-emerald-600/30 rounded-xl bg-emerald-50/30 font-sans text-xs flex items-center justify-between gap-4">
+            <div className="space-y-1">
+              <div className="flex items-center gap-1.5 text-emerald-800 font-black text-[11px] uppercase tracking-wide">
+                <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>Certification Fiscale DGI — République du Cameroun</span>
+              </div>
+              <div className="text-[10px] text-slate-600">
+                Centre des Impôts : <strong>{settings.taxCenter || 'CDI YAOUNDE I'}</strong> • Statut : <strong>ASSUJETTI TVA (19,25%)</strong>
+              </div>
+              <div className="text-[9px] font-mono text-slate-500 break-all">
+                Sceau SHA-256 : <span className="font-bold text-slate-700">{fiscalSeal || 'CALCUL_SCEAU_SHA256...'}</span>
+              </div>
+              <div className="text-[9px] text-slate-400 italic">
+                Ce document et son QR Code constituent la preuve authentique de déclaration fiscale e-Billing DGI.
+              </div>
+            </div>
+
+            {qrDataUrl && (
+              <div className="flex flex-col items-center justify-center shrink-0 p-1.5 bg-white rounded-lg border border-emerald-200 shadow-xs">
+                <img src={qrDataUrl} alt="QR Code DGI" className="w-20 h-20" />
+                <span className="text-[8px] font-bold text-slate-600 font-mono mt-0.5">DGI-CMR v1</span>
+              </div>
+            )}
+          </div>
+
           {/* Signatures & Stamps */}
-          <div className="mt-8 grid grid-cols-2 gap-8 font-sans text-xs pt-4">
+          <div className="mt-6 grid grid-cols-2 gap-8 font-sans text-xs pt-2">
             <div className="text-center">
               <div className="font-bold text-slate-700">Le Client / Réceptionnaire</div>
-              <div className="h-16 border-b border-dashed border-slate-300 mt-2"></div>
+              <div className="h-14 border-b border-dashed border-slate-300 mt-2"></div>
               <div className="text-[10px] text-slate-400 mt-1">Date et Signature précédée de la mention "Bon pour Accord"</div>
             </div>
 
             <div className="text-center">
               <div className="font-bold text-slate-700">La Caisse / Direction de l'Établissement</div>
-              <div className="h-16 border-b border-dashed border-slate-300 mt-2 flex items-center justify-center text-[10px] text-slate-300 italic">
+              <div className="h-14 border-b border-dashed border-slate-300 mt-2 flex items-center justify-center text-[10px] text-slate-300 italic">
                 Cachet et Signature
               </div>
-              <div className="text-[10px] text-slate-400 mt-1">L'Oasis Gourmande - Caisse Centrale</div>
+              <div className="text-[10px] text-slate-400 mt-1">{settings.name} — Caisse Principale</div>
             </div>
           </div>
         </div>
