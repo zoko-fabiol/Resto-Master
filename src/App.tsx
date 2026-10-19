@@ -385,12 +385,12 @@ const AppContent: React.FC = () => {
 
 export default function App() {
   return (
-    <AuthProvider>
-      <RestaurantProvider>
-        <ToastProvider>
+    <ToastProvider>
+      <AuthProvider>
+        <RestaurantProvider>
           <AppContent />
-        </ToastProvider>
-      </RestaurantProvider>
-    </AuthProvider>
+        </RestaurantProvider>
+      </AuthProvider>
+    </ToastProvider>
   );
 }

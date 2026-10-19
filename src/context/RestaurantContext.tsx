@@ -119,6 +119,7 @@ import {
   onSnapshot,
 } from 'firebase/firestore';
 import { useAuth } from './AuthContext';
+import { useToast } from './ToastContext';
 import { ordersFirestoreService } from '../services/firestore/ordersFirestoreService';
 import { tablesFirestoreService } from '../services/firestore/tablesFirestoreService';
 import { documentsFirestoreService } from '../services/firestore/documentsFirestoreService';
@@ -133,6 +134,7 @@ import { configFirestoreService } from '../services/firestore/configFirestoreSer
 import { firebaseSeedService } from '../services/firestore/firebaseSeedService';
 import { offlineSyncService } from '../services/firestore/offlineSyncService';
 import { cloudinaryService } from '../services/media/cloudinaryService';
+import { customersFirestoreService } from '../services/firestore/customersFirestoreService';
 
 interface RestaurantContextType {
   settings: RestaurantSettings;
@@ -194,6 +196,7 @@ interface RestaurantContextType {
   seatReservation: (reservationId: string, tableId: string) => Promise<void>;
   addStockMovement: (movement: Omit<StockMovement, 'id' | 'timestamp' | 'userName'>) => Promise<void>;
   createProduct: (product: Omit<Product, 'id'>) => Promise<void>;
+  updateProduct: (productId: string, updates: Partial<Product>) => Promise<void>;
   toggleProductAvailability: (productId: string) => Promise<void>;
   submitInventoryAudit: (inventory: Omit<Inventory, 'id'>) => Promise<void>;
   createPurchaseOrder: (po: Omit<PurchaseOrder, 'id' | 'orderNumber'>) => Promise<void>;
@@ -215,6 +218,8 @@ interface RestaurantContextType {
   ) => Promise<MediaAsset>;
   deleteMediaAsset: (assetId: string) => Promise<void>;
   syncOfflineData: () => Promise<void>;
+  syncError: string | null;
+  clearSyncError: () => void;
   markNotificationRead: (id: string) => void;
   markAllNotificationsRead: () => void;
   addAuditLog: (action: string, module: AuditLog['module'], details: string, entityId?: string) => void;
@@ -354,6 +359,26 @@ const RestaurantContext = createContext<RestaurantContextType | undefined>(undef
 
 export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { currentUser } = useAuth();
+  const { showToast } = useToast();
+  const [syncError, setSyncError] = useState<string | null>(null);
+
+  const clearSyncError = useCallback(() => {
+    setSyncError(null);
+  }, []);
+
+  const handleSyncError = useCallback(
+    (operation: string, error: unknown) => {
+      const errorMsg = error instanceof Error ? error.message : 'Erreur de communication Firestore';
+      console.error(`[RestoMaster OS] Échec d'écriture Firestore (${operation}) :`, error);
+      setSyncError(`Échec de synchronisation (${operation}): ${errorMsg}`);
+      showToast({
+        title: 'Erreur de synchronisation Cloud',
+        message: `Impossible d'enregistrer "${operation}" sur le serveur : ${errorMsg}`,
+        type: 'error',
+      });
+    },
+    [showToast]
+  );
 
   // Local state with localStorage fallback
   const loadState = <T,>(key: string, fallback: T): T => {
@@ -483,9 +508,9 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   // Initialisation et migration automatique localStorage -> Firestore au démarrage
   useEffect(() => {
     firebaseSeedService.initializeOrMigrateToFirestore().catch((err) => {
-      console.warn('Initialisation Firestore:', err);
+      handleSyncError('Initialisation base Firestore', err);
     });
-  }, []);
+  }, [handleSyncError]);
 
   // Offline sync queue subscriber
   useEffect(() => {
@@ -498,9 +523,11 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   // When network comes back online, trigger queue processing
   useEffect(() => {
     if (isOnline) {
-      offlineSyncService.processQueue().catch(() => {});
+      offlineSyncService.processQueue().catch((err) => {
+        handleSyncError('Traitement file hors-ligne', err);
+      });
     }
-  }, [isOnline]);
+  }, [isOnline, handleSyncError]);
 
   // Firestore Real-Time Sync Listeners scoped to Active Outlet & Group
   useEffect(() => {
@@ -662,13 +689,11 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         entityId,
       };
       setAuditLogs((prev) => [newLog, ...prev.slice(0, 199)]);
-      try {
-        setDoc(doc(db, 'auditLogs', newLog.id), newLog).catch(() => {});
-      } catch {
-        // ignore
-      }
+      configFirestoreService.appendAuditLog(newLog).catch((err) => {
+        handleSyncError('Journalisation audit', err);
+      });
     },
-    [currentUser]
+    [currentUser, handleSyncError]
   );
 
   const addNotification = useCallback(
@@ -770,7 +795,9 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
             : t
         )
       );
-      tablesFirestoreService.updateTableStatus(newOrder.tableId, 'en_service').catch(() => {});
+      tablesFirestoreService.updateTableStatus(newOrder.tableId, 'en_service').catch((err) => {
+        handleSyncError('Statut table en service', err);
+      });
     }
 
     // Deduct stock if enabled
@@ -784,7 +811,11 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
               prevStk.map((s) => {
                 if (s.id === ing.stockItemId) {
                   const newQ = Math.max(0, s.currentQuantity - consumedQty);
-                  return { ...s, currentQuantity: Math.round(newQ * 100) / 100, lastUpdated: now };
+                  const updatedItem = { ...s, currentQuantity: Math.round(newQ * 100) / 100, lastUpdated: now };
+                  stockFirestoreService.saveStockItem(updatedItem).catch((err) => {
+                    handleSyncError('Déduction stock article', err);
+                  });
+                  return updatedItem;
                 }
                 return s;
               })
@@ -806,6 +837,9 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
               timestamp: now,
             };
             setStockMovements((prev) => [newMovement, ...prev]);
+            stockFirestoreService.saveStockMovement(newMovement).catch((err) => {
+              handleSyncError('Mouvement de stock consommation', err);
+            });
           });
         }
       });
@@ -893,7 +927,11 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
               prevStk.map((s) => {
                 if (s.id === ing.stockItemId) {
                   const newQ = Math.max(0, s.currentQuantity - consumedQty);
-                  return { ...s, currentQuantity: Math.round(newQ * 100) / 100, lastUpdated: now };
+                  const updatedItem = { ...s, currentQuantity: Math.round(newQ * 100) / 100, lastUpdated: now };
+                  stockFirestoreService.saveStockItem(updatedItem).catch((err) => {
+                    handleSyncError('Déduction stock article additionnel', err);
+                  });
+                  return updatedItem;
                 }
                 return s;
               })
@@ -914,6 +952,9 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
               timestamp: now,
             };
             setStockMovements((prev) => [newMovement, ...prev]);
+            stockFirestoreService.saveStockMovement(newMovement).catch((err) => {
+              handleSyncError('Mouvement de stock rajout', err);
+            });
           });
         }
       });
@@ -1140,7 +1181,9 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
             : t
         )
       );
-      tablesFirestoreService.updateTableStatus(targetOrder.tableId, 'a_nettoyer').catch(() => {});
+      tablesFirestoreService.updateTableStatus(targetOrder.tableId, 'a_nettoyer').catch((err) => {
+        handleSyncError('Statut table à nettoyer', err);
+      });
     }
 
     // If payment method is cash, register in cash session
@@ -1156,27 +1199,41 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         referenceDocId: orderId,
       };
       setCashMovements((prev) => [movement, ...prev]);
-      setCashSession((prev) => ({
-        ...prev,
-        totalCashIn: prev.totalCashIn + amount,
-        expectedTotal: prev.expectedTotal + amount,
-      }));
+      cashFirestoreService.saveCashMovement(movement).catch((err) => {
+        handleSyncError('Encaissement espèces en caisse', err);
+      });
+      setCashSession((prev) => {
+        const updated = {
+          ...prev,
+          totalCashIn: prev.totalCashIn + amount,
+          expectedTotal: prev.expectedTotal + amount,
+        };
+        cashFirestoreService.saveCashSession(updated).catch((err) => {
+          handleSyncError('Session de caisse', err);
+        });
+        return updated;
+      });
     }
 
     // Award loyalty points to customer if identified
     if (targetOrder.customerId) {
       const pointsEarned = Math.floor(amount / 1000); // 1 point per 1000 currency units
       setCustomers((prev) =>
-        prev.map((c) =>
-          c.id === targetOrder.customerId
-            ? {
-                ...c,
-                loyaltyPoints: c.loyaltyPoints + pointsEarned,
-                totalSpent: c.totalSpent + amount,
-                totalVisits: c.totalVisits + 1,
-              }
-            : c
-        )
+        prev.map((c) => {
+          if (c.id === targetOrder.customerId) {
+            const updated = {
+              ...c,
+              loyaltyPoints: c.loyaltyPoints + pointsEarned,
+              totalSpent: c.totalSpent + amount,
+              totalVisits: c.totalVisits + 1,
+            };
+            customersFirestoreService.saveCustomer(updated).catch((err) => {
+              handleSyncError('Fidélité client', err);
+            });
+            return updated;
+          }
+          return c;
+        })
       );
     }
 
@@ -1264,7 +1321,9 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       )
     );
     for (const tid of tableIds) {
-      tablesFirestoreService.updateTableTabletLock(tid, true, reason, currentUser.name).catch(() => {});
+      tablesFirestoreService.updateTableTabletLock(tid, true, reason, currentUser.name).catch((err) => {
+        handleSyncError('Verrouillage tablette', err);
+      });
     }
     addAuditLog(
       'Verrouillage Global Tablettes',
@@ -1289,7 +1348,9 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       )
     );
     for (const tid of tableIds) {
-      tablesFirestoreService.updateTableTabletLock(tid, false).catch(() => {});
+      tablesFirestoreService.updateTableTabletLock(tid, false).catch((err) => {
+        handleSyncError('Déverrouillage tablette', err);
+      });
     }
     addAuditLog(
       'Déverrouillage Global Tablettes',
@@ -1653,7 +1714,27 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       id: `prod-${Date.now()}`,
     };
     setProducts((prev) => [...prev, newProduct]);
+    productsFirestoreService.saveProduct(newProduct).catch((err) => {
+      handleSyncError('Création produit', err);
+    });
     addAuditLog('Création nouveau produit menu', 'POS', `Produit ${newProduct.name} créé à ${newProduct.price} ${settings.currency}`);
+  };
+
+  // 10b. Update Product / Fiche Technique
+  const updateProduct = async (productId: string, updates: Partial<Product>) => {
+    setProducts((prev) =>
+      prev.map((p) => {
+        if (p.id === productId) {
+          const updated = { ...p, ...updates };
+          productsFirestoreService.saveProduct(updated).catch((err) => {
+            handleSyncError('Mise à jour produit', err);
+          });
+          return updated;
+        }
+        return p;
+      })
+    );
+    addAuditLog('Mise à jour fiche technique / produit', 'POS', `Produit / Formule ${productId} mis à jour`, productId);
   };
 
   // 11. Toggle Product Availability
@@ -2255,18 +2336,21 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     const targetFeat = features.find((f) => f.id === featureId);
     if (!targetFeat) return;
 
-    setFeatures((prev) =>
-      prev.map((f) =>
-        f.id === featureId
-          ? {
-              ...f,
-              status,
-              activatedAt: new Date().toISOString().slice(0, 10),
-              activatedBy: currentUser.name,
-            }
-          : f
-      )
+    const updated = features.map((f) =>
+      f.id === featureId
+        ? {
+            ...f,
+            status,
+            activatedAt: new Date().toISOString().slice(0, 10),
+            activatedBy: currentUser.name,
+          }
+        : f
     );
+    setFeatures(updated);
+    try {
+      localStorage.setItem('restomaster_features', JSON.stringify(updated));
+    } catch {}
+    await configFirestoreService.saveFeatures(updated);
 
     const historyItem: ConfigurationHistoryItem = {
       id: `hist-${Date.now()}`,
@@ -2293,13 +2377,16 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     const targetFeat = features.find((f) => f.id === featureId);
     if (!targetFeat) return;
 
-    setFeatures((prev) =>
-      prev.map((f) =>
-        f.id === featureId
-          ? { ...f, configuration: { ...f.configuration, ...config } }
-          : f
-      )
+    const updated = features.map((f) =>
+      f.id === featureId
+        ? { ...f, configuration: { ...f.configuration, ...config } }
+        : f
     );
+    setFeatures(updated);
+    try {
+      localStorage.setItem('restomaster_features', JSON.stringify(updated));
+    } catch {}
+    await configFirestoreService.saveFeatures(updated);
 
     addAuditLog(
       'Configuration fonctionnalité',
@@ -2353,8 +2440,23 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   };
 
   const applyConfigProfile = async (profile: ConfigurationProfileType) => {
-    const updated = FeatureService.applyProfile(features, profile);
-    setFeatures(updated);
+    // 1. Mettre à jour et persister les fonctionnalités modulaires
+    const updatedFeatures = FeatureService.applyProfile(features, profile);
+    setFeatures(updatedFeatures);
+    try {
+      localStorage.setItem('restomaster_features', JSON.stringify(updatedFeatures));
+    } catch {}
+    await configFirestoreService.saveFeatures(updatedFeatures);
+
+    // 2. Mettre à jour et persister les règles de visibilité des modules
+    const profileRules = FeatureService.getOperationRulesForProfile(profile);
+    setOperationRules((prev) => {
+      const next = { ...prev, ...profileRules };
+      try {
+        localStorage.setItem('restomaster_operations_rules', JSON.stringify(next));
+      } catch {}
+      return next;
+    });
 
     const historyItem: ConfigurationHistoryItem = {
       id: `hist-${Date.now()}`,
@@ -2526,9 +2628,15 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       if (ruleKey in operationRules) {
         return !!operationRules[ruleKey];
       }
+      for (let i = 0; i < features.length; i++) {
+        const feat = features[i];
+        if (feat.configuration && ruleKey in feat.configuration) {
+          return !!feat.configuration[ruleKey];
+        }
+      }
       return defaultValue;
     },
-    [operationRules]
+    [operationRules, features]
   );
 
   const updateOperationRules = async (updates: Partial<OperationRules>) => {
@@ -2864,6 +2972,7 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         seatReservation,
         addStockMovement,
         createProduct,
+        updateProduct,
         toggleProductAvailability,
         submitInventoryAudit,
         createPurchaseOrder,
@@ -2879,6 +2988,8 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         uploadMediaAsset,
         deleteMediaAsset,
         syncOfflineData,
+        syncError,
+        clearSyncError,
         markNotificationRead,
         markAllNotificationsRead,
         addAuditLog,

@@ -24,12 +24,15 @@ import {
   X,
   Check,
   Hash,
+  Wine,
+  GlassWater,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
 interface PosViewProps {
   initialTableId?: string;
   onOpenPayment: (orderId: string) => void;
+  mode?: 'restaurant' | 'bar';
 }
 
 // Preset Quick Tags for rapid modifiers
@@ -40,7 +43,7 @@ const QUICK_MODIFIERS = {
   regimes: ['Sans sel', 'Sans arachide', 'Sans huile', 'Bien chaud', 'À emporter séparé'],
 };
 
-export const PosView: React.FC<PosViewProps> = ({ initialTableId, onOpenPayment }) => {
+export const PosView: React.FC<PosViewProps> = ({ initialTableId, onOpenPayment, mode = 'restaurant' }) => {
   const { currentUser } = useAuth();
   const {
     products,
@@ -58,6 +61,7 @@ export const PosView: React.FC<PosViewProps> = ({ initialTableId, onOpenPayment 
     printerSettings,
     addAuditLog,
     cashSession,
+    createProduct,
   } = useRestaurant();
   const { showToast, playAudioChime } = useToast();
 
@@ -144,19 +148,42 @@ export const PosView: React.FC<PosViewProps> = ({ initialTableId, onOpenPayment 
   // Active item for Quick Quantity Numpad Modal
   const [activeNumpadItemId, setActiveNumpadItemId] = useState<string | null>(null);
 
-  // Filter products
-  const filteredProducts = products.filter((p) => {
-    const matchCat = selectedCategory === 'all' || p.categoryId === selectedCategory;
-    const matchQuery =
-      !searchQuery ||
-      p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      p.description.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchCat && matchQuery;
-  });
+  // State pour création rapide de boisson au Bar (Section Bar Séparé)
+  const [showAddDrinkModal, setShowAddDrinkModal] = useState(false);
+  const [newDrinkName, setNewDrinkName] = useState('');
+  const [newDrinkPrice, setNewDrinkPrice] = useState<number>(2500);
+  const [newDrinkCost, setNewDrinkCost] = useState<number>(1000);
+  const [newDrinkCategory, setNewDrinkCategory] = useState<string>('');
+
+  // Filter products (mémoïsé et restreint à 100% boissons si mode === 'bar')
+  const filteredProducts = useMemo(() => {
+    return products.filter((p) => {
+      if (mode === 'bar' && p.destination !== 'bar') {
+        return false;
+      }
+      const matchCat = selectedCategory === 'all' || p.categoryId === selectedCategory;
+      const matchQuery =
+        !searchQuery ||
+        p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        p.description.toLowerCase().includes(searchQuery.toLowerCase());
+      return matchCat && matchQuery;
+    });
+  }, [products, mode, selectedCategory, searchQuery]);
+
+  // Catégories disponibles (restreintes aux catégories bar en mode bar)
+  const availableCategories = useMemo(() => {
+    if (mode === 'bar') {
+      const barCategoryIds = new Set(
+        products.filter((p) => p.destination === 'bar').map((p) => p.categoryId)
+      );
+      return categories.filter((c) => barCategoryIds.has(c.id));
+    }
+    return categories;
+  }, [categories, products, mode]);
 
   // Cart operations
   const addToCart = (product: Product) => {
-    if (orderType === 'sur_place' && !selectedTableId && isUseTablesRequired && !isSaleWithoutTableAllowed) {
+    if (orderType === 'sur_place' && !selectedTableId && isUseTablesRequired && !isSaleWithoutTableAllowed && mode !== 'bar') {
       showToast({
         type: 'warning',
         title: 'Table Obligatoire',
@@ -451,12 +478,26 @@ export const PosView: React.FC<PosViewProps> = ({ initialTableId, onOpenPayment 
           if (kitchenItems.length > 0) {
             printerService
               .printKitchenOrder(finalOrder, 'cuisine', kitchenItems, kitchenPrinter)
-              .catch(() => {});
+              .catch((err) => {
+                console.error('[POS] Échec impression bon cuisine:', err);
+                showToast({
+                  type: 'warning',
+                  title: 'Impression cuisine',
+                  message: 'Le bon de commande n\'a pas pu être imprimé en cuisine.',
+                });
+              });
           }
           if (barItems.length > 0) {
             printerService
               .printKitchenOrder(finalOrder, 'bar', barItems, barPrinter || kitchenPrinter)
-              .catch(() => {});
+              .catch((err) => {
+                console.error('[POS] Échec impression bon bar:', err);
+                showToast({
+                  type: 'warning',
+                  title: 'Impression bar',
+                  message: 'Le bon de commande n\'a pas pu être imprimé au bar.',
+                });
+              });
           }
         }
 
@@ -505,12 +546,26 @@ export const PosView: React.FC<PosViewProps> = ({ initialTableId, onOpenPayment 
           if (kitchenItems.length > 0) {
             printerService
               .printKitchenOrder(finalOrder, 'cuisine', kitchenItems, kitchenPrinter)
-              .catch(() => {});
+              .catch((err) => {
+                console.error('[POS] Échec impression bon cuisine:', err);
+                showToast({
+                  type: 'warning',
+                  title: 'Impression cuisine',
+                  message: 'Le bon de commande n\'a pas pu être imprimé en cuisine.',
+                });
+              });
           }
           if (barItems.length > 0) {
             printerService
               .printKitchenOrder(finalOrder, 'bar', barItems, barPrinter || kitchenPrinter)
-              .catch(() => {});
+              .catch((err) => {
+                console.error('[POS] Échec impression bon bar:', err);
+                showToast({
+                  type: 'warning',
+                  title: 'Impression bar',
+                  message: 'Le bon de commande n\'a pas pu être imprimé au bar.',
+                });
+              });
           }
         }
 
@@ -566,6 +621,41 @@ export const PosView: React.FC<PosViewProps> = ({ initialTableId, onOpenPayment 
           <span className="text-[10px] uppercase font-bold px-2 py-0.5 bg-amber-200/80 rounded text-amber-950 shrink-0 ml-2">
             Règle Caisse Active
           </span>
+        </div>
+      )}
+
+      {/* Banner Espace Bar (100% Boissons) */}
+      {mode === 'bar' && (
+        <div className="bg-gradient-to-r from-emerald-950 via-slate-900 to-emerald-950 p-4 sm:p-5 rounded-2xl border border-emerald-500/30 text-white flex flex-col sm:flex-row items-center justify-between gap-4 shadow-xl">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 rounded-2xl bg-emerald-500 text-slate-950 flex items-center justify-center font-black shadow-md shadow-emerald-500/20">
+              <Wine className="w-6 h-6" />
+            </div>
+            <div>
+              <h3 className="text-base font-black text-white flex items-center gap-2">
+                <span>Espace Bar & Lounge (100% Boissons)</span>
+                <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 font-bold">
+                  Salle Séparée
+                </span>
+              </h3>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Cocktails signature, vins, bières & softs • Vente express au comptoir • Débit direct
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => {
+              setNewDrinkName('');
+              setNewDrinkPrice(2500);
+              setNewDrinkCost(1000);
+              setNewDrinkCategory(availableCategories[0]?.id || categories[0]?.id || '');
+              setShowAddDrinkModal(true);
+            }}
+            className="px-4 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs flex items-center gap-2 shadow-lg transition-all cursor-pointer shrink-0"
+          >
+            <Plus className="w-4 h-4" />
+            <span>+ Ajouter Boisson au Bar</span>
+          </button>
         </div>
       )}
 
@@ -636,9 +726,9 @@ export const PosView: React.FC<PosViewProps> = ({ initialTableId, onOpenPayment 
                   : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-50'
               }`}
             >
-              Tous les articles
+              {mode === 'bar' ? 'Toutes les Boissons' : 'Tous les articles'}
             </button>
-            {categories.map((cat) => (
+            {availableCategories.map((cat) => (
               <button
                 key={cat.id}
                 onClick={() => setSelectedCategory(cat.id)}
@@ -1528,6 +1618,123 @@ export const PosView: React.FC<PosViewProps> = ({ initialTableId, onOpenPayment 
                 Confirmer
               </button>
             </div>
+          </div>
+        </div>
+      )}
+      {/* Modal d'Ajout Rapide de Boisson au Bar en cours de service */}
+      {showAddDrinkModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl border border-slate-200 overflow-hidden">
+            <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-emerald-950 text-white">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-emerald-500 text-slate-950 flex items-center justify-center font-bold">
+                  <Wine className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white">+ Nouvelle Boisson / Réappro Bar</h3>
+                  <p className="text-xs text-emerald-300">Ajout immédiat au catalogue du Bar</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowAddDrinkModal(false)}
+                className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                if (!newDrinkName.trim() || newDrinkPrice <= 0) {
+                  showToast('Veuillez saisir un nom et un prix de vente valide', 'warning');
+                  return;
+                }
+                const targetCat = categories.find((c) => c.id === newDrinkCategory) || categories[0];
+                await createProduct({
+                  name: newDrinkName.trim(),
+                  description: 'Boisson ajoutée en direct depuis l\'Espace Bar',
+                  categoryId: targetCat?.id || 'cat-bar',
+                  categoryName: targetCat?.name || 'Boissons & Bar',
+                  price: newDrinkPrice,
+                  costPrice: newDrinkCost,
+                  preparationTimeMinutes: 2,
+                  available: true,
+                  destination: 'bar',
+                  ingredients: [],
+                  taxApplicable: true,
+                  mealCategory: 'bar',
+                });
+                showToast(`Boisson "${newDrinkName}" ajoutée avec succès au Bar !`, 'success');
+                setShowAddDrinkModal(false);
+              }}
+              className="p-5 space-y-4"
+            >
+              <div>
+                <label className="text-xs font-bold text-slate-700 block mb-1">Nom de la boisson / cocktail *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="ex: Cocktail Mojito Passion, Bière Kadji 65cl..."
+                  value={newDrinkName}
+                  onChange={(e) => setNewDrinkName(e.target.value)}
+                  className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 border border-slate-200 focus:outline-hidden focus:border-emerald-500 font-bold"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-bold text-slate-700 block mb-1">Prix de vente ({settings.currency}) *</label>
+                  <input
+                    type="number"
+                    required
+                    min={1}
+                    value={newDrinkPrice}
+                    onChange={(e) => setNewDrinkPrice(Number(e.target.value))}
+                    className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 border border-slate-200 focus:outline-hidden focus:border-emerald-500 font-bold"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-700 block mb-1">Coût d'achat estimé</label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={newDrinkCost}
+                    onChange={(e) => setNewDrinkCost(Number(e.target.value))}
+                    className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 border border-slate-200 focus:outline-hidden focus:border-emerald-500 font-bold"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-700 block mb-1">Catégorie Bar</label>
+                <select
+                  value={newDrinkCategory}
+                  onChange={(e) => setNewDrinkCategory(e.target.value)}
+                  className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 border border-slate-200 focus:outline-hidden focus:border-emerald-500 font-bold"
+                >
+                  {availableCategories.map((c) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex items-center gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowAddDrinkModal(false)}
+                  className="flex-1 py-2.5 text-xs font-bold rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 cursor-pointer"
+                >
+                  Annuler
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 py-2.5 text-xs font-bold rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white shadow-md font-black cursor-pointer"
+                >
+                  Enregistrer & Servir
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

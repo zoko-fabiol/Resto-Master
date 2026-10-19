@@ -203,7 +203,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, onClose }) 
       });
       QRCode.toDataURL(receiptPayload, { width: 160, margin: 1 })
         .then((url) => setQrDataUrl(url))
-        .catch(() => {});
+        .catch((err) => console.error('[PaymentModal] Erreur génération QR code:', err));
     }
   }, [isDone, targetOrder, certifiedAmount, settings]);
 
@@ -263,7 +263,10 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, onClose }) 
 
     // 1. Auto Open Cash Drawer if Cash Payment
     if (printerSettings?.autoOpenCashDrawerOnCash && paymentMethod === 'especes') {
-      printerService.openCashDrawer(cashPrinter).catch(() => {});
+      printerService.openCashDrawer(cashPrinter).catch((err) => {
+        console.error('[PaymentModal] Échec ouverture tiroir-caisse:', err);
+        showToast('Avertissement : Le tiroir-caisse n\'a pas pu s\'ouvrir automatiquement.', 'warning');
+      });
     }
 
     // 2. Auto Print Receipt if enabled in configuration
@@ -274,7 +277,10 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, onClose }) 
           changeDue,
           folio: selectedFolio === 'all' ? undefined : selectedFolio,
         })
-        .catch(() => {});
+        .catch((err) => {
+          console.error('[PaymentModal] Échec impression ticket client:', err);
+          showToast('Avertissement : L\'impression du ticket de caisse a rencontré un problème.', 'warning');
+        });
     }
 
     confetti({

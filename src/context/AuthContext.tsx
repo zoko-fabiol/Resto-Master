@@ -517,7 +517,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         ...targetAccount,
         pinCode: newPin,
         updatedAt: new Date().toISOString(),
-      }).catch(() => {});
+      }).catch((err) => {
+        console.error('[AuthContext] Échec de mise à jour du compte personnel dans Firestore:', err);
+      });
     }
 
     // 3. Synchronisation Firestore users/{uid}

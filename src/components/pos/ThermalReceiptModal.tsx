@@ -79,7 +79,7 @@ export const ThermalReceiptModal: React.FC<ThermalReceiptModalProps> = ({
     });
     QRCode.toDataURL(payload, { width: 130, margin: 1 })
       .then((url) => setQrDataUrl(url))
-      .catch(() => {});
+      .catch((err) => console.error('[ThermalReceiptModal] Erreur génération QR code:', err));
   }, [order, settings, finalTotal]);
 
   const handlePrintSystem = () => {

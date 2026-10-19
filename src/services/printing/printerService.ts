@@ -139,7 +139,9 @@ export class PrinterService {
           body: new Blob([data.buffer as ArrayBuffer]),
           headers: { 'Content-Type': 'application/octet-stream' },
           mode: 'no-cors',
-        }).catch(() => {});
+        }).catch((err) => {
+          console.warn(`[Imprimante ESC/POS] Pont local inaccessible (${bridgeUrl}) :`, err);
+        });
 
         return {
           success: true,

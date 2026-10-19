@@ -94,6 +94,8 @@ export const Header: React.FC<HeaderProps> = ({
     activeRestaurant,
     organization,
     currentDeviceProfile,
+    syncError,
+    clearSyncError,
   } = useRestaurant() as any;
 
   const [roleMenuOpen, setRoleMenuOpen] = useState(false);
@@ -153,6 +155,25 @@ export const Header: React.FC<HeaderProps> = ({
 
         {/* Right: Identity, Restaurant, Notifications, Lock */}
         <div className="flex items-center gap-2 shrink-0">
+          {/* Sync Error Indicator */}
+          {syncError && (
+            <div
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-rose-50 border border-rose-300 text-rose-700 text-xs font-semibold animate-pulse"
+              title={syncError}
+            >
+              <AlertTriangle className="w-3.5 h-3.5 text-rose-600 shrink-0" />
+              <span className="hidden sm:inline truncate max-w-[140px]">Erreur Cloud</span>
+              <button
+                type="button"
+                onClick={clearSyncError}
+                className="hover:text-rose-900 ml-1 text-xs font-bold leading-none cursor-pointer"
+                title="Ignorer l'alerte"
+              >
+                ✕
+              </button>
+            </div>
+          )}
+
           {/* Multi-Restaurant Switcher */}
           <div className="relative shrink-0" ref={outletMenuRef}>
             <button
