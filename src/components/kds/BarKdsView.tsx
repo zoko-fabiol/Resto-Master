@@ -738,6 +738,19 @@ export const BarKdsView: React.FC = () => {
                                   {item.seatNumber === 0 ? 'Table' : `C${item.seatNumber}`}
                                 </span>
                               )}
+                              {item.courseTiming && item.courseTiming !== 'direct' && (
+                                <span
+                                  className={`text-[9px] font-black px-1.5 py-0.5 rounded border uppercase ${
+                                    item.courseTiming === 'entree'
+                                      ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                                      : item.courseTiming === 'plat'
+                                      ? 'bg-amber-100 text-amber-900 border-amber-300'
+                                      : 'bg-purple-100 text-purple-900 border-purple-300'
+                                  }`}
+                                >
+                                  {item.courseTiming === 'entree' ? 'Entrée' : item.courseTiming === 'plat' ? 'Plat' : 'Dessert'}
+                                </span>
+                              )}
                               <span
                                 className={`text-xs font-bold ${
                                   isServi ? 'line-through text-slate-400' : 'text-slate-800'

@@ -310,6 +310,12 @@ export const PosView: React.FC<PosViewProps> = ({ initialTableId, onOpenPayment,
     );
   };
 
+  const setItemCourseTiming = (itemId: string, timing: 'entree' | 'plat' | 'dessert' | 'direct') => {
+    setCart((prev) =>
+      prev.map((item) => (item.id === itemId ? { ...item, courseTiming: timing } : item))
+    );
+  };
+
   const toggleModifierTag = (itemId: string, tag: string) => {
     setCart((prev) =>
       prev.map((item) => {
@@ -1076,6 +1082,11 @@ export const PosView: React.FC<PosViewProps> = ({ initialTableId, onOpenPayment,
                                 <span className="text-[9px] uppercase font-bold px-1 py-0.2 rounded bg-slate-200 text-slate-600">
                                   {item.destination}
                                 </span>
+                                {item.courseTiming && item.courseTiming !== 'direct' && (
+                                  <span className="text-[9px] uppercase font-black px-1.5 py-0.2 rounded bg-amber-100 text-amber-800 border border-amber-300">
+                                    {item.courseTiming === 'entree' ? 'Entrée' : item.courseTiming === 'plat' ? 'Plat' : 'Dessert'}
+                                  </span>
+                                )}
                               </div>
                               <div className="text-[10px] text-slate-400">
                                 {formatCurrency(item.unitPrice, settings.currency)} / unité
@@ -1372,6 +1383,39 @@ export const PosView: React.FC<PosViewProps> = ({ initialTableId, onOpenPayment,
             </div>
 
             <div className="p-4 space-y-4 max-h-[70vh] overflow-y-auto">
+              {/* Rythme de Service (Tempo KDS) */}
+              <div className="space-y-1.5 pb-3 border-b border-slate-100">
+                <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                  Rythme de Service (Cuisine / Bar) :
+                </div>
+                <div className="grid grid-cols-4 gap-1.5">
+                  {(
+                    [
+                      { id: 'entree', label: '🥗 Entrée' },
+                      { id: 'plat', label: '🍲 Plat' },
+                      { id: 'dessert', label: '🍰 Dessert' },
+                      { id: 'direct', label: '⚡ Direct' },
+                    ] as const
+                  ).map((timing) => {
+                    const isSelected = (activeModifierItem.courseTiming || 'direct') === timing.id;
+                    return (
+                      <button
+                        key={timing.id}
+                        type="button"
+                        onClick={() => setItemCourseTiming(activeModifierItem.id, timing.id)}
+                        className={`text-xs font-bold py-1.5 px-2 rounded-xl border text-center transition-all ${
+                          isSelected
+                            ? 'bg-amber-500 text-slate-950 border-amber-500 shadow-xs'
+                            : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                        }`}
+                      >
+                        {timing.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
               {/* Cuisson */}
               <div className="space-y-1.5">
                 <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Cuisson :</div>

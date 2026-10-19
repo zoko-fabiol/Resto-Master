@@ -329,6 +329,7 @@ export interface OrderItem {
   seatNumber?: number; // 0 = Partagé/Table, 1 = Couvert 1, 2 = Couvert 2, etc.
   seatLabel?: string; // Ex: "Couvert 1", "Couvert 2", "Table"
   selectedModifiers?: string[];
+  courseTiming?: 'entree' | 'plat' | 'dessert' | 'direct';
 }
 
 export type OrderStatus =
