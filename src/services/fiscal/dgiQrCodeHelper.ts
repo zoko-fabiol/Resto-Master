@@ -38,11 +38,12 @@ export class DgiFiscalHelper {
     previousHash?: string;
   }): string {
     const prev = params.previousHash || this.GENESIS_SEAL;
+    const cleanDate = (params.dateTimeIso || '').slice(0, 19).replace('T', ' ');
     const rawPayload = [
       prev,
-      params.emitterNiu || 'M012012345678A',
+      (params.emitterNiu || 'M012012345678A').trim().toUpperCase(),
       params.invoiceNumber,
-      params.dateTimeIso,
+      cleanDate,
       Math.round(params.subtotalHT),
       Math.round(params.totalTTC),
     ].join('|');
@@ -75,6 +76,42 @@ export class DgiFiscalHelper {
       clientNiu,
       seal.slice(0, 16), // Empreinte courte certifiée
     ].join('|');
+  }
+
+  /**
+   * Construit le payload e-Billing standard DGI avec sceau intégré
+   */
+  public static buildStandardPayload(params: DgiQrCodeParams, previousHash?: string): string {
+    const seal = this.computeFiscalSeal({
+      emitterNiu: params.emitterNiu,
+      invoiceNumber: params.invoiceNumber,
+      dateTimeIso: params.dateTimeIso,
+      subtotalHT: params.subtotalHT,
+      totalTTC: params.totalTTC,
+      previousHash,
+    });
+    return this.buildDgiRawString(params, seal);
+  }
+
+  /**
+   * Vérifie l'authenticité d'un payload e-Billing DGI
+   */
+  public static verifySeal(rawPayload: string, previousHash?: string): boolean {
+    const parts = rawPayload.split('|');
+    if (parts.length < 12) return false;
+    const [header, v, emitterNiu, , invoiceNumber, dateTimeIso, htStr, , , ttcStr, , sealShort] = parts;
+    if (header !== 'DGI-CMR' || v !== 'v1') return false;
+
+    const computedSeal = this.computeFiscalSeal({
+      emitterNiu,
+      invoiceNumber,
+      dateTimeIso,
+      subtotalHT: parseInt(htStr, 10) || 0,
+      totalTTC: parseInt(ttcStr, 10) || 0,
+      previousHash,
+    });
+
+    return computedSeal.slice(0, 16) === sealShort;
   }
 
   /**

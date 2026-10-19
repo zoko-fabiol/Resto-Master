@@ -90,7 +90,11 @@ export class TaxEngine {
     fiscalYear = '2026'
   ): string {
     const paddedSequence = sequence.toString().padStart(6, '0');
-    return `${fiscalYear}-${prefix || 'RESTO-001'}-${paddedSequence}`;
+    const rawPrefix = prefix || 'RESTO-001';
+    const cleanPrefix = rawPrefix.startsWith(`${fiscalYear}-`)
+      ? rawPrefix.slice(`${fiscalYear}-`.length)
+      : rawPrefix;
+    return `${fiscalYear}-${cleanPrefix}-${paddedSequence}`;
   }
 
   /**
@@ -244,8 +248,21 @@ export class TaxEngine {
       utilisateur: order.serverName,
       restaurantId: settings.restaurantId || settings.id,
       status: 'VALIDATED',
+      hashIntegrity: securitySignature,
     };
 
     return { invoice, journalItem };
+  }
+
+  /**
+   * Calculateur des retenues d'acompte fiscal (AIR) selon le régime
+   */
+  public static calculateWithholding(
+    baseAmount: number,
+    regime: TaxRegime = 'reel',
+    customRate?: number,
+    forceApply = false
+  ) {
+    return calculateWithholding(baseAmount, regime, customRate, forceApply);
   }
 }

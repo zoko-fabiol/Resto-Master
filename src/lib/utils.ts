@@ -173,22 +173,26 @@ export const numberToWordsFrench = numberToFrenchWords;
 /**
  * Formule légale obligatoire d'arrêté de facture au Cameroun (Art. L du CGI)
  */
-export function formatLegalInvoiceNotice(amount: number, currency = 'Francs CFA'): string {
+export function formatLegalInvoiceNotice(amount: number, currency = 'FRANCS CFA'): string {
   const inWords = numberToFrenchWords(Math.round(amount)).toUpperCase();
-  return `Arrêté la présente facture à la somme de : ${inWords} ${currency}.`;
+  const normalizedCurrency =
+    currency === 'XAF' || currency === 'FCFA' || currency === 'Francs CFA'
+      ? 'FRANCS CFA'
+      : currency.toUpperCase();
+  return `« Arrêté la présente facture à la somme de : ${inWords} ${normalizedCurrency}. »`;
 }
 
 // Calcul fiscal Cameroun (TVA 17.5% + 10% CAC = 19.25%)
-
 export function calculateCameroonTaxes(subtotalHt: number, totalRate: number = 19.25) {
-  const combinedTax = Math.round((subtotalHt * totalRate) / 100);
-  // Base TVA 17.5% et CAC 1.75%
-  const tvaBase = Math.round((subtotalHt * 17.5) / 100);
-  const cacBase = combinedTax - tvaBase;
-  const totalTtc = subtotalHt + combinedTax;
+  const baseHt = Math.max(0, Math.round(subtotalHt));
+  const vatRate = totalRate > 0 ? totalRate / 1.1 : 17.5;
+  const tvaBase = Math.round((baseHt * vatRate) / 100);
+  const cacBase = Math.round((tvaBase * 10) / 100);
+  const combinedTax = tvaBase + cacBase;
+  const totalTtc = baseHt + combinedTax;
 
   return {
-    subtotalHt,
+    subtotalHt: baseHt,
     tvaBase,
     cacBase,
     combinedTax,
