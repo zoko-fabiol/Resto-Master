@@ -114,6 +114,7 @@ export const INITIAL_SETTINGS: RestaurantSettings = {
     finance: 20,
     auditeur: 0,
     tablette: 0,
+    aucun: 0,
   },
 
   // Paramètres Mobile Money & QR Code Max it / MoMo Pay

@@ -203,6 +203,22 @@ export const DEFAULT_PERMISSIONS: Record<
     delivery: { view: false, create: false, edit: false, delete: false, validate: false, cancel: false, export: false },
     settings: { view: false, create: false, edit: false, delete: false, validate: false, cancel: false, export: false },
   },
+  aucun: {
+    pos: { view: false, create: false, edit: false, delete: false, validate: false, cancel: false, export: false },
+    tables: { view: false, create: false, edit: false, delete: false, validate: false, cancel: false, export: false },
+    caisse: { view: false, create: false, edit: false, delete: false, validate: false, cancel: false, export: false },
+    invoices: { view: false, create: false, edit: false, delete: false, validate: false, cancel: false, export: false },
+    stock: { view: false, create: false, edit: false, delete: false, validate: false, cancel: false, export: false },
+    purchases: { view: false, create: false, edit: false, delete: false, validate: false, cancel: false, export: false },
+    clients: { view: false, create: false, edit: false, delete: false, validate: false, cancel: false, export: false },
+    finance: { view: false, create: false, edit: false, delete: false, validate: false, cancel: false, export: false },
+    fiscal: { view: false, create: false, edit: false, delete: false, validate: false, cancel: false, export: false },
+    staff: { view: false, create: false, edit: false, delete: false, validate: false, cancel: false, export: false },
+    audit: { view: false, create: false, edit: false, delete: false, validate: false, cancel: false, export: false },
+    events: { view: false, create: false, edit: false, delete: false, validate: false, cancel: false, export: false },
+    delivery: { view: false, create: false, edit: false, delete: false, validate: false, cancel: false, export: false },
+    settings: { view: false, create: false, edit: false, delete: false, validate: false, cancel: false, export: false },
+  },
 };
 
 export class PermissionService {

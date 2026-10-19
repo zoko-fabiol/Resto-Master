@@ -26,7 +26,9 @@ export interface DemoUserOption {
   assignedTableName?: string;
 }
 
-export const DEMO_ACCOUNTS: DemoUserOption[] = [
+export const isDemoModeActive: boolean = import.meta.env.VITE_DEMO_MODE === 'true';
+
+const RAW_DEMO_ACCOUNTS: DemoUserOption[] = [
   {
     email: 'direction@demo.restaurant',
     name: 'Pauline Fouda',
@@ -150,8 +152,20 @@ export const DEMO_ACCOUNTS: DemoUserOption[] = [
   },
 ];
 
+export const DEMO_ACCOUNTS: DemoUserOption[] = isDemoModeActive ? RAW_DEMO_ACCOUNTS : [];
+
+export const defaultUnauthenticatedUser: UserProfile = {
+  id: '',
+  email: '',
+  name: 'Non connecté',
+  role: 'aucun',
+  active: false,
+  accessibleRestaurantIds: [],
+};
+
 export interface AuthContextType {
   currentUser: UserProfile;
+  setCurrentUser: React.Dispatch<React.SetStateAction<UserProfile>>;
   firebaseAuthUser: FirebaseUser | null;
   isDemoMode: boolean;
   switchRole: (role: UserRole) => void;
@@ -162,6 +176,7 @@ export interface AuthContextType {
   logout: () => Promise<void>;
   canAccess: (module: string) => boolean;
   hasPermission: (module: string, action?: 'view' | 'create' | 'edit' | 'delete') => boolean;
+  hasAccess: (module: string, action?: 'view' | 'create' | 'edit' | 'delete' | 'add' | string) => boolean;
 
   // Session & PIN Lock Controls
   isSessionLocked: boolean;
@@ -193,29 +208,37 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const saved = localStorage.getItem('restomaster_user');
     if (saved) {
       try {
-        return JSON.parse(saved);
+        const parsed = JSON.parse(saved);
+        // Garantit qu'aucun pinCode n'est conservé
+        const { pinCode: _pin, ...safeUser } = parsed;
+        return safeUser;
       } catch {
         // fallback
       }
     }
-    return {
-      id: 'demo-dir-1',
-      email: DEMO_ACCOUNTS[0].email,
-      name: DEMO_ACCOUNTS[0].name,
-      role: 'direction',
-      avatar: DEMO_ACCOUNTS[0].avatar,
-      phone: '+237 699 00 11 22',
-      pinCode: DEMO_ACCOUNTS[0].pinCode,
-      badgeNumber: DEMO_ACCOUNTS[0].matricule,
-      active: true,
-      organizationId: 'org-cameroun-hospitality',
-      accessibleRestaurantIds: ['out-1', 'out-2', 'out-3'],
-      defaultRestaurantId: 'out-1',
-    };
+    if (isDemoModeActive && RAW_DEMO_ACCOUNTS.length > 0) {
+      const demo = RAW_DEMO_ACCOUNTS[0];
+      return {
+        id: 'demo-dir-1',
+        email: demo.email,
+        name: demo.name,
+        role: demo.role,
+        avatar: demo.avatar,
+        phone: '+237 699 00 11 22',
+        badgeNumber: demo.matricule,
+        active: true,
+        organizationId: 'org-cameroun-hospitality',
+        accessibleRestaurantIds: ['out-1', 'out-2', 'out-3'],
+        defaultRestaurantId: 'out-1',
+      };
+    }
+    return defaultUnauthenticatedUser;
   });
 
   useEffect(() => {
-    localStorage.setItem('restomaster_user', JSON.stringify(currentUser));
+    // Règle 0.5 : Ne plus stocker pinCode dans localStorage
+    const { pinCode: _pin, ...safeUser } = currentUser;
+    localStorage.setItem('restomaster_user', JSON.stringify(safeUser));
   }, [currentUser]);
 
   // Synchronisation avec Firebase Authentication & Firestore
@@ -232,38 +255,33 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
           if (userSnap.exists()) {
             const data = userSnap.data();
+            const userRole: UserRole = data.role && data.role !== 'aucun' ? (data.role as UserRole) : 'aucun';
             setCurrentUser({
               id: fbUser.uid,
               email: fbUser.email,
               name: data.name || fbUser.displayName || fbUser.email.split('@')[0],
-              role: (data.role as UserRole) || 'direction',
-              avatar: data.avatar || fbUser.photoURL || DEMO_ACCOUNTS[0].avatar,
+              role: userRole,
+              avatar: data.avatar || fbUser.photoURL,
               phone: data.phone || fbUser.phoneNumber || '+237 699 00 11 22',
-              organizationId: data.organizationId || 'org-cameroun-hospitality',
-              accessibleRestaurantIds: data.accessibleRestaurantIds || ['out-1', 'out-2', 'out-3'],
-              defaultRestaurantId: data.defaultRestaurantId || 'out-1',
-              active: data.active !== false,
+              organizationId: data.organizationId || '',
+              accessibleRestaurantIds: data.accessibleRestaurantIds || [],
+              defaultRestaurantId: data.defaultRestaurantId,
+              active: data.active === true,
             });
           } else {
-            // Check if matches a demo account email for seed
-            const matchedDemo = DEMO_ACCOUNTS.find(
-              (a) => a.email.toLowerCase() === fbUser.email?.toLowerCase()
-            );
-
+            // Règle 0.4 : Rôle 'aucun' et compte inactif par défaut
             const newProfile: UserProfile = {
               id: fbUser.uid,
               email: fbUser.email,
-              name: fbUser.displayName || (matchedDemo ? matchedDemo.name : fbUser.email.split('@')[0]),
-              role: matchedDemo ? matchedDemo.role : 'direction',
-              avatar: matchedDemo ? matchedDemo.avatar : DEMO_ACCOUNTS[0].avatar,
-              phone: '+237 699 00 11 22',
-              organizationId: 'org-cameroun-hospitality',
-              accessibleRestaurantIds: ['out-1', 'out-2', 'out-3'],
-              defaultRestaurantId: 'out-1',
-              active: true,
+              name: fbUser.displayName || fbUser.email.split('@')[0],
+              role: 'aucun',
+              avatar: fbUser.photoURL || undefined,
+              phone: fbUser.phoneNumber || undefined,
+              organizationId: '',
+              accessibleRestaurantIds: [],
+              active: false,
             };
 
-            // Save to Firestore
             await setDoc(userDocRef, {
               ...newProfile,
               createdAt: new Date().toISOString(),
@@ -273,19 +291,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             setCurrentUser(newProfile);
           }
         } catch {
-          // Offline fallback
+          // Règle 0.4 : Repli hors-ligne sécurisé sans privilèges
           setCurrentUser({
             id: fbUser.uid,
             email: fbUser.email,
             name: fbUser.displayName || fbUser.email.split('@')[0],
-            role: 'direction',
-            avatar: DEMO_ACCOUNTS[0].avatar,
-            active: true,
+            role: 'aucun',
+            active: false,
+            accessibleRestaurantIds: [],
           });
         }
       } else {
-        // No Firebase user authenticated -> Stay in demo mode with active persona
-        setIsDemoMode(true);
+        setIsDemoMode(isDemoModeActive);
+        if (!isDemoModeActive) {
+          setCurrentUser(defaultUnauthenticatedUser);
+        }
       }
     });
 
@@ -293,8 +313,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const switchRole = (newRole: UserRole) => {
+    if (!isDemoModeActive) return;
     setIsDemoMode(true);
-    const matched = DEMO_ACCOUNTS.find((a) => a.role === newRole) || DEMO_ACCOUNTS[0];
+    const matched = RAW_DEMO_ACCOUNTS.find((a) => a.role === newRole) || RAW_DEMO_ACCOUNTS[0];
+    if (!matched) return;
     setCurrentUser({
       id: `usr-${newRole}`,
       email: matched.email,
@@ -302,6 +324,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       role: newRole,
       avatar: matched.avatar,
       phone: '+237 699 00 11 22',
+      badgeNumber: matched.matricule,
       organizationId: 'org-cameroun-hospitality',
       accessibleRestaurantIds: ['out-1', 'out-2', 'out-3'],
       defaultRestaurantId: 'out-1',
@@ -310,6 +333,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const selectDemoUser = (demoUser: DemoUserOption) => {
+    if (!isDemoModeActive) return;
     setIsDemoMode(true);
     setCurrentUser({
       id: `usr-${demoUser.role}`,
@@ -318,7 +342,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       role: demoUser.role,
       avatar: demoUser.avatar,
       phone: '+237 699 00 11 22',
-      pinCode: demoUser.pinCode,
       badgeNumber: demoUser.matricule,
       organizationId: 'org-cameroun-hospitality',
       accessibleRestaurantIds: ['out-1', 'out-2', 'out-3'],
@@ -386,36 +409,38 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return { success: true, user: newUser };
     }
 
-    // 3. Amorce initiale / fallback comptes de démonstration (ex: 1111 pour Direction, 2222 pour Manager)
-    const matched = DEMO_ACCOUNTS.find((a) => a.pinCode === pin);
-    if (matched) {
-      if (matched.assignedTableId) {
-        localStorage.setItem('restomaster_tablet_table_id', matched.assignedTableId);
+    // 3. Amorce initiale / fallback comptes de démonstration UNIQUEMENT si le mode démo est explicitement activé
+    if (isDemoModeActive) {
+      const matched = RAW_DEMO_ACCOUNTS.find((a) => a.pinCode === pin);
+      if (matched) {
+        if (matched.assignedTableId) {
+          localStorage.setItem('restomaster_tablet_table_id', matched.assignedTableId);
+        }
+        const newUser: UserProfile = {
+          id: `usr-${matched.role}-${matched.pinCode}`,
+          email: matched.email,
+          name: matched.name,
+          role: matched.role,
+          avatar: matched.avatar,
+          phone: '+237 699 00 11 22',
+          pinCode: matched.pinCode,
+          badgeNumber: matched.matricule,
+          accountType: matched.accountType,
+          assignedTableId: matched.assignedTableId,
+          assignedTableName: matched.assignedTableName,
+          organizationId: 'org-cameroun-hospitality',
+          accessibleRestaurantIds: ['out-1', 'out-2', 'out-3'],
+          defaultRestaurantId: 'out-1',
+          active: true,
+        };
+        setCurrentUser(newUser);
+        setIsSessionLocked(false);
+        localStorage.setItem('restomaster_session_locked', 'false');
+        return { success: true, user: newUser };
       }
-      const newUser: UserProfile = {
-        id: `usr-${matched.role}-${matched.pinCode}`,
-        email: matched.email,
-        name: matched.name,
-        role: matched.role,
-        avatar: matched.avatar,
-        phone: '+237 699 00 11 22',
-        pinCode: matched.pinCode,
-        badgeNumber: matched.matricule,
-        accountType: matched.accountType,
-        assignedTableId: matched.assignedTableId,
-        assignedTableName: matched.assignedTableName,
-        organizationId: 'org-cameroun-hospitality',
-        accessibleRestaurantIds: ['out-1', 'out-2', 'out-3'],
-        defaultRestaurantId: 'out-1',
-        active: true,
-      };
-      setCurrentUser(newUser);
-      setIsSessionLocked(false);
-      localStorage.setItem('restomaster_session_locked', 'false');
-      return { success: true, user: newUser };
     }
 
-    // Aucun passe-droit magique "en boîte" : échec strict si le PIN ne correspond à aucun compte configuré
+    // Aucun passe-droit magique : échec strict si le PIN ne correspond à aucun compte configuré
     return { success: false, message: 'Code PIN incorrect. Veuillez réessayer.' };
   };
 
@@ -448,22 +473,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       };
     }
 
-    // 3. Fallback comptes démo superviseurs
-    const matched = DEMO_ACCOUNTS.find((a) => supervisorRoles.includes(a.role) && a.pinCode === pin);
-    if (matched) {
-      return {
-        success: true,
-        user: {
-          id: `usr-${matched.role}`,
-          email: matched.email,
-          name: matched.name,
-          role: matched.role,
-          avatar: matched.avatar,
-          pinCode: matched.pinCode,
-          badgeNumber: matched.matricule,
-          active: true,
-        },
-      };
+    // 3. Fallback comptes démo superviseurs UNIQUEMENT si le mode démo est explicitement activé
+    if (isDemoModeActive) {
+      const matched = RAW_DEMO_ACCOUNTS.find((a) => supervisorRoles.includes(a.role) && a.pinCode === pin);
+      if (matched) {
+        return {
+          success: true,
+          user: {
+            id: `usr-${matched.role}`,
+            email: matched.email,
+            name: matched.name,
+            role: matched.role,
+            avatar: matched.avatar,
+            pinCode: matched.pinCode,
+            badgeNumber: matched.matricule,
+            active: true,
+          },
+        };
+      }
     }
 
     // Aucun passe-droit magique "en boîte"
@@ -478,7 +505,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // 1. Mettre à jour l'utilisateur courant en session
     const updatedUser: UserProfile = { ...currentUser, pinCode: newPin };
     setCurrentUser(updatedUser);
-    localStorage.setItem('restomaster_user', JSON.stringify(updatedUser));
+    const { pinCode: _pin, ...safeUser } = updatedUser;
+    localStorage.setItem('restomaster_user', JSON.stringify(safeUser));
 
     // 2. Mettre à jour dans Firestore collection user_accounts
     const targetAccount = configuredUserAccounts.find(
@@ -508,14 +536,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const loginWithEmail = async (email: string, pass: string) => {
     try {
       await signInWithEmailAndPassword(auth, email, pass);
-    } catch (err: any) {
-      // Check if email matches demo account
-      const matched = DEMO_ACCOUNTS.find((a) => a.email.toLowerCase() === email.toLowerCase());
-      if (matched) {
-        selectDemoUser(matched);
-      } else {
-        throw new Error(err.message || 'Identifiants de connexion incorrects');
+    } catch (err: unknown) {
+      if (isDemoModeActive) {
+        const matched = RAW_DEMO_ACCOUNTS.find((a) => a.email.toLowerCase() === email.toLowerCase());
+        if (matched) {
+          selectDemoUser(matched);
+          return;
+        }
       }
+      const message = err instanceof Error ? err.message : 'Identifiants de connexion incorrects';
+      throw new Error(message || 'Identifiants de connexion incorrects');
     }
   };
 
@@ -523,7 +553,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     email: string,
     pass: string,
     name: string,
-    role: UserRole = 'direction'
+    _role: UserRole = 'aucun'
   ) => {
     const cred = await createUserWithEmailAndPassword(auth, email, pass);
     await updateProfile(cred.user, { displayName: name });
@@ -532,13 +562,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       id: cred.user.uid,
       email: cred.user.email || email,
       name,
-      role,
-      avatar: DEMO_ACCOUNTS[0].avatar,
-      phone: '+237 699 00 11 22',
-      organizationId: 'org-cameroun-hospitality',
-      accessibleRestaurantIds: ['out-1', 'out-2', 'out-3'],
-      defaultRestaurantId: 'out-1',
-      active: true,
+      role: 'aucun', // Règle 0.4 : Aucun accès par défaut
+      active: false, // Doit être validé et provisionné par la direction
+      accessibleRestaurantIds: [],
     };
 
     // Save in Firestore
@@ -567,12 +593,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // ignore
     }
     setFirebaseAuthUser(null);
-    setIsDemoMode(true);
-    selectDemoUser(DEMO_ACCOUNTS[0]);
+    setIsDemoMode(isDemoModeActive);
+    if (isDemoModeActive && RAW_DEMO_ACCOUNTS.length > 0) {
+      selectDemoUser(RAW_DEMO_ACCOUNTS[0]);
+    } else {
+      setCurrentUser(defaultUnauthenticatedUser);
+    }
   };
 
   // RBAC permissions matrix avec prise en compte des droits fins et onglets additionnels
   const canAccess = (module: string): boolean => {
+    // Si compte inactif ou rôle 'aucun' : accès strictement interdit
+    if (!currentUser.active || currentUser.role === 'aucun') {
+      return false;
+    }
+
     // 1. Les comptes Tablettes n'ont accès qu'au Kiosk
     if (currentUser.role === 'tablette') {
       return module === 'kiosk';
@@ -656,10 +691,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return canAccess(module);
   };
 
+  const hasAccess = (module: string, action?: string): boolean => {
+    if (currentUser.role === 'direction' || currentUser.role === 'manager') return true;
+    if (!action || action === 'view') {
+      return canAccess(module);
+    }
+    const act = action === 'add' ? 'create' : (action as 'create' | 'edit' | 'delete');
+    return hasPermission(module, act);
+  };
+
   return (
     <AuthContext.Provider
       value={{
         currentUser,
+        setCurrentUser,
         firebaseAuthUser,
         isDemoMode,
         switchRole,
@@ -670,6 +715,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         logout,
         canAccess,
         hasPermission,
+        hasAccess,
         isSessionLocked,
         setIsSessionLocked,
         lockSession,

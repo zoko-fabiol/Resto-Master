@@ -10,7 +10,8 @@ export type UserRole =
   | 'finance'
   | 'comptable'
   | 'auditeur'
-  | 'tablette';
+  | 'tablette'
+  | 'aucun';
 
 export type AccountType = 'staff' | 'tablette';
 
@@ -285,6 +286,7 @@ export interface RecipeIngredient {
   stockItemName: string;
   quantityRequired: number;
   unit: string;
+  costPerUnit?: number;
 }
 
 export interface Product {
@@ -305,6 +307,7 @@ export interface Product {
   taxApplicable: boolean;
   mealCategory?: 'pdj' | 'dejeuner' | 'diner' | 'bar' | 'cave' | 'divers';
   category?: string;
+  portionYield?: number; // Portions/couverts réalisés par formule standard (par défaut 1)
 }
 
 export interface OrderItem {
@@ -682,6 +685,11 @@ export interface Expense {
   approvedAt?: string;
   documentId?: string;
   recordedBy: string;
+  remainingAmount?: number;
+  paidAmount?: number;
+  paymentType?: string;
+  description?: string;
+  supplier?: string;
 }
 
 export interface AuditLog {
@@ -992,3 +1000,84 @@ export interface ClientCreditAccount {
   lastPaymentDate?: string;
   status: 'sain' | 'relance_requise' | 'contentieux';
 }
+
+// --- MODULE RESSOURCES HUMAINES & BILAN COMMERCIAL ---
+
+export interface RhEmployee {
+  id: string | number;
+  nom: string;
+  prenom: string;
+  site: string;
+  type: 'permanent' | 'temporaire' | string;
+  salaireBase: number;
+  contact: string;
+  statut: 'actif' | 'renvoye' | string;
+  dateRenvoi?: string | null;
+  dateEmbauche?: string | null;
+  [key: string]: any;
+}
+
+export interface AttendanceDetail {
+  arrivalTime?: string;
+  justification?: string;
+  absenceReason?: string;
+  halfDayPeriod?: 'morning' | 'afternoon';
+  [key: string]: any;
+}
+
+export interface RhPayrollExtras {
+  prime: number;
+  dette: number;
+  retenue: number;
+}
+
+export interface RhAppDataPayload {
+  employees: RhEmployee[];
+  attendance?: Record<string, number>;
+  attendanceDetails?: Record<string, AttendanceDetail>;
+  dailyNotes?: Record<string, string>;
+  payrollExtras?: Record<string, RhPayrollExtras>;
+  visibleSundays?: string[];
+  [key: string]: any;
+}
+
+export interface DailyRecordItem {
+  id?: string | number;
+  name?: string;
+  qty: number;
+  price?: number;
+  cost?: number;
+}
+
+export interface DailyRecord {
+  id: string | number;
+  date: string;
+  total?: number;
+  totalCost?: number;
+  items?: DailyRecordItem[];
+  clientName?: string;
+  paymentMethod?: string;
+  [key: string]: any;
+}
+
+export interface Quote {
+  id: string | number;
+  date: string;
+  total?: number;
+  clientName?: string;
+  status?: string;
+  items?: DailyRecordItem[];
+  [key: string]: any;
+}
+
+export interface Income {
+  id: string | number;
+  date: string;
+  amount: number;
+  description?: string;
+  source?: string;
+  receivedBy?: string;
+  paymentMethod?: string;
+  [key: string]: any;
+}
+

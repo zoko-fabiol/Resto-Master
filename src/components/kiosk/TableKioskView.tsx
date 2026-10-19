@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useRestaurant } from '../../context/RestaurantContext';
 import { useToast } from '../../context/ToastContext';
 import { useAuth } from '../../context/AuthContext';
-import { Product, RestaurantTable, Order, OrderItem } from '../../types/restaurant';
+import { Product, RestaurantTable, Order, OrderItem, UserProfile } from '../../types/restaurant';
 import { formatCurrency } from '../../lib/utils';
 import { SupervisorPinModal } from '../auth/SupervisorPinModal';
 import {
@@ -36,7 +36,7 @@ import {
 
 interface TableKioskViewProps {
   initialTableId?: string;
-  onExit?: (shouldUnpair?: boolean) => void;
+  onExit?: (shouldUnpair?: boolean, supervisor?: UserProfile) => void;
 }
 
 export const TableKioskView: React.FC<TableKioskViewProps> = ({
@@ -346,7 +346,7 @@ export const TableKioskView: React.FC<TableKioskViewProps> = ({
   };
 
   // Déverrouillage Local avec PIN Superviseur
-  const handleSupervisorSuccess = async (supervisor: any) => {
+  const handleSupervisorSuccess = async (supervisor?: UserProfile) => {
     if (supervisorAction === 'unlock_tablet' && activeTable) {
       await unlockTableTablet(activeTable.id);
       showToast(`Tablette déverrouillée localement par ${supervisor?.name || 'Superviseur'}`, 'success');
@@ -357,7 +357,7 @@ export const TableKioskView: React.FC<TableKioskViewProps> = ({
       } else {
         showToast(`Mode Borne quitté par ${supervisor?.name || 'Superviseur'}`, 'success');
       }
-      if (onExit) onExit(true);
+      if (onExit) onExit(true, supervisor);
     } else if (supervisorAction === 'switch_table') {
       setShowTablePicker(true);
     }

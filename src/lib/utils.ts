@@ -245,6 +245,7 @@ export const ROLE_LABELS: Record<UserRole, { label: string; color: string }> = {
   comptable: { label: 'Comptable (SYSCOHADA)', color: 'bg-teal-100 text-teal-800 border-teal-200' },
   auditeur: { label: 'Auditeur / Contrôle', color: 'bg-amber-100 text-amber-800 border-amber-200' },
   tablette: { label: 'Tablette Tactile (Kiosk Client)', color: 'bg-violet-100 text-violet-800 border-violet-200' },
+  aucun: { label: 'Aucun accès (Compte en attente)', color: 'bg-slate-100 text-slate-600 border-slate-300' },
 };
 
 export const TABLE_STATUS_MAP: Record<TableStatus, { label: string; badgeClass: string; borderClass: string; bgClass: string }> = {

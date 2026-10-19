@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useAuth, DEMO_ACCOUNTS } from '../../context/AuthContext';
+import { useAuth } from '../../context/AuthContext';
 import { useRestaurant } from '../../context/RestaurantContext';
 import { useToast } from '../../context/ToastContext';
 import {
@@ -12,7 +12,6 @@ import {
   UserCheck,
   AlertCircle,
   Building2,
-  Users,
 } from 'lucide-react';
 
 interface PinLockScreenProps {
@@ -21,19 +20,13 @@ interface PinLockScreenProps {
 
 export const PinLockScreen: React.FC<PinLockScreenProps> = ({ onUnlockSuccess }) => {
   const { currentUser, unlockSessionWithPin, isSessionLocked } = useAuth();
-  const { activeRestaurant, addAuditLog, employees, userAccounts } = useRestaurant();
+  const { activeRestaurant, addAuditLog, employees } = useRestaurant();
   const { showToast, playAudioChime } = useToast();
 
   const [pin, setPin] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
   const [isShaking, setIsShaking] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
-  const [showStaffHints, setShowStaffHints] = useState(false);
-
-  // Liste dynamique des comptes réels configurés (avec leurs codes PIN personnalisés)
-  const displayAccounts = (userAccounts && userAccounts.length > 0)
-    ? userAccounts.filter((a) => a.active)
-    : DEMO_ACCOUNTS;
 
   // Horloge en temps réel
   useEffect(() => {
@@ -241,43 +234,6 @@ export const PinLockScreen: React.FC<PinLockScreenProps> = ({ onUnlockSuccess })
           >
             ←
           </button>
-        </div>
-
-        {/* Aide Rapide / Liste Démo des Codes PIN (Pratique pour les tests en restaurant) */}
-        <div className="w-full text-center pt-2">
-          <button
-            type="button"
-            onClick={() => setShowStaffHints((prev) => !prev)}
-            className="inline-flex items-center gap-1.5 text-[11px] text-slate-500 hover:text-amber-400 font-semibold transition-colors"
-          >
-            <Users className="w-3.5 h-3.5" />
-            <span>{showStaffHints ? 'Masquer la liste des PINs' : 'Voir les codes PIN du personnel (Aide)'}</span>
-          </button>
-
-          {showStaffHints && (
-            <div className="mt-3 p-3 rounded-2xl bg-slate-900/90 border border-slate-800 text-left text-xs space-y-1.5 animate-in fade-in duration-200">
-              <div className="text-[10px] font-black uppercase text-amber-400 tracking-wider mb-2">
-                Codes PIN Rapides Configurés :
-              </div>
-              <div className="grid grid-cols-2 gap-2 text-[11px]">
-                {displayAccounts.map((acc) => (
-                  <button
-                    key={'id' in acc ? acc.id : acc.email}
-                    type="button"
-                    onClick={() => {
-                      setPin(acc.pinCode);
-                    }}
-                    className="p-1.5 rounded-xl bg-slate-800/80 hover:bg-amber-500 hover:text-slate-950 transition-colors flex items-center justify-between text-slate-300"
-                  >
-                    <span className="truncate mr-1 font-semibold">{acc.name}</span>
-                    <span className="font-mono font-black text-amber-400 group-hover:text-slate-950 px-1 py-0.5 rounded bg-slate-950/60">
-                      {acc.pinCode}
-                    </span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
         </div>
       </div>
 

@@ -35,7 +35,8 @@ import { CustomerOrderDisplayView } from './components/kds/CustomerOrderDisplayV
 import { DevicePairingScreen } from './components/auth/DevicePairingScreen';
 import { PinLockScreen } from './components/auth/PinLockScreen';
 import { UserGuideModal } from './components/common/UserGuideModal';
-import { UserRole } from './types/restaurant';
+import { UserRole, UserProfile } from './types/restaurant';
+import { ShieldAlert } from 'lucide-react';
 
 // Modals
 import { PaymentModal } from './components/pos/PaymentModal';
@@ -53,6 +54,7 @@ const ROLE_DEFAULT_TAB: Record<UserRole, string> = {
   comptable: 'fiscal',
   auditeur: 'audit',
   tablette: 'kiosk',
+  aucun: 'dashboard',
 };
 
 const TAB_FEATURE_MAP: Record<string, string> = {
@@ -71,7 +73,7 @@ const TAB_FEATURE_MAP: Record<string, string> = {
 };
 
 const AppContent: React.FC = () => {
-  const { canAccess, currentUser, isSessionLocked, switchRole } = useAuth();
+  const { canAccess, currentUser, isSessionLocked, switchRole, setCurrentUser, lockSession, logout } = useAuth();
   const {
     seatReservation,
     isFeatureEnabled,
@@ -211,13 +213,15 @@ const AppContent: React.FC = () => {
       <div className="fixed inset-0 z-50 bg-slate-900 text-slate-100 overflow-hidden w-screen h-screen select-none">
         <TableKioskView
           initialTableId={kioskTableId}
-          onExit={async (shouldUnpair?: boolean) => {
+          onExit={async (shouldUnpair?: boolean, supervisor?: UserProfile) => {
             setIsTabletKioskUnlocked(true);
             if (shouldUnpair && currentDeviceProfile?.type === 'tablette_table') {
               await unpairCurrentDevice();
             }
-            if (currentUser.role === 'tablette') {
-              switchRole('direction');
+            if (supervisor) {
+              setCurrentUser(supervisor);
+            } else if (currentUser.role === 'tablette') {
+              lockSession();
             }
             setCurrentTab('tables');
           }}
@@ -267,45 +271,73 @@ const AppContent: React.FC = () => {
 
         {/* Dynamic View Body */}
         <main className="flex-1 p-3 sm:p-5 lg:p-7 max-w-7xl w-full mx-auto min-w-0">
-          {currentTab === 'dashboard' && <DashboardView navigateTo={handleSelectTab} />}
-          {currentTab === 'tables' && (
-            <TablesView
-              onOpenOrder={handleOpenOrderOnTable}
-              onPayOrder={handleOpenPayment}
-              onOpenKiosk={(tId) => {
-                setIsTabletKioskUnlocked(false);
-                setKioskTableId(tId);
-                setCurrentTab('kiosk');
-              }}
-            />
+          {!currentUser.active || currentUser.role === 'aucun' ? (
+            <div className="flex flex-col items-center justify-center min-h-[50vh] text-center p-8 bg-white rounded-2xl border border-slate-200 shadow-sm max-w-lg mx-auto my-12">
+              <div className="w-16 h-16 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center mb-4">
+                <ShieldAlert className="w-8 h-8" />
+              </div>
+              <h2 className="text-xl font-bold text-slate-800 mb-2">Compte en attente d'activation</h2>
+              <p className="text-sm text-slate-600 mb-6">
+                Votre profil utilisateur n'a aucun rôle actif attribué. Veuillez vous adresser à la direction ou au responsable d'établissement pour activer vos privilèges.
+              </p>
+              <button
+                onClick={() => logout()}
+                className="px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-sm font-semibold transition"
+              >
+                Se déconnecter
+              </button>
+            </div>
+          ) : (
+            <>
+              {currentTab === 'dashboard' && <DashboardView navigateTo={handleSelectTab} />}
+              {currentTab === 'tables' && (
+                <TablesView
+                  onOpenOrder={handleOpenOrderOnTable}
+                  onPayOrder={handleOpenPayment}
+                  onOpenKiosk={(tId) => {
+                    setIsTabletKioskUnlocked(false);
+                    setKioskTableId(tId);
+                    setCurrentTab('kiosk');
+                  }}
+                />
+              )}
+              {currentTab === 'pos' && (
+                <PosView
+                  initialTableId={posInitialTableId}
+                  onOpenPayment={handleOpenPayment}
+                  mode="restaurant"
+                />
+              )}
+              {currentTab === 'bar_pos' && (
+                <PosView
+                  initialTableId={posInitialTableId}
+                  onOpenPayment={handleOpenPayment}
+                  mode="bar"
+                />
+              )}
+              {currentTab === 'kitchen_kds' && <KitchenKdsView />}
+              {currentTab === 'bar_kds' && <BarKdsView />}
+              {currentTab === 'reservations' && (
+                <ReservationsView onSeatGuest={handleSeatGuestFromReservation} />
+              )}
+              {currentTab === 'events' && <EventsView />}
+              {currentTab === 'delivery' && <DeliveryView />}
+              {currentTab === 'menu' && <MenuView />}
+              {currentTab === 'stock' && <StockView />}
+              {currentTab === 'purchases' && <PurchasesView />}
+              {currentTab === 'hygiene' && <HygieneView />}
+              {currentTab === 'caisse' && <CashRegisterView onOpenPayment={handleOpenPayment} />}
+              {currentTab === 'main_courante' && <MainCouranteView />}
+              {currentTab === 'fiscal' && <FiscalCenterView />}
+              {currentTab === 'finance' && <FinanceView />}
+              {currentTab === 'clients' && <ClientsView />}
+              {currentTab === 'staff' && <StaffView />}
+              {currentTab === 'documents' && <DocumentsView />}
+              {currentTab === 'reports' && <ReportsView />}
+              {currentTab === 'audit' && <AuditView />}
+              {currentTab === 'settings' && <AdminCenterView />}
+            </>
           )}
-          {currentTab === 'pos' && (
-            <PosView
-              initialTableId={posInitialTableId}
-              onOpenPayment={handleOpenPayment}
-            />
-          )}
-          {currentTab === 'kitchen_kds' && <KitchenKdsView />}
-          {currentTab === 'bar_kds' && <BarKdsView />}
-          {currentTab === 'reservations' && (
-            <ReservationsView onSeatGuest={handleSeatGuestFromReservation} />
-          )}
-          {currentTab === 'events' && <EventsView />}
-          {currentTab === 'delivery' && <DeliveryView />}
-          {currentTab === 'menu' && <MenuView />}
-          {currentTab === 'stock' && <StockView />}
-          {currentTab === 'purchases' && <PurchasesView />}
-          {currentTab === 'hygiene' && <HygieneView />}
-          {currentTab === 'caisse' && <CashRegisterView onOpenPayment={handleOpenPayment} />}
-          {currentTab === 'main_courante' && <MainCouranteView />}
-          {currentTab === 'fiscal' && <FiscalCenterView />}
-          {currentTab === 'finance' && <FinanceView />}
-          {currentTab === 'clients' && <ClientsView />}
-          {currentTab === 'staff' && <StaffView />}
-          {currentTab === 'documents' && <DocumentsView />}
-          {currentTab === 'reports' && <ReportsView />}
-          {currentTab === 'audit' && <AuditView />}
-          {currentTab === 'settings' && <AdminCenterView />}
         </main>
       </div>
 
