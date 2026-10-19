@@ -1,4 +1,4 @@
-import { initializeApp, getApps, getApp } from 'firebase/app';
+import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
 import {
   initializeFirestore,
   persistentLocalCache,
@@ -8,33 +8,79 @@ import {
 } from 'firebase/firestore';
 import { getAuth, Auth } from 'firebase/auth';
 import { getStorage, FirebaseStorage } from 'firebase/storage';
-import firebaseConfigData from '../../firebase-applet-config.json';
+import { initializeAppCheck, ReCaptchaEnterpriseProvider } from 'firebase/app-check';
+
+// -----------------------------------------------------------------------------
+// Validation des variables d'environnement Firebase obligatoires
+// -----------------------------------------------------------------------------
+const requiredEnvKeys = [
+  'VITE_FIREBASE_API_KEY',
+  'VITE_FIREBASE_AUTH_DOMAIN',
+  'VITE_FIREBASE_PROJECT_ID',
+  'VITE_FIREBASE_STORAGE_BUCKET',
+  'VITE_FIREBASE_MESSAGING_SENDER_ID',
+  'VITE_FIREBASE_APP_ID',
+] as const;
+
+const missingEnv = requiredEnvKeys.filter((k) => !import.meta.env[k]);
+if (missingEnv.length > 0) {
+  const errMsg =
+    `[RestoMaster OS] Configuration Firebase incomplète dans .env.\n` +
+    `Variables manquantes : ${missingEnv.join(', ')}.\n` +
+    `Veuillez copier .env.example vers .env et renseigner les clés requises.`;
+  console.error(errMsg);
+  if (import.meta.env.PROD) {
+    throw new Error(errMsg);
+  }
+}
 
 export const firebaseConfig = {
-  apiKey: firebaseConfigData.apiKey || 'AIzaSyC2zfdRlJrs0N1vtYvy1qbOK11piNpsQSw',
-  authDomain: firebaseConfigData.authDomain || 'resto-master-310f7.firebaseapp.com',
-  projectId: firebaseConfigData.projectId || 'resto-master-310f7',
-  storageBucket: firebaseConfigData.storageBucket || 'resto-master-310f7.firebasestorage.app',
-  messagingSenderId: firebaseConfigData.messagingSenderId || '564883344825',
-  appId: firebaseConfigData.appId || '1:564883344825:web:8e7216b273e6b24cf1ba68',
+  apiKey: (import.meta.env.VITE_FIREBASE_API_KEY as string) || '',
+  authDomain: (import.meta.env.VITE_FIREBASE_AUTH_DOMAIN as string) || '',
+  projectId: (import.meta.env.VITE_FIREBASE_PROJECT_ID as string) || '',
+  storageBucket: (import.meta.env.VITE_FIREBASE_STORAGE_BUCKET as string) || '',
+  messagingSenderId: (import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID as string) || '',
+  appId: (import.meta.env.VITE_FIREBASE_APP_ID as string) || '',
 };
 
-const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
+// Initialisation de l'instance d'application Firebase (Singleton)
+const app: FirebaseApp = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 
-// Use the designated Firestore Database ID or default
+// Initialisation conditionnelle d'App Check (reCAPTCHA Enterprise / Debug en Dev)
+const appCheckSiteKey = import.meta.env.VITE_FIREBASE_APPCHECK_KEY as string | undefined;
+if (appCheckSiteKey && typeof window !== 'undefined') {
+  try {
+    if (import.meta.env.DEV || import.meta.env.VITE_FIREBASE_APPCHECK_DEBUG === 'true') {
+      // @ts-expect-error Firebase App Check Debug token window flag
+      window.FIREBASE_APPCHECK_DEBUG_TOKEN = true;
+    }
+    initializeAppCheck(app, {
+      provider: new ReCaptchaEnterpriseProvider(appCheckSiteKey),
+      isTokenAutoRefreshEnabled: true,
+    });
+  } catch (err) {
+    console.warn('[RestoMaster OS] Échec d\'initialisation d\'App Check :', err);
+  }
+}
+
+// Configuration de la base Firestore avec cache persistant multi-onglets
 const customDbId =
-  firebaseConfigData.firestoreDatabaseId &&
-  firebaseConfigData.firestoreDatabaseId !== '(default)'
-    ? firebaseConfigData.firestoreDatabaseId
+  import.meta.env.VITE_FIREBASE_FIRESTORE_DATABASE_ID &&
+  import.meta.env.VITE_FIREBASE_FIRESTORE_DATABASE_ID !== '(default)'
+    ? (import.meta.env.VITE_FIREBASE_FIRESTORE_DATABASE_ID as string)
     : undefined;
 
 let firestoreInstance: Firestore;
 try {
-  firestoreInstance = initializeFirestore(app, {
-    localCache: persistentLocalCache({
-      tabManager: persistentMultipleTabManager(),
-    }),
-  }, customDbId);
+  firestoreInstance = initializeFirestore(
+    app,
+    {
+      localCache: persistentLocalCache({
+        tabManager: persistentMultipleTabManager(),
+      }),
+    },
+    customDbId
+  );
 } catch {
   firestoreInstance = customDbId ? getFirestore(app, customDbId) : getFirestore(app);
 }
