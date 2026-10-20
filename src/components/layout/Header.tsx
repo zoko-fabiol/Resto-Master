@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { useAuth, DEMO_ACCOUNTS, isDemoModeActive } from '../../context/AuthContext';
+import { useAuth } from '../../context/AuthContext';
 import { useRestaurant } from '../../context/RestaurantContext';
 import { useConfirm } from '../ui/ConfirmDialog';
 import { formatCurrency, ROLE_LABELS } from '../../lib/utils';
@@ -82,7 +82,7 @@ export const Header: React.FC<HeaderProps> = ({
   openCustomerDisplay,
   openUserGuide,
 }) => {
-  const { currentUser, selectDemoUser, lockSession, isDemoMode } = useAuth();
+  const { currentUser, lockSession } = useAuth();
   const confirm = useConfirm();
   const {
     notifications,
@@ -91,7 +91,6 @@ export const Header: React.FC<HeaderProps> = ({
     markAllNotificationsRead,
     cashSession,
     settings,
-    resetToDemoData,
     isOnline,
     offlineQueueCount,
     outlets,
@@ -340,69 +339,6 @@ export const Header: React.FC<HeaderProps> = ({
                     <span>Modifier mon code PIN</span>
                   </button>
                 </div>
-
-                {isDemoMode && isDemoModeActive && (
-                  <>
-                    <div className="px-4 py-2 border-b border-t border-slate-100 flex items-center justify-between">
-                      <div>
-                        <div className="text-xs font-bold text-slate-900">Changer de Profil Démo</div>
-                        <div className="text-[11px] text-slate-500">Testez les permissions par métier</div>
-                      </div>
-                      <button
-                        onClick={async () => {
-                          const ok = await confirm({
-                            title: 'Réinitialisation des données démo',
-                            message: 'Voulez-vous réinitialiser toutes les données de démonstration ? Toutes les modifications locales seront remplacées par le jeu d\'essai initial.',
-                            confirmText: 'Réinitialiser',
-                            variant: 'danger',
-                          });
-                          if (ok) {
-                            resetToDemoData();
-                            setRoleMenuOpen(false);
-                          }
-                        }}
-                        className="text-[11px] text-amber-600 hover:text-amber-800 flex items-center gap-1 font-medium cursor-pointer"
-                        title="Réinitialiser les données"
-                      >
-                        <RotateCcw className="w-3 h-3" /> Reset
-                      </button>
-                    </div>
-
-                    <div className="max-h-64 overflow-y-auto p-1.5 space-y-1">
-                      {DEMO_ACCOUNTS.map((account) => {
-                        const isSelected = currentUser.email === account.email;
-                        const label = ROLE_LABELS[account.role];
-                        return (
-                          <button
-                            key={account.email}
-                            onClick={() => {
-                              selectDemoUser(account);
-                              setRoleMenuOpen(false);
-                            }}
-                            className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-colors ${
-                              isSelected ? 'bg-amber-50 border border-amber-200' : 'hover:bg-slate-50'
-                            }`}
-                          >
-                            <img
-                              src={account.avatar}
-                              alt={account.name}
-                              className="w-8 h-8 rounded-full object-cover shrink-0 ring-1 ring-slate-200"
-                            />
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center justify-between">
-                                <span className="text-xs font-bold text-slate-800 truncate">{account.name}</span>
-                                <span className={`text-[9px] font-semibold px-1.5 py-0.2 rounded ${label.color}`}>
-                                  {label.label}
-                                </span>
-                              </div>
-                              <p className="text-[10px] text-slate-500 truncate mt-0.5">{account.description}</p>
-                            </div>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </>
-                )}
               </div>
             )}
           </div>

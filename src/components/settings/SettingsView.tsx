@@ -20,7 +20,7 @@ import {
 } from 'lucide-react';
 
 export const SettingsView: React.FC = () => {
-  const { settings, updateSettings, resetToDemoData } = useRestaurant();
+  const { settings, updateSettings } = useRestaurant();
   const { showToast } = useToast();
   const confirm = useConfirm();
 
@@ -468,41 +468,6 @@ export const SettingsView: React.FC = () => {
         </div>
       </form>
 
-      {/* Danger Zone: Demo reset */}
-      <div className="bg-red-50/50 p-5 rounded-2xl border border-red-200 space-y-3 mt-8">
-        <div className="flex items-center justify-between">
-          <div>
-            <h4 className="font-bold text-sm text-red-900">Zone Démonstration</h4>
-            <p className="text-xs text-red-700 mt-0.5">
-              Réinitialiser l'ensemble de la base avec le jeu de données calibré aux normes camerounaises
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={async () => {
-              const ok = await confirm({
-                title: 'Réinitialiser les données de démonstration ?',
-                message: 'Êtes-vous sûr de vouloir réinitialiser toutes les données de test ? Cette action restaurera le jeu de données calibré aux normes camerounaises.',
-                confirmLabel: 'Réinitialiser',
-                cancelLabel: 'Annuler',
-                variant: 'danger',
-              });
-              if (ok) {
-                resetToDemoData();
-                showToast({
-                  type: 'success',
-                  title: 'Données réinitialisées',
-                  message: 'La base de démonstration a été restaurée avec succès.',
-                });
-              }
-            }}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold shadow-xs"
-          >
-            <RotateCcw className="w-4 h-4" />
-            <span>Réinitialiser Données</span>
-          </button>
-        </div>
-      </div>
     </div>
   );
 };

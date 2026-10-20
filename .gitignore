@@ -1,8 +1,16 @@
 node_modules/
 build/
 dist/
+dist/
 coverage/
 .DS_Store
 *.log
+*.zip
+
+# Variables d'environnement
 .env*
 !.env.example
+
+# Fonctions Firebase
+functions/lib/
+functions/node_modules/

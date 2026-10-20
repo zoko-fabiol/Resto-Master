@@ -80,7 +80,7 @@ const TAB_FEATURE_MAP: Record<string, string> = {
 const AppContent: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const { canAccess, currentUser, isSessionLocked, switchRole, setCurrentUser, lockSession, logout } = useAuth();
+  const { canAccess, currentUser, isSessionLocked, setCurrentUser, lockSession, logout } = useAuth();
   const {
     seatReservation,
     isFeatureEnabled,

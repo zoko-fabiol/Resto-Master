@@ -70,7 +70,6 @@ export const HardwareAndSecuritySection: React.FC<Props> = ({ subTab }) => {
     applyConfigProfile,
     isOnline,
     offlineQueueCount,
-    resetToDemoData,
     addAuditLog,
     operationRules,
     updateOperationRules,
@@ -734,31 +733,6 @@ export const HardwareAndSecuritySection: React.FC<Props> = ({ subTab }) => {
     }
   };
 
-  const handleResetFactory = async () => {
-    if (!isSuperAdmin) {
-      showToast({
-        title: 'Action Réservée',
-        message: 'Seul le Super Administrateur (Direction) peut réinitialiser le système.',
-        type: 'error',
-      });
-      return;
-    }
-    const ok = await confirm({
-      title: 'Réinitialisation générale',
-      message: 'Voulez-vous réinitialiser toutes les données aux valeurs de démonstration ? Toutes les modifications locales seront perdues.',
-      confirmText: 'Réinitialiser',
-      variant: 'danger',
-    });
-    if (ok) {
-      resetToDemoData();
-      showToast({
-        title: 'Système Réinitialisé',
-        message: 'Données de démonstration restaurées avec succès.',
-        type: 'info',
-      });
-    }
-  };
-
   return (
     <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-6 text-xs">
       <div className="flex items-center justify-between border-b border-slate-100 pb-3">
@@ -866,22 +840,6 @@ export const HardwareAndSecuritySection: React.FC<Props> = ({ subTab }) => {
             </button>
           </div>
         ))}
-      </div>
-
-      <div className="pt-4 border-t border-slate-100 flex items-center justify-between">
-        <button
-          type="button"
-          disabled={!isSuperAdmin}
-          onClick={handleResetFactory}
-          className={`flex items-center gap-1.5 px-4 py-2 rounded-xl font-bold border transition-colors ${
-            isSuperAdmin
-              ? 'bg-rose-50 text-rose-700 hover:bg-rose-100 border-rose-200'
-              : 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed'
-          }`}
-        >
-          <RefreshCw className="w-3.5 h-3.5" />
-          <span>Réinitialisation d'usine</span>
-        </button>
       </div>
     </div>
   );

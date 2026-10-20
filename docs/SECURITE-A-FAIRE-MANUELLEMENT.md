@@ -1,5 +1,9 @@
 # RestoMaster OS — Guide des Actions Manuelles de Sécurité (Hors Code)
 
+> [!CAUTION]
+> **ACTION CRITIQUE AVANT LIVRAISON AU CLIENT :**
+> La clé d'API Firebase doit impérativement être **régénérée** et **restreinte** (domaines HTTP autorisés + APIs strictement requises : Identity Toolkit, Cloud Firestore, Storage, App Check) avant toute livraison en production. Ne livrez jamais un projet avec une clé non restreinte ou potentiellement exposée.
+
 > Ce document recense l'ensemble des actions de sécurité obligatoires à réaliser manuellement dans les consoles **Google Cloud Platform (GCP)** et **Firebase** avant tout déploiement en production ou exploitation réelle au Cameroun.
 
 ---

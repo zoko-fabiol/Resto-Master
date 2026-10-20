@@ -171,42 +171,6 @@ export const DevicePairingScreen: React.FC<DevicePairingScreenProps> = ({ onSucc
             <ArrowRight className="w-5 h-5" />
           </button>
         </div>
-
-        {/* Quick Demo Pre-seed Badges for Beta-Testers */}
-        <div className="w-full mt-8 pt-6 border-t border-slate-800/80">
-          <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-3 flex items-center justify-center space-x-1.5">
-            <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-            <span>Codes de Déploiement Prédéfinis (Cliquez pour tester) :</span>
-          </div>
-
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-            {terminals.map((t) => (
-              <button
-                key={t.id}
-                type="button"
-                onClick={() => {
-                  if (t.pairingCode) {
-                    setInputCode(t.pairingCode);
-                    handlePair(t.pairingCode);
-                  }
-                }}
-                className="p-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 hover:border-amber-500/40 text-left transition-all group flex flex-col justify-between"
-              >
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-[10px] font-mono font-black text-amber-400 px-1.5 py-0.5 rounded bg-amber-500/10 border border-amber-500/20">
-                    {t.pairingCode || 'CODE'}
-                  </span>
-                  <span className="text-[9px] uppercase font-bold text-slate-500">
-                    {t.type.replace('_', ' ')}
-                  </span>
-                </div>
-                <div className="text-xs font-bold text-white group-hover:text-amber-300 truncate">
-                  {t.name}
-                </div>
-              </button>
-            ))}
-          </div>
-        </div>
       </div>
 
       {/* Footer Info */}

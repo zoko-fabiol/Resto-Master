@@ -200,11 +200,6 @@ export const SupervisorPinModal: React.FC<SupervisorPinModalProps> = ({
               <Delete className="w-5 h-5" aria-hidden="true" />
             </button>
           </div>
-
-          <div className="mt-4 text-xs text-slate-400 text-center">
-            Codes Démo Superviseur : <span className="text-amber-400 font-mono font-bold">1111</span> (Direction) ou{' '}
-            <span className="text-amber-400 font-mono font-bold">2222</span> (Manager)
-          </div>
         </div>
       </div>
     </div>

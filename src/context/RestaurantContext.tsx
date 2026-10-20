@@ -255,7 +255,6 @@ interface RestaurantContextType {
   markAllNotificationsRead: () => void;
   deleteNotification: (id: string) => void;
   addAuditLog: (action: string, module: AuditLog['module'], details: string, entityId?: string) => void;
-  resetToDemoData: () => void;
 
   // Nouvelles Actions Métier
   cancelOrderWithAudit: (orderId: string, reason: string, approvedBy?: string) => Promise<void>;
@@ -3552,65 +3551,6 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     addAuditLog('Création caisse', 'Caisse', `Caisse ${newReg.name} ajoutée`);
   };
 
-  // Reset demo data
-  const resetToDemoData = () => {
-    setSettings(INITIAL_SETTINGS);
-    setCategories(INITIAL_CATEGORIES);
-    setStockItems(INITIAL_STOCK_ITEMS);
-    setStockMovements([]);
-    setProducts(INITIAL_PRODUCTS);
-    setTables(INITIAL_TABLES);
-    setOrders(INITIAL_ORDERS);
-    setReservations(INITIAL_RESERVATIONS);
-    setSuppliers(INITIAL_SUPPLIERS);
-    setPurchaseOrders(INITIAL_PURCHASE_ORDERS);
-    setCustomers(INITIAL_CUSTOMERS);
-    setEmployees(INITIAL_EMPLOYEES);
-    setAttendances(INITIAL_ATTENDANCE);
-    setCashSession(INITIAL_CASH_SESSION);
-    setCashMovements(INITIAL_CASH_MOVEMENTS);
-    setExpenses(INITIAL_EXPENSES);
-    setDocuments(INITIAL_DOCUMENTS);
-    setMediaAssets([]);
-    setAuditLogs(INITIAL_AUDIT_LOGS);
-    setNotifications(INITIAL_NOTIFICATIONS);
-
-    // Nouveaux modules
-    setStockLots(INITIAL_STOCK_LOTS);
-    setHygieneChecks(INITIAL_HYGIENE_CHECKS);
-    setEvents(INITIAL_EVENTS);
-    setDeliveries(INITIAL_DELIVERIES);
-    setWithholdings(INITIAL_WITHHOLDINGS);
-    setFiscalObligations(INITIAL_FISCAL_OBLIGATIONS);
-    setClientCredits(INITIAL_CLIENT_CREDITS);
-    setCancellationLogs(INITIAL_CANCELLATION_LOGS);
-    setFiscalJournal([]);
-    setInvoices([]);
-    setOfflineQueue([]);
-
-    // Centre de configuration
-    setFeatures(INITIAL_FEATURES);
-    setOutlets(INITIAL_OUTLETS);
-    setTerminals(INITIAL_TERMINALS);
-    setRolePermissions(DEFAULT_PERMISSIONS);
-    setRoleLimits(INITIAL_ROLE_LIMITS);
-    setPeripherals(INITIAL_PERIPHERALS);
-    setConfigHistory(INITIAL_CONFIG_HISTORY);
-    setConfigAlerts(CONFIGURATION_ALERTS_INITIAL);
-
-    // Multi-Restaurants & Groupes
-    setOrganization(INITIAL_ORGANIZATION);
-    setZones(INITIAL_ZONES);
-    setCashRegisters(INITIAL_CASH_REGISTERS);
-    setUserAccounts(INITIAL_USER_ACCOUNTS);
-    setSelectedOutletId('out-1');
-    setActiveZoneId('all');
-    setActiveCashRegisterId('reg-1');
-
-    localStorage.clear();
-    addAuditLog('Réinitialisation démo', 'Paramètres', 'Jeu de données de démonstration réinitialisé');
-  };
-
   return (
     <RestaurantContext.Provider
       value={{
@@ -3750,7 +3690,6 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         markAllNotificationsRead,
         deleteNotification,
         addAuditLog,
-        resetToDemoData,
 
         cancelOrderWithAudit,
         addStockLot,
