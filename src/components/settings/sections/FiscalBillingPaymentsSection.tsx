@@ -38,6 +38,13 @@ export const FiscalBillingPaymentsSection: React.FC<Props> = ({ subTab }) => {
   const [savedSuccess, setSavedSuccess] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  const [activeBillingTab, setActiveBillingTab] = useState<'billing' | 'accounting'>(
+    subTab === 'comptabilite' ? 'accounting' : 'billing'
+  );
+  const [activePaymentTab, setActivePaymentTab] = useState<'methods' | 'momo'>(
+    subTab === 'mobile_money' ? 'momo' : 'methods'
+  );
+
   // Fiscal Form State
   const [niu, setNiu] = useState(settings.niu || 'M012012345678A');
   const [rccm, setRccm] = useState(settings.rccm || 'RC/YAO/2024/B/1894');
@@ -229,8 +236,111 @@ export const FiscalBillingPaymentsSection: React.FC<Props> = ({ subTab }) => {
     }
   };
 
-  // 1. FACTURATION (Section 18)
-  if (subTab === 'facturation') {
+  const renderComptabiliteContent = () => (
+    <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-6">
+      <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-slate-900 text-amber-400 flex items-center justify-center font-bold">
+            <FileSpreadsheet className="w-5 h-5" />
+          </div>
+          <div>
+            <h3 className="text-sm font-bold text-slate-900">Comptabilité OHADA / SYSCOHADA Révisé</h3>
+            <p className="text-xs text-slate-500">
+              Paramétrage des comptes généraux pour les exports vers Sage Saari et logiciels comptables
+            </p>
+          </div>
+        </div>
+        {savedSuccess && (
+          <span className="flex items-center gap-1.5 text-xs font-bold text-emerald-700 bg-emerald-50 px-3 py-1.5 rounded-xl border border-emerald-200">
+            <CheckCircle2 className="w-4 h-4" /> Enregistré
+          </span>
+        )}
+      </div>
+
+      {errorMessage && (
+        <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-900 text-xs flex items-center gap-2.5">
+          <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+          <span className="font-semibold">{errorMessage}</span>
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+        <div>
+          <label className="font-bold text-slate-700 block mb-1">Compte Ventes Cuisine (Compte 701) :</label>
+          <input
+            type="text"
+            value={accountingAccounts.cuisineSales}
+            onChange={(e) => setAccountingAccounts((prev) => ({ ...prev, cuisineSales: e.target.value }))}
+            className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 font-mono font-bold"
+          />
+        </div>
+
+        <div>
+          <label className="font-bold text-slate-700 block mb-1">Compte Ventes Bar & Boissons (Compte 702) :</label>
+          <input
+            type="text"
+            value={accountingAccounts.barSales}
+            onChange={(e) => setAccountingAccounts((prev) => ({ ...prev, barSales: e.target.value }))}
+            className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 font-mono font-bold"
+          />
+        </div>
+
+        <div>
+          <label className="font-bold text-slate-700 block mb-1">Compte TVA Collectée (Compte 4431) :</label>
+          <input
+            type="text"
+            value={accountingAccounts.vatCollected}
+            onChange={(e) => setAccountingAccounts((prev) => ({ ...prev, vatCollected: e.target.value }))}
+            className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 font-mono font-bold"
+          />
+        </div>
+
+        <div>
+          <label className="font-bold text-slate-700 block mb-1">Compte CAC Collectés (Compte 4432) :</label>
+          <input
+            type="text"
+            value={accountingAccounts.cacCollected}
+            onChange={(e) => setAccountingAccounts((prev) => ({ ...prev, cacCollected: e.target.value }))}
+            className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 font-mono font-bold"
+          />
+        </div>
+
+        <div>
+          <label className="font-bold text-slate-700 block mb-1">Compte Caisse Espèces (Compte 571) :</label>
+          <input
+            type="text"
+            value={accountingAccounts.cashAccount}
+            onChange={(e) => setAccountingAccounts((prev) => ({ ...prev, cashAccount: e.target.value }))}
+            className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 font-mono font-bold"
+          />
+        </div>
+
+        <div>
+          <label className="font-bold text-slate-700 block mb-1">Compte Mobile Money (Compte 585) :</label>
+          <input
+            type="text"
+            value={accountingAccounts.mobileMoneyAccount}
+            onChange={(e) => setAccountingAccounts((prev) => ({ ...prev, mobileMoneyAccount: e.target.value }))}
+            className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 font-mono font-bold"
+          />
+        </div>
+      </div>
+
+      <div className="pt-4 border-t border-slate-100 flex justify-end">
+        <button
+          type="button"
+          onClick={() => handleSave()}
+          className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-slate-900 text-white font-bold text-xs hover:bg-slate-800 shadow-xs"
+        >
+          <Save className="w-4 h-4" />
+          <span>Enregistrer le plan comptable</span>
+        </button>
+      </div>
+    </div>
+  );
+
+  // 1. FACTURATION & SYSCOHADA (Sections 18 & 21b)
+  if (subTab === 'facturation' || subTab === 'comptabilite') {
     const billingItems = [
       {
         key: 'bill_active',
@@ -331,7 +441,37 @@ export const FiscalBillingPaymentsSection: React.FC<Props> = ({ subTab }) => {
     ];
 
     return (
-      <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-xs space-y-6">
+      <div className="space-y-4">
+        {/* Switcher Facturation / SYSCOHADA */}
+        <div className="bg-white p-2 rounded-2xl border border-slate-200 shadow-xs flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setActiveBillingTab('billing')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+              activeBillingTab === 'billing'
+                ? 'bg-slate-900 text-white shadow-xs'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+            }`}
+          >
+            <Receipt className="w-4 h-4 text-emerald-400" />
+            <span>Facturation Laser A5 & Mentions Légales</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveBillingTab('accounting')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+              activeBillingTab === 'accounting'
+                ? 'bg-slate-900 text-white shadow-xs'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+            }`}
+          >
+            <FileSpreadsheet className="w-4 h-4 text-teal-500" />
+            <span>Plan Comptable & SYSCOHADA Révisé</span>
+          </button>
+        </div>
+
+        {activeBillingTab === 'billing' ? (
+          <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-xs space-y-6">
         <div className="flex items-center justify-between border-b border-slate-100 pb-4">
           <div className="flex items-center gap-3">
             <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-emerald-600 to-green-500 text-white flex items-center justify-center shadow-md shadow-emerald-500/20">
@@ -388,6 +528,10 @@ export const FiscalBillingPaymentsSection: React.FC<Props> = ({ subTab }) => {
             <span>Enregistrer la facturation</span>
           </button>
         </div>
+      </div>
+        ) : (
+          renderComptabiliteContent()
+        )}
       </div>
     );
   }
@@ -543,136 +687,7 @@ export const FiscalBillingPaymentsSection: React.FC<Props> = ({ subTab }) => {
     );
   }
 
-  // 3. PAIEMENTS (Section 20)
-  if (subTab === 'paiements') {
-    const paymentMethodsList = [
-      {
-        key: 'pay_especes',
-        label: 'Espèces (FCFA)',
-        description: 'Paiements au comptant avec rendu de monnaie automatique',
-        icon: Banknote,
-      },
-      {
-        key: 'pay_cb',
-        label: 'Carte Bancaire / TPE',
-        description: 'Terminaux bancaires physiques Visa, Mastercard et GIMAC',
-        icon: CreditCard,
-      },
-      {
-        key: 'pay_mtn_momo',
-        label: 'MTN Mobile Money',
-        description: 'Paiements push USSD *126# et QR codes commerçant',
-        icon: Smartphone,
-      },
-      {
-        key: 'pay_orange_money',
-        label: 'Orange Money',
-        description: 'Règlements sécurisés via pass #150# et Max it Cameroun',
-        icon: Smartphone,
-      },
-      {
-        key: 'pay_virement',
-        label: 'Virement Bancaire',
-        description: 'Paiement direct sur le compte bancaire de l’entreprise',
-        icon: Landmark,
-      },
-      {
-        key: 'pay_cheque',
-        label: 'Chèque Certifié',
-        description: 'Encaissement de chèques d’entreprises avec n° de série',
-        icon: FileSignature,
-      },
-      {
-        key: 'pay_credit_client',
-        label: 'Crédit Client / Compte',
-        description: 'Mise en ardoise et facturation différée fin de mois',
-        icon: Wallet,
-      },
-      {
-        key: 'pay_partiel',
-        label: 'Paiement Partiel (Acomptes)',
-        description: 'Multiples versements successifs sur une même commande',
-        icon: Percent,
-      },
-      {
-        key: 'pay_multiple',
-        label: 'Paiement Mixte / Fractionné',
-        description: 'Règlement d’une même table avec plusieurs moyens',
-        icon: Coins,
-      },
-    ];
-
-    return (
-      <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-xs space-y-6">
-        <div className="flex items-center justify-between border-b border-slate-100 pb-4">
-          <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-slate-900 to-slate-800 text-amber-400 flex items-center justify-center shadow-md">
-              <CreditCard className="w-5 h-5" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h3 className="text-sm sm:text-base font-black text-slate-900">
-                  Moyens d'Encaissement & de Paiement
-                </h3>
-                <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-slate-100 text-slate-700">
-                  Section 20
-                </span>
-              </div>
-              <p className="text-xs text-slate-500 mt-0.5">
-                Activez ou désactivez chaque mode de règlement accepté en caisse et sur les terminaux mobiles
-              </p>
-            </div>
-          </div>
-          {savedSuccess && (
-            <span className="flex items-center gap-1.5 text-xs font-bold text-emerald-700 bg-emerald-50 px-3 py-1.5 rounded-xl border border-emerald-200 shadow-xs">
-              <CheckCircle2 className="w-4 h-4 text-emerald-600" /> Enregistré
-            </span>
-          )}
-        </div>
-
-        {errorMessage && (
-          <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-900 text-xs flex items-center gap-2.5">
-            <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
-            <span className="font-semibold">{errorMessage}</span>
-          </div>
-        )}
-
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
-          {paymentMethodsList.map((m) => (
-            <ModernRuleToggle
-              key={m.key}
-              id={m.key}
-              label={m.label}
-              description={m.description}
-              icon={m.icon}
-              checked={paymentMethods[m.key] ?? false}
-              onChange={() =>
-                setPaymentMethods((prev) => ({
-                  ...prev,
-                  [m.key]: !prev[m.key],
-                }))
-              }
-            />
-          ))}
-        </div>
-
-        <div className="pt-4 border-t border-slate-100 flex justify-end">
-          <button
-            type="button"
-            onClick={() => handleSave()}
-            className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-slate-900 text-white font-bold text-xs hover:bg-slate-800 shadow-xs"
-          >
-            <Save className="w-4 h-4" />
-            <span>Enregistrer les moyens de paiement</span>
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  // 4. MOBILE MONEY (Section 21)
-  if (subTab === 'mobile_money') {
-    return (
+  const renderMobileMoneyContent = () => (
       <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-6">
         <div className="flex items-center justify-between border-b border-slate-100 pb-4">
           <div className="flex items-center gap-3">
@@ -953,110 +968,170 @@ export const FiscalBillingPaymentsSection: React.FC<Props> = ({ subTab }) => {
           </button>
         </div>
       </div>
+  );
+
+  // 3. PAIEMENTS & MOBILE MONEY (Sections 20 & 21)
+  if (subTab === 'paiements' || subTab === 'mobile_money') {
+
+    const paymentMethodsList = [
+      {
+        key: 'pay_especes',
+        label: 'Espèces (FCFA)',
+        description: 'Paiements au comptant avec rendu de monnaie automatique',
+        icon: Banknote,
+      },
+      {
+        key: 'pay_cb',
+        label: 'Carte Bancaire / TPE',
+        description: 'Terminaux bancaires physiques Visa, Mastercard et GIMAC',
+        icon: CreditCard,
+      },
+      {
+        key: 'pay_mtn_momo',
+        label: 'MTN Mobile Money',
+        description: 'Paiements push USSD *126# et QR codes commerçant',
+        icon: Smartphone,
+      },
+      {
+        key: 'pay_orange_money',
+        label: 'Orange Money',
+        description: 'Règlements sécurisés via pass #150# et Max it Cameroun',
+        icon: Smartphone,
+      },
+      {
+        key: 'pay_virement',
+        label: 'Virement Bancaire',
+        description: 'Paiement direct sur le compte bancaire de l’entreprise',
+        icon: Landmark,
+      },
+      {
+        key: 'pay_cheque',
+        label: 'Chèque Certifié',
+        description: 'Encaissement de chèques d’entreprises avec n° de série',
+        icon: FileSignature,
+      },
+      {
+        key: 'pay_credit_client',
+        label: 'Crédit Client / Compte',
+        description: 'Mise en ardoise et facturation différée fin de mois',
+        icon: Wallet,
+      },
+      {
+        key: 'pay_partiel',
+        label: 'Paiement Partiel (Acomptes)',
+        description: 'Multiples versements successifs sur une même commande',
+        icon: Percent,
+      },
+      {
+        key: 'pay_multiple',
+        label: 'Paiement Mixte / Fractionné',
+        description: 'Règlement d’une même table avec plusieurs moyens',
+        icon: Coins,
+      },
+    ];
+
+    return (
+      <div className="space-y-4">
+        {/* Switcher Moyens d'encaissement / Mobile Money */}
+        <div className="bg-white p-2 rounded-2xl border border-slate-200 shadow-xs flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setActivePaymentTab('methods')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+              activePaymentTab === 'methods'
+                ? 'bg-slate-900 text-white shadow-xs'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+            }`}
+          >
+            <CreditCard className="w-4 h-4 text-amber-500" />
+            <span>Moyens d'Encaissement Actifs</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setActivePaymentTab('momo')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+              activePaymentTab === 'momo'
+                ? 'bg-slate-900 text-white shadow-xs'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+            }`}
+          >
+            <Smartphone className="w-4 h-4 text-orange-500" />
+            <span>Comptes Marchands Mobile Money (MTN & Orange)</span>
+          </button>
+        </div>
+
+        {activePaymentTab === 'methods' ? (
+    
+      <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-xs space-y-6">
+        <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+          <div className="flex items-center gap-3">
+            <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-slate-900 to-slate-800 text-amber-400 flex items-center justify-center shadow-md">
+              <CreditCard className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm sm:text-base font-black text-slate-900">
+                  Moyens d'Encaissement & de Paiement
+                </h3>
+                <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-slate-100 text-slate-700">
+                  Section 20
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Activez ou désactivez chaque mode de règlement accepté en caisse et sur les terminaux mobiles
+              </p>
+            </div>
+          </div>
+          {savedSuccess && (
+            <span className="flex items-center gap-1.5 text-xs font-bold text-emerald-700 bg-emerald-50 px-3 py-1.5 rounded-xl border border-emerald-200 shadow-xs">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600" /> Enregistré
+            </span>
+          )}
+        </div>
+
+        {errorMessage && (
+          <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-900 text-xs flex items-center gap-2.5">
+            <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+            <span className="font-semibold">{errorMessage}</span>
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
+          {paymentMethodsList.map((m) => (
+            <ModernRuleToggle
+              key={m.key}
+              id={m.key}
+              label={m.label}
+              description={m.description}
+              icon={m.icon}
+              checked={paymentMethods[m.key] ?? false}
+              onChange={() =>
+                setPaymentMethods((prev) => ({
+                  ...prev,
+                  [m.key]: !prev[m.key],
+                }))
+              }
+            />
+          ))}
+        </div>
+
+        <div className="pt-4 border-t border-slate-100 flex justify-end">
+          <button
+            type="button"
+            onClick={() => handleSave()}
+            className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-slate-900 text-white font-bold text-xs hover:bg-slate-800 shadow-xs"
+          >
+            <Save className="w-4 h-4" />
+            <span>Enregistrer les moyens de paiement</span>
+          </button>
+        </div>
+      </div>
+        ) : (
+          renderMobileMoneyContent()
+        )}
+      </div>
     );
   }
 
-  // 5. COMPTABILITÉ (Section 21b)
-  return (
-    <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-6">
-      <div className="flex items-center justify-between border-b border-slate-100 pb-4">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-slate-900 text-amber-400 flex items-center justify-center font-bold">
-            <FileSpreadsheet className="w-5 h-5" />
-          </div>
-          <div>
-            <h3 className="text-sm font-bold text-slate-900">Comptabilité OHADA / SYSCOHADA</h3>
-            <p className="text-xs text-slate-500">
-              Paramétrage des comptes généraux pour les exports vers Sage Saari et logiciels comptables
-            </p>
-          </div>
-        </div>
-        {savedSuccess && (
-          <span className="flex items-center gap-1.5 text-xs font-bold text-emerald-700 bg-emerald-50 px-3 py-1.5 rounded-xl border border-emerald-200">
-            <CheckCircle2 className="w-4 h-4" /> Enregistré
-          </span>
-        )}
-      </div>
-
-      {errorMessage && (
-        <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-900 text-xs flex items-center gap-2.5">
-          <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
-          <span className="font-semibold">{errorMessage}</span>
-        </div>
-      )}
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-        <div>
-          <label className="font-bold text-slate-700 block mb-1">Compte Ventes Cuisine (Compte 701) :</label>
-          <input
-            type="text"
-            value={accountingAccounts.cuisineSales}
-            onChange={(e) => setAccountingAccounts((prev) => ({ ...prev, cuisineSales: e.target.value }))}
-            className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 font-mono font-bold"
-          />
-        </div>
-
-        <div>
-          <label className="font-bold text-slate-700 block mb-1">Compte Ventes Bar & Boissons (Compte 702) :</label>
-          <input
-            type="text"
-            value={accountingAccounts.barSales}
-            onChange={(e) => setAccountingAccounts((prev) => ({ ...prev, barSales: e.target.value }))}
-            className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 font-mono font-bold"
-          />
-        </div>
-
-        <div>
-          <label className="font-bold text-slate-700 block mb-1">Compte TVA Collectée (Compte 4431) :</label>
-          <input
-            type="text"
-            value={accountingAccounts.vatCollected}
-            onChange={(e) => setAccountingAccounts((prev) => ({ ...prev, vatCollected: e.target.value }))}
-            className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 font-mono font-bold"
-          />
-        </div>
-
-        <div>
-          <label className="font-bold text-slate-700 block mb-1">Compte CAC Collectés (Compte 4432) :</label>
-          <input
-            type="text"
-            value={accountingAccounts.cacCollected}
-            onChange={(e) => setAccountingAccounts((prev) => ({ ...prev, cacCollected: e.target.value }))}
-            className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 font-mono font-bold"
-          />
-        </div>
-
-        <div>
-          <label className="font-bold text-slate-700 block mb-1">Compte Caisse Espèces (Compte 571) :</label>
-          <input
-            type="text"
-            value={accountingAccounts.cashAccount}
-            onChange={(e) => setAccountingAccounts((prev) => ({ ...prev, cashAccount: e.target.value }))}
-            className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 font-mono font-bold"
-          />
-        </div>
-
-        <div>
-          <label className="font-bold text-slate-700 block mb-1">Compte Mobile Money (Compte 585) :</label>
-          <input
-            type="text"
-            value={accountingAccounts.mobileMoneyAccount}
-            onChange={(e) => setAccountingAccounts((prev) => ({ ...prev, mobileMoneyAccount: e.target.value }))}
-            className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 font-mono font-bold"
-          />
-        </div>
-      </div>
-
-      <div className="pt-4 border-t border-slate-100 flex justify-end">
-        <button
-          type="button"
-          onClick={() => handleSave()}
-          className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-slate-900 text-white font-bold text-xs hover:bg-slate-800 shadow-xs"
-        >
-          <Save className="w-4 h-4" />
-          <span>Enregistrer le plan comptable</span>
-        </button>
-      </div>
-    </div>
-  );
+  return null;
 };

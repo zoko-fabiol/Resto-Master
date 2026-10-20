@@ -127,8 +127,8 @@ export const HardwareAndSecuritySection: React.FC<Props> = ({ subTab }) => {
     );
   }
 
-  // 2. PERMISSIONS RBAC GRANULAIRES (Section 25)
-  if (subTab === 'permissions') {
+  // 2. PERMISSIONS RBAC GRANULAIRES & PLAFONDS FINANCIERS
+  if (subTab === 'permissions' || (subTab as string) === 'securite') {
     const modules: { module: PermissionModule; label: string }[] = [
       { module: 'pos', label: 'POS & Prise de commande' },
       { module: 'tables', label: 'Plan des tables & Salles' },
@@ -149,121 +149,137 @@ export const HardwareAndSecuritySection: React.FC<Props> = ({ subTab }) => {
     const roles: UserRole[] = ['direction', 'manager', 'caisse', 'serveur', 'cuisine', 'bar', 'stock', 'finance', 'comptable'];
 
     return (
-      <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-4">
-        <div className="flex items-center justify-between border-b border-slate-100 pb-4">
-          <div>
-            <h3 className="text-sm font-bold text-slate-900">Matrice de Permissions Granulaires (RBAC) (Section 25)</h3>
+      <div className="space-y-6">
+        {/* Matrice RBAC */}
+        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-4">
+          <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-rose-600 text-white flex items-center justify-center font-bold shadow-md shadow-rose-600/20">
+                <ShieldCheck className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-slate-900">Matrice de Permissions Granulaires (RBAC)</h3>
+                <p className="text-xs text-slate-500">
+                  Définissez les droits d'accès détaillés par module et rôle métier
+                </p>
+              </div>
+            </div>
+            <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-3 py-1 rounded-xl border border-emerald-200">
+              Traçabilité active
+            </span>
+          </div>
+
+          <div className="overflow-x-auto custom-scrollbar">
+            <table className="w-full text-left border-collapse text-xs">
+              <thead>
+                <tr className="bg-slate-100 text-slate-700 font-bold uppercase text-[10px] border-b border-slate-200">
+                  <th className="py-2.5 px-3">Module</th>
+                  {roles.map((r) => (
+                    <th key={r} className="py-2.5 px-2 text-center uppercase">
+                      {r}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {modules.map((m) => (
+                  <tr key={m.module} className="hover:bg-slate-50">
+                    <td className="py-3 px-3 font-bold text-slate-900">{m.label}</td>
+                    {roles.map((r) => {
+                      const canView = (rolePermissions as any)?.[r]?.[m.module]?.view ?? false;
+                      const isDirection = r === 'direction';
+
+                      return (
+                        <td key={r} className="py-3 px-2 text-center">
+                          <button
+                            type="button"
+                            disabled={isDirection}
+                            onClick={() => updateRolePermission(r, m.module, 'view', !canView)}
+                            className={`relative inline-flex h-4 w-7 shrink-0 cursor-pointer rounded-full border border-transparent transition-colors duration-200 ease-in-out disabled:cursor-not-allowed ${
+                              (isDirection || canView) ? 'bg-amber-500' : 'bg-slate-200'
+                            }`}
+                          >
+                            <span
+                              className={`pointer-events-none inline-block h-3 w-3 transform rounded-full bg-white shadow-xs transition duration-200 ease-in-out ${
+                                (isDirection || canView) ? 'translate-x-3' : 'translate-x-0.5'
+                              } mt-0.5`}
+                            />
+                          </button>
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Plafonds Financiers par Rôle */}
+        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-6">
+          <div className="border-b border-slate-100 pb-4">
+            <h3 className="text-sm font-bold text-slate-900">Plafonds Financiers & Limites de Rôles</h3>
             <p className="text-xs text-slate-500">
-              Définissez les droits d'accès détaillés par module et rôle métier
+              Plafonds stricts de remises (%) et de remboursements (FCFA) applicables sans code PIN Superviseur
             </p>
           </div>
-          <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-3 py-1 rounded-xl border border-emerald-200">
-            Traçabilité active
-          </span>
-        </div>
 
-        <div className="overflow-x-auto custom-scrollbar">
-          <table className="w-full text-left border-collapse text-xs">
-            <thead>
-              <tr className="bg-slate-100 text-slate-700 font-bold uppercase text-[10px] border-b border-slate-200">
-                <th className="py-2.5 px-3">Module</th>
-                {roles.map((r) => (
-                  <th key={r} className="py-2.5 px-2 text-center uppercase">
-                    {r}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {modules.map((m) => (
-                <tr key={m.module} className="hover:bg-slate-50">
-                  <td className="py-3 px-3 font-bold text-slate-900">{m.label}</td>
-                  {roles.map((r) => {
-                    const canView = (rolePermissions as any)?.[r]?.[m.module]?.view ?? false;
-                    const isDirection = r === 'direction';
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {(['serveur', 'caisse', 'manager'] as UserRole[]).map((role) => {
+              const currentLimit = roleLimits[role] || {
+                maxDiscountPercent: 5,
+                maxRefundAmount: 10000,
+                maxExpenseAmount: 50000,
+              };
 
-                    return (
-                      <td key={r} className="py-3 px-2 text-center">
-                        <button
-                          type="button"
-                          disabled={isDirection}
-                          onClick={() => updateRolePermission(r, m.module, 'view', !canView)}
-                          className={`relative inline-flex h-4 w-7 shrink-0 cursor-pointer rounded-full border border-transparent transition-colors duration-200 ease-in-out disabled:cursor-not-allowed ${
-                            (isDirection || canView) ? 'bg-amber-500' : 'bg-slate-200'
-                          }`}
-                        >
-                          <span
-                            className={`pointer-events-none inline-block h-3 w-3 transform rounded-full bg-white shadow-xs transition duration-200 ease-in-out ${
-                              (isDirection || canView) ? 'translate-x-3' : 'translate-x-0.5'
-                            } mt-0.5`}
-                          />
-                        </button>
-                      </td>
-                    );
-                  })}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    );
-  }
+              return (
+                <div key={role} className="p-4 rounded-xl border border-slate-200 bg-slate-50 space-y-3 text-xs">
+                  <div className="font-bold text-slate-900 uppercase text-xs flex items-center justify-between">
+                    <span>Rôle : {role}</span>
+                    <span className="text-[10px] px-2 py-0.5 rounded bg-white font-bold border border-slate-200">
+                      Actif
+                    </span>
+                  </div>
 
-  // 3. SÉCURITÉ & PLAFONDS
-  if (subTab === 'securite') {
-    return (
-      <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-6">
-        <div className="border-b border-slate-100 pb-4">
-          <h3 className="text-sm font-bold text-slate-900">Plafonds Financiers & Règles d'Autorisation</h3>
-          <p className="text-xs text-slate-500">
-            Plafonds de remise et de remboursement sans approbation managériale
-          </p>
-        </div>
+                  <div>
+                    <label className="text-slate-600 block mb-1">Remise max sans accord (%) :</label>
+                    <input
+                      type="number"
+                      min={0}
+                      max={100}
+                      value={currentLimit.maxDiscountPercent}
+                      onChange={(e) => updateRoleLimits(role, { maxDiscountPercent: Number(e.target.value) })}
+                      className="w-full p-2 bg-white rounded-lg border border-slate-300 font-bold font-mono"
+                    />
+                  </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {(['serveur', 'caisse', 'manager'] as UserRole[]).map((role) => {
-            const currentLimit = roleLimits[role] || {
-              maxDiscountPercent: 5,
-              maxRefundAmount: 10000,
-              maxExpenseAmount: 50000,
-            };
+                  <div>
+                    <label className="text-slate-600 block mb-1">Remboursement max (FCFA) :</label>
+                    <input
+                      type="number"
+                      min={0}
+                      step={5000}
+                      value={currentLimit.maxRefundAmount}
+                      onChange={(e) => updateRoleLimits(role, { maxRefundAmount: Number(e.target.value) })}
+                      className="w-full p-2 bg-white rounded-lg border border-slate-300 font-bold font-mono"
+                    />
+                  </div>
 
-            return (
-              <div key={role} className="p-4 rounded-xl border border-slate-200 bg-slate-50 space-y-3 text-xs">
-                <div className="font-bold text-slate-900 uppercase text-xs flex items-center justify-between">
-                  <span>Rôle : {role}</span>
-                  <span className="text-[10px] px-2 py-0.5 rounded bg-white font-bold border border-slate-200">
-                    Actif
-                  </span>
+                  <div>
+                    <label className="text-slate-600 block mb-1">Dépense de caisse max (FCFA) :</label>
+                    <input
+                      type="number"
+                      min={0}
+                      step={10000}
+                      value={currentLimit.maxExpenseAmount}
+                      onChange={(e) => updateRoleLimits(role, { maxExpenseAmount: Number(e.target.value) })}
+                      className="w-full p-2 bg-white rounded-lg border border-slate-300 font-bold font-mono"
+                    />
+                  </div>
                 </div>
-
-                <div>
-                  <label className="text-slate-600 block mb-1">Remise max sans accord (%) :</label>
-                  <input
-                    type="number"
-                    min={0}
-                    max={100}
-                    value={currentLimit.maxDiscountPercent}
-                    onChange={(e) => updateRoleLimits(role, { maxDiscountPercent: Number(e.target.value) })}
-                    className="w-full p-2 bg-white rounded-lg border border-slate-300 font-bold font-mono"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-slate-600 block mb-1">Remboursement max (FCFA) :</label>
-                  <input
-                    type="number"
-                    min={0}
-                    step={5000}
-                    value={currentLimit.maxRefundAmount}
-                    onChange={(e) => updateRoleLimits(role, { maxRefundAmount: Number(e.target.value) })}
-                    className="w-full p-2 bg-white rounded-lg border border-slate-300 font-bold font-mono"
-                  />
-                </div>
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
         </div>
       </div>
     );

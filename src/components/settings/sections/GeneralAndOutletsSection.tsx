@@ -84,9 +84,43 @@ export const GeneralAndOutletsSection: React.FC<Props> = ({ subTab }) => {
     setNewOutletAddress('');
   };
 
-  if (subTab === 'general') {
-    return (
-      <form onSubmit={handleSaveGeneral} className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-6">
+  const [currentSubTab, setCurrentSubTab] = useState<'general' | 'etablissement'>(subTab || 'general');
+
+  return (
+    <div className="space-y-4">
+      {/* Tab Switcher */}
+      <div className="bg-white p-2 rounded-2xl border border-slate-200 shadow-xs flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() => setCurrentSubTab('general')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+            currentSubTab === 'general'
+              ? 'bg-slate-900 text-white shadow-xs'
+              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+          }`}
+        >
+          <Building className="w-4 h-4 text-amber-400" />
+          <span>Identité Commerciale & Devise</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setCurrentSubTab('etablissement')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+            currentSubTab === 'etablissement'
+              ? 'bg-slate-900 text-white shadow-xs'
+              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+          }`}
+        >
+          <MapPin className="w-4 h-4 text-emerald-500" />
+          <span>Succursales & Points de Vente</span>
+          <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-200 text-slate-700 font-black">
+            {outlets.length}
+          </span>
+        </button>
+      </div>
+
+      {currentSubTab === 'general' ? (
+        <form onSubmit={handleSaveGeneral} className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-6">
         <div className="flex items-center justify-between border-b border-slate-100 pb-4">
           <div>
             <h3 className="text-sm font-bold text-slate-900">Paramètres Généraux de l'Établissement</h3>
@@ -194,12 +228,8 @@ export const GeneralAndOutletsSection: React.FC<Props> = ({ subTab }) => {
           </button>
         </div>
       </form>
-    );
-  }
-
-  // Subtab: 'etablissement'
-  return (
-    <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-6">
+      ) : (
+        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-6">
       <div className="flex items-center justify-between border-b border-slate-100 pb-4">
         <div>
           <h3 className="text-sm font-bold text-slate-900">Gestion Multi-Établissements & Succursales</h3>
@@ -395,6 +425,8 @@ export const GeneralAndOutletsSection: React.FC<Props> = ({ subTab }) => {
               </button>
             </div>
           </form>
+        </div>
+      )}
         </div>
       )}
     </div>

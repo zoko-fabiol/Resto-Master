@@ -37,21 +37,23 @@ export const ClientsAndLoyaltySection: React.FC<Props> = ({ subTab }) => {
     setOptions((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
+  const [currentSubTab, setCurrentSubTab] = useState<'clients' | 'fidelite'>(subTab || 'clients');
+
   const handleSave = async () => {
     await updateOperationRules(options);
     setSavedSuccess(true);
-    addAuditLog('Mise à jour options', 'Paramètres', `Paramètres ${subTab.toUpperCase()} enregistrés`);
+    addAuditLog('Mise à jour options', 'Paramètres', `Paramètres ${currentSubTab.toUpperCase()} enregistrés`);
     setTimeout(() => setSavedSuccess(false), 2500);
   };
 
-  const isClients = subTab === 'clients';
+  const isClients = currentSubTab === 'clients';
   const Icon = isClients ? Users : Award;
   const title = isClients
     ? 'Configuration Clients, Fiches & Crédits'
     : 'Configuration Programme de Fidélité & Récompenses';
   const description = isClients
-    ? 'CRM restaurant, plafonds de créance et historique de consommation (Section 13)'
-    : 'Paliers VIP, barème de points, remises et cartes cadeaux (Section 14)';
+    ? 'CRM restaurant, plafonds de créance et historique de consommation'
+    : 'Paliers VIP, barème de points, remises et cartes cadeaux';
 
   const items = isClients
     ? [
@@ -178,7 +180,36 @@ export const ClientsAndLoyaltySection: React.FC<Props> = ({ subTab }) => {
       ];
 
   return (
-    <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-xs space-y-6">
+    <div className="space-y-4">
+      {/* Switcher CRM / Fidélité */}
+      <div className="bg-white p-2 rounded-2xl border border-slate-200 shadow-xs flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() => setCurrentSubTab('clients')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+            currentSubTab === 'clients'
+              ? 'bg-slate-900 text-white shadow-xs'
+              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+          }`}
+        >
+          <Users className="w-4 h-4 text-sky-400" />
+          <span>Fiches Clients, CRM & Crédits</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setCurrentSubTab('fidelite')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+            currentSubTab === 'fidelite'
+              ? 'bg-slate-900 text-white shadow-xs'
+              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+          }`}
+        >
+          <Award className="w-4 h-4 text-amber-500" />
+          <span>Programme de Fidélité VIP & Points</span>
+        </button>
+      </div>
+
+      <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-xs space-y-6">
       <div className="flex items-center justify-between border-b border-slate-100 pb-4">
         <div className="flex items-center gap-3">
           <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-sky-500 to-indigo-600 text-white flex items-center justify-center shadow-md shadow-sky-500/20">
@@ -233,5 +264,6 @@ export const ClientsAndLoyaltySection: React.FC<Props> = ({ subTab }) => {
         </button>
       </div>
     </div>
+  </div>
   );
 };
