@@ -28,6 +28,7 @@ import {
   X,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
+import { EmptyState } from '../ui/EmptyState';
 
 const CRITICAL_KEYWORDS = ['arachide', 'sel', 'piment', 'allergie', 'saignant', 'bien cuit', 'sans', 'urgent'];
 
@@ -47,6 +48,33 @@ export const KitchenKdsView: React.FC = () => {
   const [search86, setSearch86] = useState('');
   const [soundEnabled, setSoundEnabled] = useState<boolean>(true);
   const previousKitchenOrdersCount = React.useRef<number | null>(null);
+
+  // Maintien de l'écran allumé (Screen Wake Lock API) pour tablette de cuisine
+  React.useEffect(() => {
+    let wakeLock: any = null;
+    const requestWakeLock = async () => {
+      try {
+        if ('wakeLock' in navigator) {
+          wakeLock = await (navigator as any).wakeLock.request('screen');
+        }
+      } catch {
+        // Fallback silencieux si non supporté ou refusé par le navigateur
+      }
+    };
+    requestWakeLock();
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        requestWakeLock();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      if (wakeLock) {
+        wakeLock.release().catch(() => {});
+      }
+    };
+  }, []);
 
   // Alerte sonore automatique lors de l'arrivée d'une nouvelle commande en cuisine
   React.useEffect(() => {
@@ -72,6 +100,22 @@ export const KitchenKdsView: React.FC = () => {
   const isPrepCategoriesAllowed = isRuleEnabled('cuisine_prep_categories', true);
 
   const [categoryFilter, setCategoryFilter] = useState<'tous' | 'chaud' | 'froid' | 'grillades'>('tous');
+
+  // Filtrage intelligent par poste de préparation cuisine
+  const matchesStation = (item: OrderItem) => {
+    if (categoryFilter === 'tous') return true;
+    const text = `${item.productName} ${item.notes || ''}`.toLowerCase();
+    if (categoryFilter === 'grillades') {
+      return text.includes('grill') || text.includes('brais') || text.includes('brochet') || text.includes('steak') || text.includes('choukouya');
+    }
+    if (categoryFilter === 'froid') {
+      return item.courseTiming === 'entree' || item.courseTiming === 'dessert' || text.includes('salade') || text.includes('froid') || text.includes('glace');
+    }
+    if (categoryFilter === 'chaud') {
+      return item.courseTiming === 'plat' || text.includes('chaud') || text.includes('soupe') || text.includes('sauce') || text.includes('riz') || text.includes('frite');
+    }
+    return true;
+  };
 
   // Mode & Tabs:
   // - 'active': En cours & Servies (toutes les commandes non encore encaissées)
@@ -108,7 +152,7 @@ export const KitchenKdsView: React.FC = () => {
   // Visible tant que la commande N'EST PAS ENCAISSÉE (status !== 'payee' et status !== 'annulee')
   const activeKitchenOrders = useMemo(() => {
     return orders.filter((order) => {
-      const hasKitchenItems = order.items.some((i) => i.destination === 'cuisine');
+      const hasKitchenItems = order.items.some((i) => i.destination === 'cuisine' && matchesStation(i));
       if (!hasKitchenItems) return false;
 
       // Dès qu'elle est encaissée ou annulée, elle disparaît du KDS actif
@@ -126,11 +170,11 @@ export const KitchenKdsView: React.FC = () => {
       // 'active': toutes les commandes en cours ou servies à table
       return true;
     });
-  }, [orders, filterState]);
+  }, [orders, filterState, categoryFilter]);
 
   // Stats for the active tabs badges
   const counts = useMemo(() => {
-    const kitchenOnly = orders.filter((o) => o.items.some((i) => i.destination === 'cuisine'));
+    const kitchenOnly = orders.filter((o) => o.items.some((i) => i.destination === 'cuisine' && matchesStation(i)));
     const uncashed = kitchenOnly.filter((o) => o.status !== 'payee' && o.status !== 'annulee');
 
     return {
@@ -144,7 +188,7 @@ export const KitchenKdsView: React.FC = () => {
           (o.status === 'payee' || o.status === 'servi')
       ).length,
     };
-  }, [orders, selectedDate]);
+  }, [orders, selectedDate, categoryFilter]);
 
   // Orders for "Historique Journalier"
   const historyOrders = useMemo(() => {
@@ -851,12 +895,18 @@ export const KitchenKdsView: React.FC = () => {
         /* ========================================================= */
         <>
           {activeKitchenOrders.length === 0 ? (
-            <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center text-slate-400 space-y-2 shadow-xs">
-              <ChefHat className="w-12 h-12 mx-auto text-slate-300" />
-              <div className="text-sm font-bold text-slate-700">Aucun bon de commande en cours</div>
-              <p className="text-xs text-slate-500 max-w-sm mx-auto">
-                Toutes les préparations cuisine ont été envoyées, servies et encaissées ! Vous pouvez consulter l'Historique Journalier à tout moment.
-              </p>
+            <div className="bg-white rounded-3xl border border-slate-200 p-8 sm:p-12 shadow-xs">
+              <EmptyState
+                icon={ChefHat}
+                title="Aucun bon de commande en cours"
+                description={
+                  categoryFilter !== 'tous'
+                    ? `Aucune commande active pour le poste « ${categoryFilter} ». Réinitialisez le filtre pour voir toutes les commandes.`
+                    : "Toutes les préparations cuisine ont été envoyées, servies et encaissées ! Vous pouvez consulter l'historique journalier à tout moment."
+                }
+                actionLabel={categoryFilter !== 'tous' ? "Afficher tous les postes" : undefined}
+                onAction={categoryFilter !== 'tous' ? () => setCategoryFilter('tous') : undefined}
+              />
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
@@ -864,12 +914,11 @@ export const KitchenKdsView: React.FC = () => {
                 const elapsed = getMinutesElapsed(order.createdAt);
                 const isLate = elapsed > 25;
                 const isMedium = elapsed > 15 && !isLate;
-                const kitchenItems = order.items.filter((i) => i.destination === 'cuisine');
+                const kitchenItems = order.items.filter((i) => i.destination === 'cuisine' && matchesStation(i));
 
                 // State checks on items
                 const hasPendingItems = kitchenItems.some((i) => i.status === 'en_attente');
                 const hasInPrepItems = kitchenItems.some((i) => i.status === 'en_preparation');
-                const allReadyOrServi = kitchenItems.every((i) => i.status === 'pret' || i.status === 'servi');
                 const isOrderServi = order.status === 'servi';
 
                 return (
@@ -899,55 +948,56 @@ export const KitchenKdsView: React.FC = () => {
                     >
                       <div>
                         <div className="flex items-center gap-2">
-                          <span className="text-base font-black text-slate-900">
+                          <span className="text-lg sm:text-xl font-black text-slate-900 tracking-tight">
                             {order.tableName || 'À emporter'}
                           </span>
                           {order.guestCount && order.guestCount > 0 ? (
-                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200">
+                            <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200 tabular-nums">
                               {order.guestCount} cvts
                             </span>
                           ) : null}
-                          <span className="text-xs font-mono text-slate-500 font-bold">
+                          <span className="text-xs font-mono font-bold text-slate-500 tabular-nums">
                             {order.orderNumber}
                           </span>
                         </div>
-                        <div className="text-[11px] text-slate-500 mt-0.5">
-                          Serveur : <strong>{order.serverName}</strong>
+                        <div className="text-xs text-slate-500 mt-1">
+                          Serveur : <strong className="text-slate-800">{order.serverName}</strong>
                         </div>
                       </div>
 
                       {/* Header Badge: Status, Priority or Elapsed Timer */}
-                      <div className="flex flex-col items-end gap-1">
+                      <div className="flex flex-col items-end gap-1.5">
                         {isPriorityAllowed && (order.notes?.toLowerCase().includes('urgent') || (order.total && order.total >= 40000)) && (
-                          <span className="text-[10px] font-black px-1.5 py-0.5 rounded-full bg-rose-600 text-white animate-pulse flex items-center gap-1">
-                            <Flame className="w-3 h-3" />
+                          <span className="text-xs font-black px-2 py-0.5 rounded-full bg-rose-600 text-white animate-pulse flex items-center gap-1 shadow-2xs">
+                            <Flame className="w-3.5 h-3.5" />
                             <span>VIP / Urgent</span>
                           </span>
                         )}
 
                         {isOrderServi ? (
-                          <div className="flex items-center gap-1 text-[11px] font-black px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300">
-                            <Utensils className="w-3 h-3" />
+                          <div className="flex items-center gap-1.5 text-xs font-black px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300">
+                            <Utensils className="w-3.5 h-3.5" />
                             <span>Servi à table</span>
                           </div>
                         ) : isPrepTimerAllowed ? (
                           <div
-                            className={`flex items-center gap-1 text-xs font-black px-2.5 py-1 rounded-full border ${
+                            className={`flex items-center gap-1.5 text-xs font-black px-3 py-1 rounded-full border tabular-nums ${
                               isLate && isNotifyDelayAllowed
-                                ? 'bg-red-600 text-white border-red-700 animate-pulse'
+                                ? 'bg-rose-600 text-white border-rose-700 animate-pulse shadow-xs'
                                 : isMedium
                                 ? 'bg-amber-100 text-amber-900 border-amber-300'
                                 : 'bg-emerald-100 text-emerald-800 border-emerald-300'
                             }`}
+                            aria-label={`Temps écoulé : ${elapsed} minutes`}
                           >
-                            <Clock className="w-3 h-3" />
+                            <Clock className="w-3.5 h-3.5" />
                             <span>{elapsed} min</span>
                           </div>
                         ) : null}
 
                         {order.status === 'en_preparation' && !isOrderServi && (
-                          <span className="text-[10px] font-bold text-amber-600 flex items-center gap-1">
-                            <Flame className="w-3 h-3 animate-bounce" />
+                          <span className="text-xs font-bold text-amber-700 flex items-center gap-1">
+                            <Flame className="w-3.5 h-3.5 text-amber-600 animate-bounce" />
                             <span>En préparation</span>
                           </span>
                         )}
@@ -969,18 +1019,18 @@ export const KitchenKdsView: React.FC = () => {
                         return (
                           <div
                             key={item.id}
-                            className={`pt-2.5 first:pt-0 space-y-1.5 ${
+                            className={`pt-3 first:pt-0 space-y-2 ${
                               isServi ? 'opacity-50' : ''
                             }`}
                           >
-                            <div className="flex items-start justify-between gap-2">
-                              <div className="flex items-center gap-2">
-                                <span className="text-sm font-black text-slate-900 w-6">
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="flex items-center gap-2.5 min-w-0">
+                                <span className="text-base sm:text-lg font-black text-slate-900 w-7 tabular-nums shrink-0">
                                   {item.quantity}x
                                 </span>
                                 {item.seatNumber !== undefined && (
                                   <span
-                                    className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${
+                                    className={`text-xs font-bold px-2 py-0.5 rounded border shrink-0 ${
                                       item.seatNumber === 0
                                         ? 'bg-slate-100 text-slate-700 border-slate-300'
                                         : 'bg-amber-100 text-amber-900 border-amber-300 font-black'
@@ -995,7 +1045,7 @@ export const KitchenKdsView: React.FC = () => {
                                 )}
                                 {item.courseTiming && item.courseTiming !== 'direct' && (
                                   <span
-                                    className={`text-[9px] font-black px-1.5 py-0.5 rounded border uppercase ${
+                                    className={`text-xs font-black px-2 py-0.5 rounded border uppercase shrink-0 ${
                                       item.courseTiming === 'entree'
                                         ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
                                         : item.courseTiming === 'plat'
@@ -1007,7 +1057,7 @@ export const KitchenKdsView: React.FC = () => {
                                   </span>
                                 )}
                                 <span
-                                  className={`text-xs font-bold ${
+                                  className={`text-sm sm:text-base font-bold leading-snug ${
                                     isServi
                                       ? 'line-through text-slate-400'
                                       : isReady
@@ -1020,33 +1070,33 @@ export const KitchenKdsView: React.FC = () => {
                               </div>
 
                               {/* Progressive Item Action Button: en_attente -> en_prep -> pret -> servi */}
-                              <div>
+                              <div className="shrink-0">
                                 {isPending ? (
                                   <button
                                     onClick={() => handleNextItemStatus(order.id, item)}
-                                    className="px-2.5 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-800 text-[11px] font-bold border border-amber-200 transition-colors flex items-center gap-1 cursor-pointer"
+                                    className="px-3 py-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-900 text-xs font-bold border border-amber-200 transition-colors flex items-center gap-1.5 cursor-pointer shadow-2xs active:scale-95"
                                   >
-                                    <Flame className="w-3 h-3 text-amber-600" />
+                                    <Flame className="w-3.5 h-3.5 text-amber-600" />
                                     <span>Lancer</span>
                                   </button>
                                 ) : isInPrep ? (
                                   <button
                                     onClick={() => handleNextItemStatus(order.id, item)}
-                                    className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-emerald-100 text-slate-700 hover:text-emerald-800 text-[11px] font-bold transition-colors cursor-pointer"
+                                    className="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-emerald-100 text-slate-700 hover:text-emerald-900 text-xs font-bold transition-colors cursor-pointer border border-slate-200 hover:border-emerald-300 shadow-2xs active:scale-95"
                                   >
                                     Prêt
                                   </button>
                                 ) : isReady ? (
                                   <button
                                     onClick={() => handleNextItemStatus(order.id, item)}
-                                    className="px-2.5 py-1 rounded-lg bg-emerald-100 hover:bg-emerald-200 text-emerald-900 text-[11px] font-black border border-emerald-300 transition-colors flex items-center gap-1 cursor-pointer"
+                                    className="px-3 py-1.5 rounded-xl bg-emerald-100 hover:bg-emerald-200 text-emerald-900 text-xs font-black border border-emerald-300 transition-colors flex items-center gap-1.5 cursor-pointer shadow-2xs active:scale-95"
                                     title="Marquer comme servi à table"
                                   >
-                                    <Check className="w-3 h-3" />
+                                    <Check className="w-3.5 h-3.5" />
                                     <span>Servir</span>
                                   </button>
                                 ) : (
-                                  <span className="flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+                                  <span className="flex items-center gap-1.5 text-xs font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200">
                                     <CheckCheck className="w-3.5 h-3.5" />
                                     <span>Servi</span>
                                   </span>
@@ -1057,13 +1107,13 @@ export const KitchenKdsView: React.FC = () => {
                             {/* Special preparation note / allergies */}
                             {item.notes && (
                               <div
-                                className={`text-[11px] px-2 py-1 rounded-md font-semibold ${
+                                className={`text-xs px-2.5 py-1.5 rounded-lg font-semibold ${
                                   hasCriticalNote
-                                    ? 'bg-rose-100 text-rose-900 border border-rose-300 font-bold'
-                                    : 'bg-amber-50 text-amber-900 border border-amber-200'
+                                    ? 'bg-rose-100 text-rose-950 border border-rose-300 font-bold'
+                                    : 'bg-amber-50 text-amber-950 border border-amber-200'
                                 }`}
                               >
-                                {hasCriticalNote && <span className="font-black mr-1 uppercase">Attention :</span>}
+                                {hasCriticalNote && <span className="font-black mr-1 uppercase text-rose-700">Attention :</span>}
                                 {item.notes}
                               </div>
                             )}
@@ -1073,7 +1123,7 @@ export const KitchenKdsView: React.FC = () => {
 
                       {/* General order note */}
                       {order.notes && (
-                        <div className="pt-2 text-[11px] italic text-slate-500 bg-slate-50 p-2 rounded-lg">
+                        <div className="pt-2 text-xs italic text-slate-600 bg-slate-50 p-2.5 rounded-xl border border-slate-100">
                           Note client : {order.notes}
                         </div>
                       )}

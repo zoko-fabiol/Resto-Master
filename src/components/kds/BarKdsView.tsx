@@ -25,10 +25,38 @@ import {
   X,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
+import { EmptyState } from '../ui/EmptyState';
 
 export const BarKdsView: React.FC = () => {
   const { orders, updateOrderItemStatus, updateOrderStatus, isRuleEnabled } = useRestaurant();
   const { showToast, playAudioChime } = useToast();
+
+  // Maintien de l'écran allumé (Screen Wake Lock API) pour tablette du bar
+  React.useEffect(() => {
+    let wakeLock: any = null;
+    const requestWakeLock = async () => {
+      try {
+        if ('wakeLock' in navigator) {
+          wakeLock = await (navigator as any).wakeLock.request('screen');
+        }
+      } catch {
+        // Fallback silencieux si non supporté ou refusé par le navigateur
+      }
+    };
+    requestWakeLock();
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        requestWakeLock();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      if (wakeLock) {
+        wakeLock.release().catch(() => {});
+      }
+    };
+  }, []);
 
   // Règles Opérationnelles (Section 10 Bar & Cave)
   const isBarLossesAllowed = isRuleEnabled('bar_losses', true) || isRuleEnabled('bar_breakage', true);
@@ -650,10 +678,12 @@ export const BarKdsView: React.FC = () => {
         /* LIVE BAR CARDS */
         <>
           {activeBarOrders.length === 0 ? (
-            <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center text-slate-400 space-y-2">
-              <GlassWater className="w-12 h-12 mx-auto text-slate-300" />
-              <div className="text-sm font-bold text-slate-700">Aucune boisson en cours</div>
-              <p className="text-xs text-slate-500">Toutes les consommations ont été servies et encaissées !</p>
+            <div className="bg-white rounded-3xl border border-slate-200 p-8 sm:p-12 shadow-xs">
+              <EmptyState
+                icon={Wine}
+                title="Aucune boisson en cours"
+                description="Toutes les consommations ont été servies et encaissées ! Vous pouvez consulter l'historique journalier du bar à tout moment."
+              />
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
@@ -678,32 +708,35 @@ export const BarKdsView: React.FC = () => {
                     <div className="p-4 bg-emerald-50/60 border-b border-emerald-100 flex items-start justify-between">
                       <div>
                         <div className="flex items-center gap-2">
-                          <span className="text-base font-black text-slate-900">
+                          <span className="text-lg sm:text-xl font-black text-slate-900 tracking-tight">
                             {order.tableName || 'Bar Comptoir'}
                           </span>
                           {order.guestCount && order.guestCount > 0 ? (
-                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
+                            <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200 tabular-nums">
                               {order.guestCount} cvts
                             </span>
                           ) : null}
-                          <span className="text-xs font-mono font-bold text-slate-500">
+                          <span className="text-xs font-mono font-bold text-slate-500 tabular-nums">
                             {order.orderNumber}
                           </span>
                         </div>
-                        <div className="text-[11px] text-slate-500 mt-0.5">
-                          Serveur : <strong>{order.serverName}</strong>
+                        <div className="text-xs text-slate-500 mt-1">
+                          Serveur : <strong className="text-slate-800">{order.serverName}</strong>
                         </div>
                       </div>
 
-                      <div className="flex flex-col items-end gap-1">
+                      <div className="flex flex-col items-end gap-1.5">
                         {isOrderServi ? (
-                          <div className="flex items-center gap-1 text-[11px] font-black px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300">
-                            <Wine className="w-3 h-3" />
+                          <div className="flex items-center gap-1.5 text-xs font-black px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300">
+                            <Wine className="w-3.5 h-3.5" />
                             <span>Servi à table</span>
                           </div>
                         ) : (
-                          <div className="flex items-center gap-1 text-xs font-black px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
-                            <Clock className="w-3 h-3" />
+                          <div
+                            className="flex items-center gap-1.5 text-xs font-black px-3 py-1.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300 tabular-nums"
+                            aria-label={`Temps écoulé : ${elapsed} minutes`}
+                          >
+                            <Clock className="w-3.5 h-3.5" />
                             <span>{elapsed} min</span>
                           </div>
                         )}
@@ -711,7 +744,7 @@ export const BarKdsView: React.FC = () => {
                     </div>
 
                     {/* Items */}
-                    <div className="p-4 space-y-2 flex-1 divide-y divide-slate-100">
+                    <div className="p-4 space-y-3 flex-1 divide-y divide-slate-100">
                       {barItems.map((item) => {
                         const isServi = item.status === 'servi';
                         const isReady = item.status === 'pret';
@@ -721,73 +754,76 @@ export const BarKdsView: React.FC = () => {
                         return (
                           <div
                             key={item.id}
-                            className={`pt-2 first:pt-0 flex items-center justify-between gap-3 ${
+                            className={`pt-3 first:pt-0 space-y-2 ${
                               isServi ? 'opacity-50' : ''
                             }`}
                           >
-                            <div className="flex items-center gap-2">
-                              <span className="font-black text-slate-900 text-sm">{item.quantity}x</span>
-                              {item.seatNumber !== undefined && (
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="flex items-center gap-2.5 min-w-0">
+                                <span className="font-black text-slate-900 text-base sm:text-lg w-7 tabular-nums shrink-0">{item.quantity}x</span>
+                                {item.seatNumber !== undefined && (
+                                  <span
+                                    className={`text-xs font-bold px-2 py-0.5 rounded border shrink-0 ${
+                                      item.seatNumber === 0
+                                        ? 'bg-slate-100 text-slate-700 border-slate-300'
+                                        : 'bg-emerald-100 text-emerald-900 border-emerald-300 font-black'
+                                    }`}
+                                  >
+                                    {item.seatNumber === 0 ? 'Table' : `C${item.seatNumber}`}
+                                  </span>
+                                )}
+                                {item.courseTiming && item.courseTiming !== 'direct' && (
+                                  <span
+                                    className={`text-xs font-black px-2 py-0.5 rounded border uppercase shrink-0 ${
+                                      item.courseTiming === 'entree'
+                                        ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                                        : item.courseTiming === 'plat'
+                                        ? 'bg-amber-100 text-amber-900 border-amber-300'
+                                        : 'bg-purple-100 text-purple-900 border-purple-300'
+                                    }`}
+                                  >
+                                    {item.courseTiming === 'entree' ? 'Entrée' : item.courseTiming === 'plat' ? 'Plat' : 'Dessert'}
+                                  </span>
+                                )}
                                 <span
-                                  className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${
-                                    item.seatNumber === 0
-                                      ? 'bg-slate-100 text-slate-700 border-slate-300'
-                                      : 'bg-emerald-100 text-emerald-900 border-emerald-300 font-black'
+                                  className={`text-sm sm:text-base font-bold leading-snug ${
+                                    isServi ? 'line-through text-slate-400' : 'text-slate-800'
                                   }`}
                                 >
-                                  {item.seatNumber === 0 ? 'Table' : `C${item.seatNumber}`}
+                                  {item.productName}
                                 </span>
-                              )}
-                              {item.courseTiming && item.courseTiming !== 'direct' && (
-                                <span
-                                  className={`text-[9px] font-black px-1.5 py-0.5 rounded border uppercase ${
-                                    item.courseTiming === 'entree'
-                                      ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
-                                      : item.courseTiming === 'plat'
-                                      ? 'bg-amber-100 text-amber-900 border-amber-300'
-                                      : 'bg-purple-100 text-purple-900 border-purple-300'
-                                  }`}
-                                >
-                                  {item.courseTiming === 'entree' ? 'Entrée' : item.courseTiming === 'plat' ? 'Plat' : 'Dessert'}
-                                </span>
-                              )}
-                              <span
-                                className={`text-xs font-bold ${
-                                  isServi ? 'line-through text-slate-400' : 'text-slate-800'
-                                }`}
-                              >
-                                {item.productName}
-                              </span>
-                            </div>
+                              </div>
 
-                            <div>
-                              {isPending ? (
-                                <button
-                                  onClick={() => handleNextItemStatus(order.id, item)}
-                                  className="text-[11px] font-bold px-2 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 cursor-pointer"
-                                >
-                                  Préparer
-                                </button>
-                              ) : isInPrep ? (
-                                <button
-                                  onClick={() => handleNextItemStatus(order.id, item)}
-                                  className="text-[11px] font-bold px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-emerald-100 text-slate-700 hover:text-emerald-800 cursor-pointer"
-                                >
-                                  Prêt
-                                </button>
-                              ) : isReady ? (
-                                <button
-                                  onClick={() => handleNextItemStatus(order.id, item)}
-                                  className="text-[11px] font-black px-2.5 py-1 rounded-lg bg-emerald-100 hover:bg-emerald-200 text-emerald-900 border border-emerald-300 cursor-pointer"
-                                >
-                                  Servir
-                                </button>
-                              ) : (
-                                <span className="flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
-                                  <CheckCheck className="w-3.5 h-3.5" />
-                                  <span>Servi</span>
-                                </span>
-                              )}
+                              <div className="shrink-0">
+                                {isPending ? (
+                                  <button
+                                    onClick={() => handleNextItemStatus(order.id, item)}
+                                    className="text-xs font-bold px-3 py-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 cursor-pointer shadow-2xs active:scale-95 transition-colors"
+                                  >
+                                    Préparer
+                                  </button>
+                                ) : isInPrep ? (
+                                  <button
+                                    onClick={() => handleNextItemStatus(order.id, item)}
+                                    className="text-xs font-bold px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-emerald-100 text-slate-700 hover:text-emerald-900 border border-slate-200 hover:border-emerald-300 cursor-pointer shadow-2xs active:scale-95 transition-colors"
+                                  >
+                                    Prêt
+                                  </button>
+                                ) : isReady ? (
+                                  <button
+                                    onClick={() => handleNextItemStatus(order.id, item)}
+                                    className="text-xs font-black px-3 py-1.5 rounded-xl bg-emerald-100 hover:bg-emerald-200 text-emerald-900 border border-emerald-300 cursor-pointer shadow-2xs active:scale-95 transition-colors flex items-center gap-1.5"
+                                  >
+                                    <Wine className="w-3.5 h-3.5" />
+                                    <span>Servir</span>
+                                  </button>
+                                ) : (
+                                  <span className="flex items-center gap-1.5 text-xs font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200">
+                                    <CheckCheck className="w-3.5 h-3.5" />
+                                    <span>Servi</span>
+                                  </span>
+                                )}
+                              </div>
                             </div>
                           </div>
                         );
