@@ -1,7 +1,7 @@
 import { CallableRequest, HttpsError } from 'firebase-functions/v2/https';
 import crypto from 'node:crypto';
 import { db, auth, FieldValue } from '../firebase.js';
-import { getCallerContext, assertRoles } from '../auth.js';
+import { getCallerContext, assertRoles, hashPin } from '../auth.js';
 import { UserRole } from '../types.js';
 
 interface CreateUserData {
@@ -11,6 +11,10 @@ interface CreateUserData {
   phone?: string;
   outlets?: string[];
   organizationId?: string;
+  pin?: string;
+  accountType?: 'staff' | 'tablette';
+  assignedTableId?: string;
+  assignedTableName?: string;
 }
 
 interface SetUserRoleData {
@@ -52,7 +56,7 @@ export async function handleCreateUser(request: CallableRequest<CreateUserData>)
   const caller = getCallerContext(request);
   assertRoles(caller, ['superadmin', 'direction']);
 
-  const { email, name, role, phone, outlets, organizationId } = request.data;
+  const { email, name, role, phone, outlets, organizationId, pin, accountType, assignedTableId, assignedTableName } = request.data;
   if (!email || !name || !role) {
     throw new HttpsError('invalid-argument', 'Les champs email, nom et rôle sont obligatoires.');
   }
@@ -95,17 +99,37 @@ export async function handleCreateUser(request: CallableRequest<CreateUserData>)
     active: true,
   });
 
+  // Gestion cryptographique du PIN serveur
+  const finalPin = pin && /^\d{4,6}$/.test(pin)
+    ? pin
+    : crypto.randomInt(1000, 10000).toString();
+  const { hash, salt } = hashPin(finalPin);
+
+  await db.collection('user_pins').doc(userRecord.uid).set({
+    userId: userRecord.uid,
+    hash,
+    salt,
+    failedAttempts: 0,
+    lockoutUntil: null,
+    updatedAt: FieldValue.serverTimestamp(),
+    updatedBy: caller.name,
+  });
+
   // Création du profil utilisateur dans Firestore
   const userDoc = {
     id: userRecord.uid,
     email,
     name,
     role,
+    accountType: accountType || (role === 'tablette' ? 'tablette' : 'staff'),
+    assignedTableId: assignedTableId || null,
+    assignedTableName: assignedTableName || null,
     phone: phone || '',
     accessibleRestaurantIds: assignedOutlets,
     organizationId: assignedOrg,
     active: true,
     mustChangePassword: true,
+    hasPin: true,
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
     createdBy: caller.name,
@@ -117,7 +141,7 @@ export async function handleCreateUser(request: CallableRequest<CreateUserData>)
   await db.collection('audit_logs').add({
     action: 'Création Utilisateur',
     module: 'Personnel',
-    details: `Création du compte ${name} (${email}) avec rôle ${role} et mot de passe temporaire obligatoire`,
+    details: `Création du compte ${name} (${email}) avec rôle ${role}, mot de passe temporaire et PIN serveur`,
     entityId: userRecord.uid,
     userName: caller.name,
     userRole: caller.role,
@@ -129,6 +153,7 @@ export async function handleCreateUser(request: CallableRequest<CreateUserData>)
     success: true,
     userId: userRecord.uid,
     temporaryPassword,
+    generatedPin: finalPin,
   };
 }
 
@@ -207,4 +232,48 @@ export async function handleSetUserRole(request: CallableRequest<SetUserRoleData
   });
 
   return { success: true, userId, role, active };
+}
+
+/**
+ * Suppression sécurisée d'un compte utilisateur (Auth + Firestore + Pins + Audit)
+ * Accessible uniquement par le Super Administrateur et la Direction
+ */
+export async function handleDeleteUser(request: CallableRequest<{ userId: string }>) {
+  const caller = getCallerContext(request);
+  assertRoles(caller, ['superadmin', 'direction']);
+
+  const { userId } = request.data;
+  if (!userId) {
+    throw new HttpsError('invalid-argument', 'Le paramètre userId est obligatoire.');
+  }
+
+  // Interdiction formelle de supprimer son propre compte administrateur
+  if (userId === caller.uid) {
+    throw new HttpsError('failed-precondition', 'Impossible de supprimer votre propre compte.');
+  }
+
+  // 1. Suppression Firebase Auth
+  try {
+    await auth.deleteUser(userId);
+  } catch (err: any) {
+    console.warn(`[handleDeleteUser] Utilisateur non trouvé dans Auth ou déjà purgé (${userId}):`, err);
+  }
+
+  // 2. Suppression Firestore
+  await db.collection('users').doc(userId).delete();
+  await db.collection('user_pins').doc(userId).delete();
+
+  // 3. Journal d'audit immuable
+  await db.collection('audit_logs').add({
+    action: 'Suppression Compte Utilisateur',
+    module: 'Sécurité',
+    details: `Suppression définitive du compte utilisateur ${userId} par ${caller.name}`,
+    entityId: userId,
+    userName: caller.name,
+    userRole: caller.role,
+    userId: caller.uid,
+    timestamp: FieldValue.serverTimestamp(),
+  });
+
+  return { success: true, userId };
 }

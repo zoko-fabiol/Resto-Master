@@ -1,5 +1,5 @@
 import { onCall } from 'firebase-functions/v2/https';
-import { handleCreateUser, handleSetUserRole } from './modules/users.js';
+import { handleCreateUser, handleSetUserRole, handleDeleteUser } from './modules/users.js';
 import { handleSetPin, handleVerifyPin, handleVerifySupervisor, handleUnlockWithPin } from './modules/pin.js';
 import { handleCreateOrder, handleAddItemsToOrder } from './modules/orders.js';
 import { handleRecordPayment } from './modules/payments.js';
@@ -18,6 +18,7 @@ const FUNCTION_OPTIONS = {
 // 1. Identité, Utilisateurs et Rôles RBAC
 export const createUser = onCall(FUNCTION_OPTIONS, handleCreateUser);
 export const setUserRole = onCall(FUNCTION_OPTIONS, handleSetUserRole);
+export const deleteUser = onCall(FUNCTION_OPTIONS, handleDeleteUser);
 
 // 2. Sécurité PIN & Superviseurs
 export const setPin = onCall(FUNCTION_OPTIONS, handleSetPin);

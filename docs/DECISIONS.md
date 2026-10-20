@@ -125,3 +125,29 @@ Ce document consigne les décisions d'architecture prises pour la livraison d'un
     - Protection renforcée dans `firestore.rules` pour `/restaurants/{restaurantId}` (suppression réservée à `isSuperadmin()`) et `/settings/{docId}` (interdiction de déverrouillage pour les rôles non-superadmin).
     - Génération et impression d'une Fiche Officielle de Mise en Service et Remise Client (A4 avec signatures intégrateur / client).
 - **Conséquences** : Parcours de déploiement clé-en-main, intégrité garantie dès le premier lancement, audit automatique infaillible et traçabilité de remise certifiée conforme.
+
+---
+
+### ADR-010 : Gestion Serveur des Comptes Utilisateurs, Sécurité Cryptographique des PINs et Fiches de Remise Sécurisées (Phase F)
+- **Date** : 2026-10-20
+- **Statut** : Accepté & Implémenté
+- **Contexte** : Historiquement, certains comptes étaient gérés en local ou dans une collection `user_accounts` non sécurisée avec des codes PIN en clair exposés dans l'interface client (cartes tablettes et tableau). Les opérations de création/modification/suppression n'étaient pas synchronisées avec Firebase Auth et les Cloud Functions. Il était impératif de supprimer la collection `user_accounts`, de basculer l'écoute sur la collection canonique `/users`, de hacher cryptographiquement les codes PIN (PBKDF2) côté serveur dans `/user_pins/{uid}` sans jamais stocker ni afficher de PIN en clair, d'introduire des fiches de remise d'identifiants imprimables (A4) pour l'employé, de lier les tablettes à `assignedTableId`, de découpler proprement les fiches RH des comptes d'accès, et de garantir l'unicité stricte des identifiants.
+- **Décision** :
+  - **F1 & F2 (Sécurité Serveur & Hachage PBKDF2)** :
+    - Suppression de la collection `user_accounts` au profit de la collection canonique sécurisée `/users`.
+    - Les PINs sont hachés côté serveur avec PBKDF2 (100 000 itérations, sel unique) dans `/user_pins/{uid}` via Cloud Functions (`createUser`, `setPin`). Le profil utilisateur dans Firestore `/users` conserve uniquement le drapeau booléen `hasPin: true`.
+    - Éradication complète de tout affichage de code PIN en clair dans l'interface (remplacé par des badges d'état "PIN Actif" / "Sans PIN" et boutons d'action sécurisés).
+  - **F3 (Fiche de Remise Sécurisée d'Identifiants `CredentialHandoverModal`)** :
+    - Création du composant `CredentialHandoverModal` assurant l'affichage unique des identifiants (email, mot de passe temporaire aléatoire fort généré côté serveur, code PIN) lors de la création ou de la réinitialisation.
+    - Format d'impression A4 officiel avec logo de l'établissement, engagements de confidentialité et bloc de double signature (direction / collaborateur).
+  - **F4 (Comptes Bornes Tablettes)** :
+    - Attribution et liaison directe du compte tablette à la table physique sélectionnée (`assignedTableId`, `assignedTableName`).
+    - Restriction en mode Kiosk client tactile sans barre latérale.
+  - **F5 (Découplage RH vs Accès)** :
+    - Séparation stricte des fiches d'employés RH (`employees`) et des comptes d'accès système (`users`).
+    - Passerelle fluide lors de la création permettant de lier un compte système à un profil RH existant en 1 clic sans fusionner les collections.
+  - **F6 (Unicité & Prévention des Comptes Fictifs)** :
+    - Contrôle d'unicité stricte de l'adresse email côté client et rejet des doublons côté Cloud Function (`already-exists`).
+    - Protection contre la suppression accidentelle des comptes superadmin ou du compte actif connecté.
+- **Conséquences** : Zéro code PIN en clair en base ou à l'écran, conformité RBAC via Custom Claims Firebase Auth, fiches de remise officielles imprimables pour la remise au personnel, traçabilité serveur complète via les journaux d'audit.
+

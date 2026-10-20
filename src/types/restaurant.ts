@@ -27,7 +27,8 @@ export interface UserAccount {
   id: string;
   name: string;
   email: string;
-  pinCode: string;
+  pinCode?: string; // Optionnel car désormais stocké hashé côté serveur dans user_pins
+  hasPin?: boolean;
   role: UserRole;
   accountType: AccountType;
   active: boolean;

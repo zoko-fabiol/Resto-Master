@@ -10,41 +10,63 @@ import {
   orderBy,
   limit,
 } from 'firebase/firestore';
-import { Employee, Attendance, UserAccount } from '../../types/restaurant';
+import { Employee, Attendance, UserAccount, UserProfile } from '../../types/restaurant';
 
 export const staffFirestoreService = {
-  // --- COMPTES UTILISATEURS DU SYSTÈME (AVEC CODES PIN ET PERMISSIONS) ---
-  async saveUserAccount(account: UserAccount): Promise<void> {
+  // --- COMPTES UTILISATEURS CANONIQUES (COLLECTION USERS SÉCURISÉE) ---
+  subscribeToUsers(callback: (users: UserAccount[]) => void): () => void {
     try {
-      const docRef = doc(db, 'user_accounts', account.id);
-      await setDoc(docRef, { ...account, updatedAt: new Date().toISOString() }, { merge: true });
-    } catch (err) {
-      console.warn('Erreur saveUserAccount Firestore:', err);
-    }
-  },
-
-  async deleteUserAccount(accountId: string): Promise<void> {
-    try {
-      await deleteDoc(doc(db, 'user_accounts', accountId));
-    } catch (err) {
-      console.warn('Erreur deleteUserAccount Firestore:', err);
-    }
-  },
-
-  subscribeToUserAccounts(callback: (accounts: UserAccount[]) => void): () => void {
-    try {
-      const colRef = collection(db, 'user_accounts');
+      const colRef = collection(db, 'users');
       return onSnapshot(
         colRef,
         (snapshot) => {
-          if (!snapshot.empty) {
-            callback(snapshot.docs.map((d) => d.data() as UserAccount));
-          }
+          const list = snapshot.docs.map((d) => {
+            const data = d.data();
+            const createdAtStr = data.createdAt?.toDate
+              ? data.createdAt.toDate().toISOString().slice(0, 10)
+              : (typeof data.createdAt === 'string' ? data.createdAt : new Date().toISOString().slice(0, 10));
+            const updatedAtStr = data.updatedAt?.toDate
+              ? data.updatedAt.toDate().toISOString().slice(0, 10)
+              : (typeof data.updatedAt === 'string' ? data.updatedAt : new Date().toISOString().slice(0, 10));
+
+            return {
+              id: d.id,
+              name: data.name || data.displayName || 'Utilisateur',
+              email: data.email || '',
+              role: data.role || 'serveur',
+              accountType: data.accountType || (data.role === 'tablette' ? 'tablette' : 'staff'),
+              active: data.active !== false,
+              avatar: data.avatar || '',
+              phone: data.phone || '',
+              matricule: data.matricule || '',
+              hasPin: Boolean(data.hasPin),
+              assignedTableId: data.assignedTableId || undefined,
+              assignedTableName: data.assignedTableName || undefined,
+              tabPermissions: data.tabPermissions || undefined,
+              additionalTabs: data.additionalTabs || undefined,
+              createdAt: createdAtStr,
+              updatedAt: updatedAtStr,
+            } as UserAccount;
+          });
+          callback(list);
         },
-        () => {}
+        (err) => {
+          console.warn('[staffFirestoreService] Écoute users interrompue:', err);
+        }
       );
-    } catch {
+    } catch (err) {
+      console.error('[staffFirestoreService] Erreur subscribeToUsers:', err);
       return () => {};
+    }
+  },
+
+  async updateUserProfile(userId: string, updates: Partial<UserAccount>): Promise<void> {
+    try {
+      const docRef = doc(db, 'users', userId);
+      await setDoc(docRef, { ...updates, updatedAt: new Date().toISOString() }, { merge: true });
+    } catch (err) {
+      console.error('[staffFirestoreService] Erreur updateUserProfile:', err);
+      throw err;
     }
   },
 
@@ -72,13 +94,14 @@ export const staffFirestoreService = {
       return onSnapshot(
         colRef,
         (snapshot) => {
-          if (!snapshot.empty) {
-            callback(snapshot.docs.map((d) => d.data() as Employee));
-          }
+          callback(snapshot.docs.map((d) => d.data() as Employee));
         },
-        () => {}
+        (err) => {
+          console.warn('[staffFirestoreService] Écoute employees interrompue:', err);
+        }
       );
-    } catch {
+    } catch (err) {
+      console.error('[staffFirestoreService] Erreur subscribeToEmployees:', err);
       return () => {};
     }
   },
@@ -89,7 +112,8 @@ export const staffFirestoreService = {
       const docRef = doc(db, 'attendances', attendance.id);
       await setDoc(docRef, attendance, { merge: true });
     } catch (err) {
-      console.warn('Erreur saveAttendance Firestore:', err);
+      console.error('[staffFirestoreService] Erreur saveAttendance:', err);
+      throw err;
     }
   },
 
@@ -100,13 +124,14 @@ export const staffFirestoreService = {
       return onSnapshot(
         q,
         (snapshot) => {
-          if (!snapshot.empty) {
-            callback(snapshot.docs.map((d) => d.data() as Attendance));
-          }
+          callback(snapshot.docs.map((d) => d.data() as Attendance));
         },
-        () => {}
+        (err) => {
+          console.warn('[staffFirestoreService] Écoute attendances interrompue:', err);
+        }
       );
-    } catch {
+    } catch (err) {
+      console.error('[staffFirestoreService] Erreur subscribeToAttendances:', err);
       return () => {};
     }
   },

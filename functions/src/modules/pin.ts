@@ -59,6 +59,14 @@ export async function handleSetPin(request: CallableRequest<SetPinData>) {
     updatedBy: caller.name,
   });
 
+  await db.collection('users').doc(targetUserId).set(
+    {
+      hasPin: true,
+      updatedAt: FieldValue.serverTimestamp(),
+    },
+    { merge: true }
+  );
+
   return { success: true };
 }
 

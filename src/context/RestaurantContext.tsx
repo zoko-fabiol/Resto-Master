@@ -267,7 +267,9 @@ interface RestaurantContextType {
 
   // Gestion des Comptes Utilisateurs & Tablettes Tactiles (Droits Granulaires CRUD par Onglet)
   userAccounts: UserAccount[];
-  createUserAccount: (accountData: Omit<UserAccount, 'id' | 'createdAt' | 'updatedAt'>) => Promise<UserAccount>;
+  createUserAccount: (
+    accountData: Omit<UserAccount, 'id' | 'createdAt' | 'updatedAt'> & { pin?: string; password?: string }
+  ) => Promise<UserAccount & { temporaryPassword?: string; generatedPin?: string }>;
   updateUserAccount: (id: string, updates: Partial<UserAccount>) => Promise<void>;
   deleteUserAccount: (id: string) => Promise<void>;
   toggleUserAccountStatus: (id: string) => Promise<void>;
@@ -630,7 +632,7 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     const unsubEvents = reservationsFirestoreService.subscribeToEvents(setEvents);
 
     // RH, Personnel & Comptes
-    const unsubUserAccounts = staffFirestoreService.subscribeToUserAccounts(setUserAccounts);
+    const unsubUserAccounts = staffFirestoreService.subscribeToUsers(setUserAccounts);
     const unsubEmployees = staffFirestoreService.subscribeToEmployees(setEmployees);
     const unsubAttendances = staffFirestoreService.subscribeToAttendances(setAttendances);
 
@@ -1832,34 +1834,68 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     );
   };
 
-  // 5c. Gestion des Comptes Utilisateurs & Tablettes Tactiles (Droits Granulaires CRUD par Onglet)
+  // 5c. Gestion Sécurisée des Comptes Utilisateurs Serveur (Cloud Functions + Firestore users)
   const createUserAccount = async (
-    accountData: Omit<UserAccount, 'id' | 'createdAt' | 'updatedAt'>
-  ): Promise<UserAccount> => {
+    accountData: Omit<UserAccount, 'id' | 'createdAt' | 'updatedAt'> & { pin?: string; password?: string }
+  ): Promise<UserAccount & { temporaryPassword?: string; generatedPin?: string }> => {
+    const res = await cloudFunctionsService.createUser({
+      email: accountData.email,
+      name: accountData.name,
+      role: accountData.role,
+      phone: accountData.phone,
+      pin: accountData.pin,
+      accountType: accountData.accountType,
+      assignedTableId: accountData.assignedTableId,
+      assignedTableName: accountData.assignedTableName,
+      outlets: selectedOutletId ? [selectedOutletId] : undefined,
+      organizationId: organization?.id,
+    });
+
+    if (accountData.matricule || accountData.tabPermissions || accountData.additionalTabs) {
+      await staffFirestoreService.updateUserProfile(res.userId, {
+        matricule: accountData.matricule,
+        tabPermissions: accountData.tabPermissions,
+        additionalTabs: accountData.additionalTabs,
+      });
+    }
+
     const nowStr = new Date().toISOString().slice(0, 10);
-    const newAccount: UserAccount = {
+    const newAccount: UserAccount & { temporaryPassword?: string; generatedPin?: string } = {
       ...accountData,
-      id: generateSecureId('acc'),
+      id: res.userId,
+      hasPin: true,
       createdAt: nowStr,
       updatedAt: nowStr,
+      temporaryPassword: res.temporaryPassword,
+      generatedPin: res.generatedPin,
     };
-    setUserAccounts((prev) => [newAccount, ...prev]);
+
     addAuditLog(
       'Création Compte Utilisateur',
       'Personnel',
       `Création du compte ${newAccount.name} (${newAccount.accountType === 'tablette' ? 'Borne Tablette ' + (newAccount.assignedTableName || '') : 'Rôle ' + newAccount.role})`,
-      newAccount.id
+      res.userId
     );
+
     return newAccount;
   };
 
   const updateUserAccount = async (id: string, updates: Partial<UserAccount>) => {
-    const nowStr = new Date().toISOString().slice(0, 10);
-    setUserAccounts((prev) =>
-      prev.map((acc) =>
-        acc.id === id ? { ...acc, ...updates, updatedAt: nowStr } : acc
-      )
-    );
+    if (updates.role !== undefined || updates.active !== undefined) {
+      const current = userAccounts.find((a) => a.id === id);
+      const roleToSet = updates.role || current?.role || 'serveur';
+      const activeToSet = updates.active !== undefined ? updates.active : (current?.active !== false);
+      await cloudFunctionsService.setUserRole({
+        userId: id,
+        role: roleToSet,
+        active: activeToSet,
+        outlets: selectedOutletId ? [selectedOutletId] : undefined,
+        organizationId: organization?.id,
+      });
+    }
+
+    await staffFirestoreService.updateUserProfile(id, updates);
+
     addAuditLog(
       'Modification Compte Utilisateur',
       'Personnel',
@@ -1870,7 +1906,7 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
   const deleteUserAccount = async (id: string) => {
     const target = userAccounts.find((a) => a.id === id);
-    setUserAccounts((prev) => prev.filter((acc) => acc.id !== id));
+    await cloudFunctionsService.deleteUser({ userId: id });
     addAuditLog(
       'Suppression Compte Utilisateur',
       'Personnel',
@@ -1880,11 +1916,22 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   };
 
   const toggleUserAccountStatus = async (id: string) => {
-    const nowStr = new Date().toISOString().slice(0, 10);
-    setUserAccounts((prev) =>
-      prev.map((acc) =>
-        acc.id === id ? { ...acc, active: !acc.active, updatedAt: nowStr } : acc
-      )
+    const target = userAccounts.find((a) => a.id === id);
+    if (!target) return;
+    const newActive = !target.active;
+    await cloudFunctionsService.setUserRole({
+      userId: id,
+      role: target.role,
+      active: newActive,
+      outlets: selectedOutletId ? [selectedOutletId] : undefined,
+      organizationId: organization?.id,
+    });
+    await staffFirestoreService.updateUserProfile(id, { active: newActive });
+    addAuditLog(
+      newActive ? 'Activation Compte Utilisateur' : 'Désactivation Compte Utilisateur',
+      'Personnel',
+      `Statut du compte ${target.name} passé à ${newActive ? 'actif' : 'inactif'}`,
+      id
     );
   };
 
@@ -1893,14 +1940,10 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     tabPermissions: Record<string, TabPermission>,
     additionalTabs: string[]
   ) => {
-    const nowStr = new Date().toISOString().slice(0, 10);
-    setUserAccounts((prev) =>
-      prev.map((acc) =>
-        acc.id === id
-          ? { ...acc, tabPermissions, additionalTabs, updatedAt: nowStr }
-          : acc
-      )
-    );
+    await staffFirestoreService.updateUserProfile(id, {
+      tabPermissions,
+      additionalTabs,
+    });
     const target = userAccounts.find((a) => a.id === id);
     addAuditLog(
       'Mise à Jour Droits Granulaires',

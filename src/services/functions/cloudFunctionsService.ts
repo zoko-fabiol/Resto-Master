@@ -47,10 +47,14 @@ export class CloudFunctionsService {
     phone?: string;
     outlets?: string[];
     organizationId?: string;
+    pin?: string;
+    accountType?: 'staff' | 'tablette';
+    assignedTableId?: string;
+    assignedTableName?: string;
   }) {
     const fn = httpsCallable(functions, 'createUser');
     const res = await fn(data);
-    return res.data as { success: boolean; userId: string; temporaryPassword?: string };
+    return res.data as { success: boolean; userId: string; temporaryPassword?: string; generatedPin?: string };
   }
 
   async setUserRole(data: {
@@ -63,6 +67,12 @@ export class CloudFunctionsService {
     const fn = httpsCallable(functions, 'setUserRole');
     const res = await fn(data);
     return res.data as { success: boolean; userId: string; role: UserRole };
+  }
+
+  async deleteUser(data: { userId: string }) {
+    const fn = httpsCallable(functions, 'deleteUser');
+    const res = await fn(data);
+    return res.data as { success: boolean; userId: string };
   }
 
   // 2. Sécurité PIN & Superviseur

@@ -4,6 +4,8 @@ import { useAuth } from '../../context/AuthContext';
 import { UserAccount, UserRole, AccountType, TabPermission } from '../../types/restaurant';
 import { ROLE_LABELS } from '../../lib/utils';
 import { useConfirm } from '../ui/ConfirmDialog';
+import { cloudFunctionsService } from '../../services/functions/cloudFunctionsService';
+import { CredentialHandoverModal, CredentialHandoverData } from './CredentialHandoverModal';
 import {
   Tablet,
   Shield,
@@ -28,6 +30,7 @@ import {
   Check,
   X,
   AlertCircle,
+  Loader2,
 } from 'lucide-react';
 
 // Modules configurables avec leurs métadonnées
@@ -75,7 +78,9 @@ export const UserAccountsSection: React.FC = () => {
     toggleUserAccountStatus,
     updateUserAccountPermissions,
     tables,
-  } = useRestaurant();
+    employees,
+    settings,
+  } = useRestaurant() as any;
 
   const { unlockSessionWithPin, updateCurrentUserPin, currentUser } = useAuth();
   const confirm = useConfirm();
@@ -88,6 +93,11 @@ export const UserAccountsSection: React.FC = () => {
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [permissionsModalOpen, setPermissionsModalOpen] = useState(false);
   const [editingAccount, setEditingAccount] = useState<UserAccount | null>(null);
+
+  // Fiche de Remise Sécurisée d'Identifiants (Phase F - Exigence F3)
+  const [handoverData, setHandoverData] = useState<CredentialHandoverData | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // Gestion du PIN
   const [showPin, setShowPin] = useState(false);
@@ -112,40 +122,22 @@ export const UserAccountsSection: React.FC = () => {
   const [tempPermissions, setTempPermissions] = useState<Record<string, TabPermission>>({});
   const [tempAdditionalTabs, setTempAdditionalTabs] = useState<string[]>([]);
 
-  // Générateur de code PIN unique aléatoire à 4 chiffres (sans collision)
-  const generateUniquePin = (excludeUserId?: string): string => {
-    const existingPins = new Set(
-      userAccounts
-        .filter((a) => a.id !== excludeUserId)
-        .map((a) => a.pinCode)
-    );
-    for (let attempts = 0; attempts < 1000; attempts++) {
-      const candidate = Math.floor(1000 + Math.random() * 9000).toString();
-      if (!existingPins.has(candidate)) {
-        return candidate;
-      }
-    }
+  // Générateur de PIN aléatoire à 4 chiffres
+  const generateRandomPin = (): string => {
     return Math.floor(1000 + Math.random() * 9000).toString();
   };
 
-  // Détection en temps réel des collisions de PIN (doublons)
-  const pinCollision = useMemo(() => {
-    if (!formData.pinCode || formData.pinCode.length < 4) return null;
-    return userAccounts.find(
-      (a) => a.id !== editingAccount?.id && a.pinCode === formData.pinCode
+  // Employés RH non encore liés à un compte système (F5)
+  const unlinkedEmployees = useMemo(() => {
+    if (!employees || !Array.isArray(employees)) return [];
+    return employees.filter(
+      (emp) => !userAccounts.some((u: UserAccount) => u.email.toLowerCase() === emp.email.toLowerCase())
     );
-  }, [formData.pinCode, userAccounts, editingAccount]);
-
-  const quickPinCollision = useMemo(() => {
-    if (!quickNewPin || quickNewPin.length < 4) return null;
-    return userAccounts.find(
-      (a) => a.id !== selectedAccountForPin?.id && a.pinCode === quickNewPin
-    );
-  }, [quickNewPin, userAccounts, selectedAccountForPin]);
+  }, [employees, userAccounts]);
 
   // Filtrer les comptes
   const filteredAccounts = useMemo(() => {
-    return userAccounts.filter((acc) => {
+    return userAccounts.filter((acc: UserAccount) => {
       if (filterType === 'staff' && acc.accountType === 'tablette') return false;
       if (filterType === 'tablette' && acc.accountType !== 'tablette') return false;
       if (!searchTerm) return true;
@@ -162,11 +154,11 @@ export const UserAccountsSection: React.FC = () => {
 
   // Comptes tablettes seuls pour la vitrine
   const tabletAccounts = useMemo(() => {
-    return userAccounts.filter((acc) => acc.accountType === 'tablette');
+    return userAccounts.filter((acc: UserAccount) => acc.accountType === 'tablette');
   }, [userAccounts]);
 
   const staffAccounts = useMemo(() => {
-    return userAccounts.filter((acc) => acc.accountType !== 'tablette');
+    return userAccounts.filter((acc: UserAccount) => acc.accountType !== 'tablette');
   }, [userAccounts]);
 
   // Ouvrir la modale de création
@@ -175,7 +167,7 @@ export const UserAccountsSection: React.FC = () => {
     const defaultTable = tables[nextNum - 1] || tables[0];
     const initialPin = type === 'tablette'
       ? `000${nextNum}`.slice(-4)
-      : generateUniquePin();
+      : generateRandomPin();
 
     setFormData({
       name: type === 'tablette' ? `Tablette Table ${defaultTable ? defaultTable.number : nextNum}` : '',
@@ -188,6 +180,7 @@ export const UserAccountsSection: React.FC = () => {
       assignedTableId: defaultTable?.id || '',
     });
     setEditingAccount(null);
+    setErrorMessage(null);
     setShowPin(true);
     setCreateModalOpen(true);
   };
@@ -195,76 +188,146 @@ export const UserAccountsSection: React.FC = () => {
   // Ouvrir la modale de modification rapide de PIN
   const handleOpenQuickPinModal = (acc: UserAccount) => {
     setSelectedAccountForPin(acc);
-    setQuickNewPin(generateUniquePin(acc.id));
+    setQuickNewPin(generateRandomPin());
     setShowQuickPin(true);
     setPinModalOpen(true);
   };
 
   const handleSaveQuickPin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedAccountForPin || quickNewPin.length !== 4 || quickPinCollision) return;
+    if (!selectedAccountForPin || !/^\d{4,6}$/.test(quickNewPin)) return;
 
-    await updateUserAccount(selectedAccountForPin.id, { pinCode: quickNewPin });
+    setIsSubmitting(true);
+    try {
+      await cloudFunctionsService.setPin(quickNewPin, selectedAccountForPin.id);
 
-    if (
-      currentUser.id === selectedAccountForPin.id ||
-      currentUser.email.toLowerCase() === selectedAccountForPin.email.toLowerCase()
-    ) {
-      await updateCurrentUserPin(quickNewPin);
+      if (
+        currentUser.id === selectedAccountForPin.id ||
+        currentUser.email.toLowerCase() === selectedAccountForPin.email.toLowerCase()
+      ) {
+        await updateCurrentUserPin(quickNewPin);
+      }
+
+      const updatedAccount = selectedAccountForPin;
+      setPinModalOpen(false);
+      setSelectedAccountForPin(null);
+
+      // Ouvrir la fiche de remise sécurisée
+      setHandoverData({
+        name: updatedAccount.name,
+        email: updatedAccount.email,
+        role: updatedAccount.role,
+        accountType: updatedAccount.accountType,
+        assignedTableName: updatedAccount.assignedTableName,
+        generatedPin: quickNewPin,
+        title: 'Nouveau Code PIN Configuré',
+      });
+      setQuickNewPin('');
+    } catch (err: any) {
+      console.error('[UserAccountsSection] Erreur PIN:', err);
+      alert(err?.message || 'Erreur lors de la configuration du code PIN.');
+    } finally {
+      setIsSubmitting(false);
     }
-
-    setPinModalOpen(false);
-    setSelectedAccountForPin(null);
-    setQuickNewPin('');
   };
 
-  // Sauvegarder un compte (Création ou Mise à jour)
+  // Sauvegarder un compte (Création ou Mise à jour serveur)
   const handleSubmitAccount = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (formData.pinCode.length !== 4 || pinCollision) {
+    setErrorMessage(null);
+
+    const emailNorm = formData.email.trim().toLowerCase();
+    if (!emailNorm || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailNorm)) {
+      setErrorMessage("Veuillez saisir une adresse e-mail valide.");
       return;
     }
-    const assignedTable = tables.find((t) => t.id === formData.assignedTableId);
 
-    if (editingAccount) {
-      await updateUserAccount(editingAccount.id, {
-        name: formData.name,
-        email: formData.email,
-        pinCode: formData.pinCode,
-        role: formData.role,
-        accountType: formData.accountType,
-        matricule: formData.matricule,
-        phone: formData.phone,
-        assignedTableId: formData.accountType === 'tablette' ? formData.assignedTableId : undefined,
-        assignedTableName: formData.accountType === 'tablette' && assignedTable ? (assignedTable.name || `Table ${assignedTable.number}`) : undefined,
-      });
-
-      // Synchronisation immédiate si c'est l'utilisateur en cours
-      if (
-        currentUser.id === editingAccount.id ||
-        currentUser.email.toLowerCase() === editingAccount.email.toLowerCase()
-      ) {
-        await updateCurrentUserPin(formData.pinCode);
-      }
-    } else {
-      await createUserAccount({
-        name: formData.name,
-        email: formData.email,
-        pinCode: formData.pinCode,
-        role: formData.role,
-        accountType: formData.accountType,
-        active: true,
-        matricule: formData.matricule,
-        phone: formData.phone,
-        assignedTableId: formData.accountType === 'tablette' ? formData.assignedTableId : undefined,
-        assignedTableName: formData.accountType === 'tablette' && assignedTable ? (assignedTable.name || `Table ${assignedTable.number}`) : undefined,
-        tabPermissions: formData.accountType === 'tablette'
-          ? { kiosk: { view: true, create: true, edit: false, delete: false } }
-          : undefined,
-        additionalTabs: [],
-      });
+    const emailDuplicate = userAccounts.find(
+      (a: UserAccount) => a.id !== editingAccount?.id && a.email.toLowerCase() === emailNorm
+    );
+    if (emailDuplicate) {
+      setErrorMessage(`L'adresse email "${emailNorm}" est déjà utilisée par ${emailDuplicate.name}.`);
+      return;
     }
-    setCreateModalOpen(false);
+
+    if (formData.pinCode && !/^\d{4,6}$/.test(formData.pinCode)) {
+      setErrorMessage("Le code PIN doit comporter entre 4 et 6 chiffres.");
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const assignedTable = tables.find((t: any) => t.id === formData.assignedTableId);
+      const assignedTableName = formData.accountType === 'tablette' && assignedTable
+        ? (assignedTable.name || `Table ${assignedTable.number}`)
+        : undefined;
+
+      if (editingAccount) {
+        await updateUserAccount(editingAccount.id, {
+          name: formData.name.trim(),
+          role: formData.role,
+          accountType: formData.accountType,
+          matricule: formData.matricule.trim(),
+          phone: formData.phone.trim(),
+          assignedTableId: formData.accountType === 'tablette' ? formData.assignedTableId : undefined,
+          assignedTableName,
+        });
+
+        if (formData.pinCode) {
+          await cloudFunctionsService.setPin(formData.pinCode, editingAccount.id);
+          if (
+            currentUser.id === editingAccount.id ||
+            currentUser.email.toLowerCase() === editingAccount.email.toLowerCase()
+          ) {
+            await updateCurrentUserPin(formData.pinCode);
+          }
+          setHandoverData({
+            name: formData.name.trim(),
+            email: editingAccount.email,
+            role: formData.role,
+            accountType: formData.accountType,
+            assignedTableName,
+            generatedPin: formData.pinCode,
+            title: 'Mise à Jour des Accès Réussie',
+          });
+        }
+        setCreateModalOpen(false);
+      } else {
+        const created = await createUserAccount({
+          name: formData.name.trim(),
+          email: emailNorm,
+          pin: formData.pinCode || undefined,
+          role: formData.role,
+          accountType: formData.accountType,
+          active: true,
+          matricule: formData.matricule.trim(),
+          phone: formData.phone.trim(),
+          assignedTableId: formData.accountType === 'tablette' ? formData.assignedTableId : undefined,
+          assignedTableName,
+          tabPermissions: formData.accountType === 'tablette'
+            ? { kiosk: { view: true, create: true, edit: false, delete: false } }
+            : undefined,
+          additionalTabs: [],
+        });
+
+        setCreateModalOpen(false);
+        setHandoverData({
+          name: created.name,
+          email: created.email,
+          role: created.role,
+          accountType: created.accountType,
+          assignedTableName: created.assignedTableName,
+          temporaryPassword: created.temporaryPassword,
+          generatedPin: created.generatedPin,
+          title: 'Création de Compte Réussie',
+        });
+      }
+    } catch (err: any) {
+      console.error('[UserAccountsSection] Erreur soumission compte:', err);
+      setErrorMessage(err?.message || "Une erreur est survenue lors de l'enregistrement du compte.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   // Ouvrir l'éditeur de permissions
@@ -345,10 +408,8 @@ export const UserAccountsSection: React.FC = () => {
 
   // Tester la tablette directement
   const handleTestTablet = async (tablet: UserAccount) => {
-    const success = await unlockSessionWithPin(tablet.pinCode);
-    if (success) {
-      window.location.reload();
-    }
+    // Redirection vers le mode Kiosk client
+    window.location.hash = '#/kiosk';
   };
 
   return (
@@ -379,7 +440,7 @@ export const UserAccountsSection: React.FC = () => {
 
           <button
             onClick={() => handleOpenCreateModal('tablette')}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-600 hover:to-violet-700 text-white text-xs font-bold shadow-lg shadow-indigo-500/25 transition-all self-start md:self-auto"
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-600 hover:to-violet-700 text-white text-xs font-bold shadow-lg shadow-indigo-500/25 transition-all self-start md:self-auto cursor-pointer"
           >
             <Plus className="w-4 h-4" />
             <span>Ajouter une Tablette de Table</span>
@@ -388,8 +449,8 @@ export const UserAccountsSection: React.FC = () => {
 
         {/* Grille des Tablettes */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 relative z-10">
-          {tabletAccounts.map((tablet) => {
-            const assignedTable = tables.find((t) => t.id === tablet.assignedTableId);
+          {tabletAccounts.map((tablet: UserAccount) => {
+            const assignedTable = tables.find((t: any) => t.id === tablet.assignedTableId);
             return (
               <div
                 key={tablet.id}
@@ -427,15 +488,21 @@ export const UserAccountsSection: React.FC = () => {
                       </span>
                     </div>
                     <div className="flex items-center justify-between text-slate-300">
-                      <span className="text-[11px] text-slate-400">Code PIN de connexion :</span>
+                      <span className="text-[11px] text-slate-400">Sécurité d'accès :</span>
                       <div className="flex items-center gap-1.5">
-                        <span className="font-mono font-bold bg-white/10 px-2 py-0.5 rounded text-indigo-200">
-                          {tablet.pinCode}
-                        </span>
+                        {tablet.hasPin ? (
+                          <span className="inline-flex items-center gap-1 text-emerald-300 bg-emerald-500/20 px-2 py-0.5 rounded text-[10px] font-bold border border-emerald-500/30">
+                            <ShieldCheck className="w-3 h-3 text-emerald-400" /> PIN Serveur
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 text-amber-300 bg-amber-500/20 px-2 py-0.5 rounded text-[10px] font-bold border border-amber-500/30">
+                            <AlertCircle className="w-3 h-3 text-amber-400" /> Sans PIN
+                          </span>
+                        )}
                         <button
                           type="button"
                           onClick={() => handleOpenQuickPinModal(tablet)}
-                          className="p-1 rounded text-amber-300 hover:text-amber-200 hover:bg-white/10 transition-colors"
+                          className="p-1 rounded text-amber-300 hover:text-amber-200 hover:bg-white/10 transition-colors cursor-pointer"
                           title="Modifier le code PIN de cette borne"
                         >
                           <Key className="w-3.5 h-3.5" />
@@ -475,7 +542,7 @@ export const UserAccountsSection: React.FC = () => {
                       setFormData({
                         name: tablet.name,
                         email: tablet.email,
-                        pinCode: tablet.pinCode,
+                        pinCode: '',
                         role: tablet.role,
                         accountType: tablet.accountType,
                         matricule: tablet.matricule || '',
@@ -579,8 +646,8 @@ export const UserAccountsSection: React.FC = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {filteredAccounts.map((acc) => {
-                const roleInfo = ROLE_LABELS[acc.role] || { label: acc.role, color: 'bg-slate-100 text-slate-800' };
+              {filteredAccounts.map((acc: UserAccount) => {
+                const roleInfo = ROLE_LABELS[acc.role as UserRole] || { label: acc.role, color: 'bg-slate-100 text-slate-800' };
                 const permCount = Object.keys(acc.tabPermissions || {}).length;
                 const additionalCount = acc.additionalTabs?.length || 0;
 
@@ -628,19 +695,27 @@ export const UserAccountsSection: React.FC = () => {
                       </div>
                     </td>
 
-                    {/* PIN & Matricule */}
-                    <td className="py-3 px-4 font-mono">
+                    {/* Sécurité PIN & Matricule */}
+                    <td className="py-3 px-4">
                       <div className="flex items-center gap-2">
+                        {acc.hasPin ? (
+                          <span className="inline-flex items-center gap-1 text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded text-[10px] font-bold">
+                            <ShieldCheck className="w-3 h-3 text-emerald-600" /> PIN Actif
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded text-[10px] font-bold">
+                            <AlertCircle className="w-3 h-3 text-amber-600" /> Sans PIN
+                          </span>
+                        )}
                         <button
                           type="button"
                           onClick={() => handleOpenQuickPinModal(acc)}
-                          className="bg-slate-100 hover:bg-amber-100 px-2 py-0.5 rounded font-bold text-slate-800 hover:text-amber-900 border border-slate-200 hover:border-amber-300 transition-colors flex items-center gap-1.5 group cursor-pointer"
-                          title="Cliquer pour modifier le code PIN de ce collaborateur"
+                          className="p-1 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded transition-colors cursor-pointer"
+                          title="Générer ou réinitialiser le code PIN cryptographique"
                         >
-                          <Key className="w-3 h-3 text-amber-600 group-hover:scale-110 transition-transform" />
-                          <span>{acc.pinCode}</span>
+                          <Key className="w-3.5 h-3.5" />
                         </button>
-                        <span className="text-[11px] text-slate-400">
+                        <span className="text-[11px] font-mono text-slate-400">
                           {acc.matricule || '—'}
                         </span>
                       </div>
@@ -692,7 +767,7 @@ export const UserAccountsSection: React.FC = () => {
                         <button
                           type="button"
                           onClick={() => handleOpenQuickPinModal(acc)}
-                          className="p-1.5 rounded-lg text-amber-600 hover:text-amber-800 hover:bg-amber-50 transition-colors"
+                          className="p-1.5 rounded-lg text-amber-600 hover:text-amber-800 hover:bg-amber-50 transition-colors cursor-pointer"
                           title="Modifier le code PIN"
                         >
                           <Key className="w-3.5 h-3.5" />
@@ -700,7 +775,7 @@ export const UserAccountsSection: React.FC = () => {
 
                         <button
                           onClick={() => handleOpenPermissions(acc)}
-                          className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-xs transition-colors border border-indigo-200"
+                          className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-xs transition-colors border border-indigo-200 cursor-pointer"
                           title="Paramétrer les permissions fines (CRUD par onglet)"
                         >
                           <ShieldCheck className="w-3.5 h-3.5" />
@@ -713,7 +788,7 @@ export const UserAccountsSection: React.FC = () => {
                             setFormData({
                               name: acc.name,
                               email: acc.email,
-                              pinCode: acc.pinCode,
+                              pinCode: '',
                               role: acc.role,
                               accountType: acc.accountType,
                               matricule: acc.matricule || '',
@@ -723,13 +798,13 @@ export const UserAccountsSection: React.FC = () => {
                             setShowPin(false);
                             setCreateModalOpen(true);
                           }}
-                          className="p-1.5 rounded-lg text-slate-500 hover:text-slate-900 hover:bg-slate-100 transition-colors"
+                          className="p-1.5 rounded-lg text-slate-500 hover:text-slate-900 hover:bg-slate-100 transition-colors cursor-pointer"
                           title="Modifier les informations"
                         >
                           <Edit2 className="w-3.5 h-3.5" />
                         </button>
 
-                        {acc.id !== 'acc-1' && acc.id !== 'acc-dir' && (
+                        {acc.role !== 'superadmin' && acc.id !== currentUser.id && (
                           <button
                             onClick={async () => {
                               const ok = await confirm({
@@ -743,7 +818,7 @@ export const UserAccountsSection: React.FC = () => {
                                 deleteUserAccount(acc.id);
                               }
                             }}
-                            className="p-1.5 rounded-lg text-red-500 hover:text-red-700 hover:bg-red-50 transition-colors"
+                            className="p-1.5 rounded-lg text-red-500 hover:text-red-700 hover:bg-red-50 transition-colors cursor-pointer"
                             title="Supprimer ce compte"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
@@ -790,6 +865,13 @@ export const UserAccountsSection: React.FC = () => {
             </div>
 
             <form onSubmit={handleSubmitAccount} className="space-y-4 pt-4">
+              {errorMessage && (
+                <div className="p-3 rounded-2xl bg-red-50 border border-red-200 text-red-700 text-xs flex items-start gap-2 animate-in fade-in">
+                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-red-600" />
+                  <span>{errorMessage}</span>
+                </div>
+              )}
+
               {/* Type de compte */}
               {!editingAccount && (
                 <div>
@@ -798,7 +880,7 @@ export const UserAccountsSection: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => setFormData({ ...formData, accountType: 'staff', role: 'serveur' })}
-                      className={`p-3 rounded-xl border text-left flex items-center gap-3 transition-all ${
+                      className={`p-3 rounded-xl border text-left flex items-center gap-3 transition-all cursor-pointer ${
                         formData.accountType === 'staff'
                           ? 'border-amber-500 bg-amber-50/50 text-slate-900 shadow-xs'
                           : 'border-slate-200 text-slate-600 hover:bg-slate-50'
@@ -822,7 +904,7 @@ export const UserAccountsSection: React.FC = () => {
                           assignedTableId: tables[0]?.id || '',
                         })
                       }
-                      className={`p-3 rounded-xl border text-left flex items-center gap-3 transition-all ${
+                      className={`p-3 rounded-xl border text-left flex items-center gap-3 transition-all cursor-pointer ${
                         formData.accountType === 'tablette'
                           ? 'border-indigo-500 bg-indigo-50/50 text-slate-900 shadow-xs'
                           : 'border-slate-200 text-slate-600 hover:bg-slate-50'
@@ -838,6 +920,39 @@ export const UserAccountsSection: React.FC = () => {
                 </div>
               )}
 
+              {/* Liaison RH optionnelle (Exigence F5) */}
+              {formData.accountType === 'staff' && !editingAccount && unlinkedEmployees.length > 0 && (
+                <div className="p-3 bg-amber-50/70 border border-amber-200 rounded-2xl space-y-1">
+                  <label className="block text-[11px] font-bold text-amber-900">
+                    Lier à un profil RH existant (Optionnel) :
+                  </label>
+                  <select
+                    onChange={(e) => {
+                      const emp = unlinkedEmployees.find((x: any) => x.id === e.target.value);
+                      if (emp) {
+                        setFormData((prev) => ({
+                          ...prev,
+                          name: emp.fullName,
+                          email: emp.email || prev.email,
+                          phone: emp.phone || prev.phone,
+                          matricule: emp.matricule || prev.matricule,
+                          role: emp.role || prev.role,
+                        }));
+                      }
+                    }}
+                    className="w-full px-2.5 py-1.5 bg-white border border-amber-300 rounded-xl text-xs font-semibold text-slate-800 outline-hidden"
+                    defaultValue=""
+                  >
+                    <option value="">-- Sélectionner un collaborateur RH --</option>
+                    {unlinkedEmployees.map((emp: any) => (
+                      <option key={emp.id} value={emp.id}>
+                        {emp.fullName} ({emp.department} • {ROLE_LABELS[emp.role as UserRole]?.label || emp.role})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
               {/* Nom & Email */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
@@ -847,7 +962,7 @@ export const UserAccountsSection: React.FC = () => {
                   <input
                     type="text"
                     required
-                    placeholder={formData.accountType === 'tablette' ? 'ex: Tablette Table 1' : 'ex: Paul Biya'}
+                    placeholder={formData.accountType === 'tablette' ? 'ex: Tablette Table 1' : 'ex: Jean Dupont'}
                     value={formData.name}
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 outline-hidden font-medium"
@@ -899,7 +1014,7 @@ export const UserAccountsSection: React.FC = () => {
                       className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-hidden font-bold"
                     >
                       <option value="">Sélectionner la table...</option>
-                      {tables.map((t) => (
+                      {tables.map((t: any) => (
                         <option key={t.id} value={t.id}>
                           Table {t.number} — {t.name} ({t.capacity} couverts)
                         </option>
@@ -910,10 +1025,10 @@ export const UserAccountsSection: React.FC = () => {
 
                 <div>
                   <div className="flex items-center justify-between mb-1">
-                    <label className="block text-xs font-bold text-slate-700">Code PIN (4 chiffres)</label>
+                    <label className="block text-xs font-bold text-slate-700">Code PIN (4-6 chiffres)</label>
                     <button
                       type="button"
-                      onClick={() => setFormData((prev) => ({ ...prev, pinCode: generateUniquePin(editingAccount?.id) }))}
+                      onClick={() => setFormData((prev) => ({ ...prev, pinCode: generateRandomPin() }))}
                       className="text-[10px] text-amber-700 hover:text-amber-800 font-bold flex items-center gap-1 hover:underline cursor-pointer"
                     >
                       <Sparkles className="w-3 h-3 text-amber-600" />
@@ -923,38 +1038,26 @@ export const UserAccountsSection: React.FC = () => {
                   <div className="relative">
                     <input
                       type={showPin ? 'text' : 'password'}
-                      maxLength={4}
-                      required
-                      placeholder="ex: 1234"
+                      maxLength={6}
+                      placeholder={editingAccount ? "Inchangé si vide" : "Généré auto si vide"}
                       value={formData.pinCode}
                       onChange={(e) => setFormData({ ...formData, pinCode: e.target.value.replace(/\D/g, '') })}
-                      className={`w-full px-3 py-2 pr-10 bg-slate-50 border rounded-xl text-xs focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 outline-hidden font-mono text-center tracking-widest text-lg font-bold transition-colors ${
-                        pinCollision ? 'border-red-400 bg-red-50/20 text-red-900' : 'border-slate-200'
-                      }`}
+                      className="w-full px-3 py-2 pr-10 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 outline-hidden font-mono text-center tracking-widest text-lg font-bold"
                     />
                     <button
                       type="button"
                       onClick={() => setShowPin(!showPin)}
-                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1"
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1 cursor-pointer"
                       title={showPin ? 'Masquer le code PIN' : 'Afficher le code PIN'}
                     >
                       {showPin ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
                   </div>
-
-                  {pinCollision ? (
-                    <div className="mt-1.5 flex items-center gap-1.5 p-2 rounded-xl bg-red-50 border border-red-200 text-red-700 text-[11px] font-medium leading-tight animate-in fade-in">
-                      <AlertCircle className="w-3.5 h-3.5 shrink-0 text-red-600" />
-                      <span>
-                        Ce code PIN est déjà attribué à <strong>{pinCollision.name}</strong> ({ROLE_LABELS[pinCollision.role]?.label || pinCollision.role}).
-                      </span>
-                    </div>
-                  ) : formData.pinCode.length === 4 ? (
-                    <div className="mt-1 flex items-center gap-1 text-[10px] text-emerald-600 font-semibold">
-                      <CheckCircle2 className="w-3 h-3" />
-                      <span>Code PIN unique disponible</span>
-                    </div>
-                  ) : null}
+                  <p className="text-[10px] text-slate-400 mt-1">
+                    {editingAccount
+                      ? 'Laissez vide pour conserver le code PIN serveur existant.'
+                      : 'Laissez vide pour générer un code PIN cryptographique serveur.'}
+                  </p>
                 </div>
               </div>
 
@@ -975,7 +1078,7 @@ export const UserAccountsSection: React.FC = () => {
                     <label className="block text-xs font-bold text-slate-700 mb-1">Téléphone Contact</label>
                     <input
                       type="tel"
-                      placeholder="+237 6..."
+                      placeholder="+237 6XX XX XX XX"
                       value={formData.phone}
                       onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                       className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 outline-hidden"
@@ -989,20 +1092,21 @@ export const UserAccountsSection: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setCreateModalOpen(false)}
-                  className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition-colors"
+                  className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
                 >
                   Annuler
                 </button>
                 <button
                   type="submit"
-                  disabled={formData.pinCode.length !== 4 || !!pinCollision}
-                  className={`px-5 py-2.5 rounded-xl text-white text-xs font-bold shadow-md transition-all ${
-                    formData.pinCode.length !== 4 || !!pinCollision
-                      ? 'bg-slate-300 cursor-not-allowed shadow-none'
+                  disabled={isSubmitting}
+                  className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-white text-xs font-bold shadow-md transition-all cursor-pointer ${
+                    isSubmitting
+                      ? 'bg-amber-400 cursor-wait'
                       : 'bg-amber-600 hover:bg-amber-700 shadow-amber-600/20'
                   }`}
                 >
-                  {editingAccount ? 'Enregistrer les Modifications' : 'Créer le Compte'}
+                  {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
+                  <span>{editingAccount ? 'Enregistrer les Modifications' : 'Créer le Compte & Générer les Accès'}</span>
                 </button>
               </div>
             </form>
@@ -1266,18 +1370,18 @@ export const UserAccountsSection: React.FC = () => {
                 <div className="text-[11px] text-slate-500">Compte collaborateur / borne :</div>
                 <div className="flex items-center justify-between text-xs font-bold text-slate-800">
                   <span className="truncate max-w-[160px]">{selectedAccountForPin.name}</span>
-                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-200 text-slate-700">
-                    Actuel : {selectedAccountForPin.pinCode}
+                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-slate-200 text-slate-700">
+                    {selectedAccountForPin.hasPin ? 'PIN Actif (Sécurisé)' : 'Sans PIN'}
                   </span>
                 </div>
               </div>
 
               <div>
                 <div className="flex items-center justify-between mb-1">
-                  <label className="block text-xs font-bold text-slate-700">Nouveau PIN (4 chiffres)</label>
+                  <label className="block text-xs font-bold text-slate-700">Nouveau PIN (4-6 chiffres)</label>
                   <button
                     type="button"
-                    onClick={() => setQuickNewPin(generateUniquePin(selectedAccountForPin.id))}
+                    onClick={() => setQuickNewPin(generateRandomPin())}
                     className="text-[10px] text-amber-700 hover:text-amber-800 font-bold flex items-center gap-1 hover:underline cursor-pointer"
                   >
                     <Sparkles className="w-3 h-3 text-amber-600" />
@@ -1288,65 +1392,67 @@ export const UserAccountsSection: React.FC = () => {
                 <div className="relative">
                   <input
                     type={showQuickPin ? 'text' : 'password'}
-                    maxLength={4}
+                    maxLength={6}
                     autoFocus
                     required
                     placeholder="ex: 5824"
                     value={quickNewPin}
                     onChange={(e) => setQuickNewPin(e.target.value.replace(/\D/g, ''))}
-                    className={`w-full px-3 py-2.5 pr-10 bg-slate-50 border rounded-xl text-xs focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 outline-hidden font-mono text-center tracking-widest text-xl font-bold transition-colors ${
-                      quickPinCollision ? 'border-red-400 bg-red-50/20 text-red-900' : 'border-slate-200'
-                    }`}
+                    className="w-full px-3 py-2.5 pr-10 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 outline-hidden font-mono text-center tracking-widest text-xl font-bold transition-colors"
                   />
                   <button
                     type="button"
                     onClick={() => setShowQuickPin(!showQuickPin)}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1"
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1 cursor-pointer"
                     title={showQuickPin ? 'Masquer le code PIN' : 'Afficher le code PIN'}
                   >
                     {showQuickPin ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
 
-                {quickPinCollision ? (
-                  <div className="mt-1.5 flex items-center gap-1.5 p-2 rounded-xl bg-red-50 border border-red-200 text-red-700 text-[11px] font-medium leading-tight animate-in fade-in">
-                    <AlertCircle className="w-3.5 h-3.5 shrink-0 text-red-600" />
-                    <span>
-                      Déjà utilisé par <strong>{quickPinCollision.name}</strong>.
-                    </span>
-                  </div>
-                ) : quickNewPin.length === 4 ? (
+                {quickNewPin.length >= 4 && (
                   <div className="mt-1 flex items-center gap-1 text-[10px] text-emerald-600 font-semibold">
                     <CheckCircle2 className="w-3 h-3" />
-                    <span>Code PIN unique prêt à être enregistré</span>
+                    <span>Format valide ({quickNewPin.length} chiffres). Prêt pour le hachage sécurisé PBKDF2.</span>
                   </div>
-                ) : null}
+                )}
               </div>
 
               <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
                 <button
                   type="button"
                   onClick={() => setPinModalOpen(false)}
-                  className="px-3 py-1.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition-colors"
+                  className="px-3 py-1.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
                 >
                   Annuler
                 </button>
                 <button
                   type="submit"
-                  disabled={quickNewPin.length !== 4 || !!quickPinCollision}
-                  className={`px-4 py-2 rounded-xl text-white text-xs font-bold shadow-md transition-all ${
-                    quickNewPin.length !== 4 || !!quickPinCollision
+                  disabled={quickNewPin.length < 4 || isSubmitting}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-xl text-white text-xs font-bold shadow-md transition-all cursor-pointer ${
+                    quickNewPin.length < 4 || isSubmitting
                       ? 'bg-slate-300 cursor-not-allowed shadow-none'
                       : 'bg-amber-600 hover:bg-amber-700 shadow-amber-600/20'
                   }`}
                 >
-                  Enregistrer le PIN
+                  {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
+                  <span>Enregistrer & Générer la Fiche</span>
                 </button>
               </div>
             </form>
           </div>
         </div>
       )}
+
+      {/* 7. FICHE OFFICIELLE DE REMISE SÉCURISÉE D'IDENTIFIANTS (Phase F - Exigence F3) */}
+      <CredentialHandoverModal
+        isOpen={Boolean(handoverData)}
+        data={handoverData}
+        onClose={() => setHandoverData(null)}
+        issuerName={currentUser?.name || 'Direction Générale'}
+        issuerEmail={currentUser?.email || ''}
+        restaurantName={settings?.name || 'RestoMaster OS'}
+      />
     </div>
   );
 };
