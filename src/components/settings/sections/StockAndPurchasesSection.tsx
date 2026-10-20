@@ -29,8 +29,10 @@ import {
   BarChart3,
   History,
   Shield,
+  Search,
 } from 'lucide-react';
 import { ModernRuleToggle } from './ModernRuleToggle';
+import { StickyActionBar, SearchInput } from '../../ui';
 
 interface Props {
   subTab: 'stock' | 'achats';
@@ -39,22 +41,44 @@ interface Props {
 export const StockAndPurchasesSection: React.FC<Props> = ({ subTab }) => {
   const { operationRules, updateOperationRules, addAuditLog } = useRestaurant();
   const [savedSuccess, setSavedSuccess] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [options, setOptions] = useState<Record<string, boolean>>(operationRules);
+  const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
     setOptions(operationRules);
   }, [operationRules]);
 
   const toggleOption = (key: string) => {
-    setOptions((prev) => ({ ...prev, [key]: !prev[key] }));
+    setOptions((prev) => {
+      const nextVal = !prev[key];
+      const next = { ...prev, [key]: nextVal };
+      // Exclusivité mutuelle FIFO / FEFO (Invariants métier restauration)
+      if (key === 'stock_fifo' && nextVal) {
+        next.stock_fefo = false;
+      } else if (key === 'stock_fefo' && nextVal) {
+        next.stock_fifo = false;
+      }
+      return next;
+    });
   };
 
   const handleSave = async () => {
-    await updateOperationRules(options);
-    setSavedSuccess(true);
-    addAuditLog('Mise à jour options', 'Paramètres', `Paramètres ${subTab.toUpperCase()} enregistrés`);
-    setTimeout(() => setSavedSuccess(false), 2500);
+    setIsSaving(true);
+    try {
+      await updateOperationRules(options);
+      setSavedSuccess(true);
+      addAuditLog('Mise à jour options', 'Paramètres', `Paramètres ${subTab.toUpperCase()} enregistrés`);
+      setTimeout(() => setSavedSuccess(false), 2500);
+    } finally {
+      setIsSaving(false);
+    }
   };
+
+  // Calcul du nombre d'options modifiées non enregistrées
+  const dirtyCount = Object.keys(options).filter(
+    (k) => (options[k] ?? false) !== (operationRules[k] ?? false)
+  ).length;
 
   const isStock = subTab === 'stock';
   const Icon = isStock ? Package : Truck;
@@ -230,61 +254,101 @@ export const StockAndPurchasesSection: React.FC<Props> = ({ subTab }) => {
         },
       ];
 
+  const filteredItems = items.filter((item) => {
+    if (!searchQuery.trim()) return true;
+    const q = searchQuery.toLowerCase();
+    return (
+      item.label.toLowerCase().includes(q) ||
+      (item.description && item.description.toLowerCase().includes(q))
+    );
+  });
+
   return (
-    <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-xs space-y-6">
-      <div className="flex items-center justify-between border-b border-slate-100 pb-4">
-        <div className="flex items-center gap-3">
-          <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-amber-500 to-orange-500 text-white flex items-center justify-center shadow-md shadow-amber-500/20">
-            <Icon className="w-5 h-5" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h3 className="text-sm sm:text-base font-black text-slate-900">{title}</h3>
-              <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">
-                {isStock ? 'Section 11' : 'Section 12'}
-              </span>
+    <>
+      <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-xs space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-4">
+          <div className="flex items-center gap-3">
+            <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-amber-500 to-orange-500 text-white flex items-center justify-center shadow-md shadow-amber-500/20">
+              <Icon className="w-5 h-5" />
             </div>
-            <p className="text-xs text-slate-500 mt-0.5">{description}</p>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm sm:text-base font-black text-slate-900">{title}</h3>
+                <span className="text-xs font-bold uppercase px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">
+                  {isStock ? 'Section 11' : 'Section 12'}
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 mt-0.5">{description}</p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <div className="w-full sm:w-64">
+              <SearchInput
+                value={searchQuery}
+                onChange={setSearchQuery}
+                placeholder="Rechercher une règle..."
+              />
+            </div>
+            {savedSuccess && (
+              <span className="flex items-center gap-1.5 text-xs font-bold text-emerald-700 bg-emerald-50 px-3.5 py-1.5 rounded-xl border border-emerald-200 shadow-xs animate-in fade-in shrink-0">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600" /> Paramètres enregistrés
+              </span>
+            )}
           </div>
         </div>
 
-        {savedSuccess && (
-          <span className="flex items-center gap-1.5 text-xs font-bold text-emerald-700 bg-emerald-50 px-3.5 py-1.5 rounded-xl border border-emerald-200 shadow-xs animate-in fade-in">
-            <CheckCircle2 className="w-4 h-4 text-emerald-600" /> Paramètres enregistrés
+        {/* Modern Rule Toggles Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+          {filteredItems.map((item) => {
+            const isChildStockOption = isStock && item.key !== 'stock_gestion';
+            const isMasterStockDisabled = isChildStockOption && !options.stock_gestion;
+            const isSensitive = item.key === 'stock_disallow_negative';
+
+            return (
+              <ModernRuleToggle
+                key={item.key}
+                id={item.key}
+                label={item.label}
+                description={item.description}
+                badge={item.badge}
+                icon={item.icon}
+                checked={options[item.key] ?? false}
+                onChange={() => toggleOption(item.key)}
+                disabled={isMasterStockDisabled}
+                disabledReason="Nécessite d'abord l'activation de la Gestion stock globale"
+                isSensitive={isSensitive}
+                sensitiveWarning="Le blocage du stock négatif interdira strictement la validation d'une commande si un ingrédient ou produit passe sous zéro."
+              />
+            );
+          })}
+        </div>
+
+        <div className="pt-4 border-t border-slate-100 flex items-center justify-between">
+          <span className="text-xs text-slate-500 font-medium">
+            {items.filter((i) => options[i.key]).length} sur {items.length} options actives
           </span>
-        )}
+
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={isSaving}
+            className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-slate-900 text-white font-bold text-xs hover:bg-slate-800 shadow-xs transition-colors cursor-pointer"
+          >
+            <Save className="w-4 h-4" />
+            <span>{isSaving ? 'Enregistrement...' : 'Enregistrer les paramètres'}</span>
+          </button>
+        </div>
       </div>
 
-      {/* Modern Rule Toggles Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
-        {items.map((item) => (
-          <ModernRuleToggle
-            key={item.key}
-            id={item.key}
-            label={item.label}
-            description={item.description}
-            badge={item.badge}
-            icon={item.icon}
-            checked={options[item.key] ?? false}
-            onChange={() => toggleOption(item.key)}
-          />
-        ))}
-      </div>
-
-      <div className="pt-4 border-t border-slate-100 flex items-center justify-between">
-        <span className="text-[11px] text-slate-400 font-mono">
-          {items.filter((i) => options[i.key]).length} sur {items.length} options activées
-        </span>
-
-        <button
-          type="button"
-          onClick={handleSave}
-          className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-slate-900 text-white font-bold text-xs hover:bg-slate-800 shadow-xs transition-colors"
-        >
-          <Save className="w-4 h-4" />
-          <span>Enregistrer les paramètres</span>
-        </button>
-      </div>
-    </div>
+      {/* Barre d'action collante lors de modifications non enregistrées */}
+      <StickyActionBar
+        dirtyCount={dirtyCount}
+        onSave={handleSave}
+        onCancel={() => setOptions(operationRules)}
+        isSaving={isSaving}
+        saveLabel="Enregistrer les paramètres"
+      />
+    </>
   );
 };

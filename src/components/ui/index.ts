@@ -15,3 +15,5 @@ export * from './Modal';
 export * from './ConfirmDialog';
 export * from './SearchInput';
 export * from './Toast';
+export * from './ConfigSection';
+export * from './ConfigToggleRow';

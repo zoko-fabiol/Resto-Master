@@ -71,8 +71,10 @@ import {
   BarChart3,
   Package,
   Crown,
+  Search,
 } from 'lucide-react';
 import { ModernRuleToggle } from './ModernRuleToggle';
+import { SearchInput, StickyActionBar } from '../../ui';
 
 interface Props {
   subTab:
@@ -87,6 +89,15 @@ interface Props {
     | 'caisse';
 }
 
+const SENSITIVE_RULE_KEYS = new Set([
+  'pos_force_pin_cancel',
+  'pos_delete_lines',
+  'pos_disallow_discounts',
+  'caisse_allow_manual_float',
+  'caisse_force_z_report',
+  'cuisine_notify_delay',
+]);
+
 export const OperationsOptionsSection: React.FC<Props> = ({ subTab }) => {
   const { operationRules, updateOperationRules, settings, updateSettings } = useRestaurant();
   const { currentUser } = useAuth();
@@ -94,6 +105,8 @@ export const OperationsOptionsSection: React.FC<Props> = ({ subTab }) => {
   const isSuperAdmin = currentUser?.role === 'direction';
 
   const [savedSuccess, setSavedSuccess] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
   const [options, setOptions] = useState<Record<string, boolean>>(operationRules);
   const [kitchenMode, setKitchenMode] = useState<'ecran_cuisine' | 'sans_compte'>(
     settings.kitchenOperationMode || 'ecran_cuisine'
@@ -130,18 +143,32 @@ export const OperationsOptionsSection: React.FC<Props> = ({ subTab }) => {
       });
       return;
     }
-    await updateOperationRules(options);
-    if (subTab === 'cuisine') {
-      await updateSettings({ kitchenOperationMode: kitchenMode });
+    setIsSaving(true);
+    try {
+      await updateOperationRules(options);
+      if (subTab === 'cuisine') {
+        await updateSettings({ kitchenOperationMode: kitchenMode });
+      }
+      showToast({
+        title: 'Configuration Enregistrée',
+        message: 'Les règles opérationnelles et modules ont été mis à jour avec succès.',
+        type: 'success',
+      });
+      setSavedSuccess(true);
+      setTimeout(() => setSavedSuccess(false), 2500);
+    } finally {
+      setIsSaving(false);
     }
-    showToast({
-      title: 'Configuration Enregistrée',
-      message: 'Les règles opérationnelles et modules ont été mis à jour avec succès.',
-      type: 'success',
-    });
-    setSavedSuccess(true);
-    setTimeout(() => setSavedSuccess(false), 2500);
   };
+
+  // Calcul du nombre de modifications non enregistrées
+  const dirtyCount =
+    Object.keys(options).filter(
+      (k) => (options[k] ?? false) !== (operationRules[k] ?? false)
+    ).length +
+    (subTab === 'cuisine' && kitchenMode !== (settings.kitchenOperationMode || 'ecran_cuisine')
+      ? 1
+      : 0);
 
   // Content configurations according to subTab
   const getSubTabConfig = () => {
@@ -373,147 +400,189 @@ export const OperationsOptionsSection: React.FC<Props> = ({ subTab }) => {
   const config = getSubTabConfig();
   const Icon = config.icon;
 
+  const filteredItems = config.items.filter((item) => {
+    if (!searchQuery.trim()) return true;
+    const q = searchQuery.toLowerCase();
+    return (
+      item.label.toLowerCase().includes(q) ||
+      (item.description && item.description.toLowerCase().includes(q))
+    );
+  });
+
   return (
-    <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-xs space-y-6">
-      <div className="flex items-center justify-between border-b border-slate-100 pb-4">
-        <div className="flex items-center gap-3">
-          <div
-            className={`w-11 h-11 rounded-2xl bg-gradient-to-tr ${config.gradient} text-white flex items-center justify-center shadow-md shadow-slate-200`}
-          >
-            <Icon className="w-5 h-5" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h3 className="text-sm sm:text-base font-black text-slate-900">{config.title}</h3>
-              {config.sectionNumber && (
-                <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-slate-100 text-slate-800">
-                  {config.sectionNumber}
-                </span>
-              )}
+    <>
+      <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-xs space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-4">
+          <div className="flex items-center gap-3">
+            <div
+              className={`w-11 h-11 rounded-2xl bg-gradient-to-tr ${config.gradient} text-white flex items-center justify-center shadow-md shadow-slate-200`}
+            >
+              <Icon className="w-5 h-5" />
             </div>
-            <p className="text-xs text-slate-500 mt-0.5">{config.description}</p>
-          </div>
-        </div>
-
-        {savedSuccess && (
-          <span className="flex items-center gap-1.5 text-xs font-bold text-emerald-700 bg-emerald-50 px-3.5 py-1.5 rounded-xl border border-emerald-200 shadow-xs animate-in fade-in">
-            <CheckCircle2 className="w-4 h-4 text-emerald-600" /> Règles enregistrées
-          </span>
-        )}
-      </div>
-
-      {/* Super Admin Status Banner */}
-      {isSuperAdmin ? (
-        <div className="flex items-center gap-2.5 px-4 py-2.5 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-900 text-xs font-medium">
-          <Crown className="w-4 h-4 text-amber-600 shrink-0" />
-          <span>
-            <strong>Contrôle Super-Administrateur actif :</strong> Vous disposez des autorisations complètes pour activer/désactiver les modules et règles métier.
-          </span>
-        </div>
-      ) : (
-        <div className="flex items-center gap-2.5 px-4 py-2.5 rounded-2xl bg-slate-100 border border-slate-200 text-slate-700 text-xs font-medium">
-          <Lock className="w-4 h-4 text-slate-500 shrink-0" />
-          <span>
-            <strong>Mode Consultation :</strong> La modification des règles et modules applicatifs est strictement réservée au Super Administrateur (Direction).
-          </span>
-        </div>
-      )}
-
-      {/* Mode de fonctionnement de la cuisine (Guide Genesis Digital Agency - Section 3, 6, 12) */}
-      {subTab === 'cuisine' && (
-        <div className="bg-gradient-to-br from-amber-50 to-orange-50/50 p-5 rounded-2xl border border-amber-200 space-y-3">
-          <div className="flex items-center justify-between">
             <div>
-              <h4 className="text-sm font-bold text-amber-950 flex items-center gap-2">
-                <ChefHat className="w-4 h-4 text-amber-600" />
-                <span>Mode de fonctionnement de la cuisine</span>
-              </h4>
-              <p className="text-xs text-amber-800 mt-0.5">
-                Conforme au Guide d'Utilisation Officiel (Section 3, 6 et 12)
-              </p>
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm sm:text-base font-black text-slate-900">{config.title}</h3>
+                {config.sectionNumber && (
+                  <span className="text-xs font-bold uppercase px-2 py-0.5 rounded-full bg-slate-100 text-slate-800">
+                    {config.sectionNumber}
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-slate-500 mt-0.5">{config.description}</p>
             </div>
-            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-200 text-amber-900 border border-amber-300">
-              {kitchenMode === 'ecran_cuisine' ? 'Mode Écran KDS' : 'Sans Compte Cuisinier'}
+          </div>
+
+          <div className="flex items-center gap-3">
+            <div className="w-full sm:w-64">
+              <SearchInput
+                value={searchQuery}
+                onChange={setSearchQuery}
+                placeholder="Rechercher une option..."
+              />
+            </div>
+            {savedSuccess && (
+              <span className="flex items-center gap-1.5 text-xs font-bold text-emerald-700 bg-emerald-50 px-3.5 py-1.5 rounded-xl border border-emerald-200 shadow-xs animate-in fade-in shrink-0">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600" /> Règles enregistrées
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Super Admin Status Banner */}
+        {isSuperAdmin ? (
+          <div className="flex items-center gap-2.5 px-4 py-2.5 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-900 text-xs font-medium">
+            <Crown className="w-4 h-4 text-amber-600 shrink-0" />
+            <span>
+              <strong>Contrôle Super-Administrateur actif :</strong> Vous disposez des autorisations complètes pour activer/désactiver les modules et règles métier.
             </span>
           </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
-            <button
-              type="button"
-              disabled={!isSuperAdmin}
-              onClick={() => isSuperAdmin && setKitchenMode('ecran_cuisine')}
-              className={`p-3.5 rounded-xl border text-left transition-all ${
-                kitchenMode === 'ecran_cuisine'
-                  ? 'bg-white border-amber-500 shadow-sm ring-2 ring-amber-400/20'
-                  : 'bg-white/60 border-amber-200 hover:bg-white text-slate-600'
-              } ${!isSuperAdmin ? 'opacity-70 cursor-not-allowed' : ''}`}
-            >
-              <div className="flex items-center justify-between mb-1">
-                <span className="font-bold text-xs text-slate-900">1. Mode Écran Cuisine</span>
-                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
-              </div>
-              <p className="text-[11px] text-slate-500 leading-snug">
-                Les cuisiniers disposent de comptes individuels et d'un écran tactile KDS pour valider la préparation des plats ("En préparation" &rarr; "Prêt").
-              </p>
-            </button>
-
-            <button
-              type="button"
-              disabled={!isSuperAdmin}
-              onClick={() => isSuperAdmin && setKitchenMode('sans_compte')}
-              className={`p-3.5 rounded-xl border text-left transition-all ${
-                kitchenMode === 'sans_compte'
-                  ? 'bg-white border-amber-500 shadow-sm ring-2 ring-amber-400/20'
-                  : 'bg-white/60 border-amber-200 hover:bg-white text-slate-600'
-              } ${!isSuperAdmin ? 'opacity-70 cursor-not-allowed' : ''}`}
-            >
-              <div className="flex items-center justify-between mb-1">
-                <span className="font-bold text-xs text-slate-900">2. Mode Sans Compte Cuisinier</span>
-                <span className="w-2.5 h-2.5 rounded-full bg-amber-500"></span>
-              </div>
-              <p className="text-[11px] text-slate-500 leading-snug">
-                La caisse ou le serveur transmet les commandes en cuisine (bon imprimé ou écran partagé) et gère directement les statuts à la place d'un compte dédié.
-              </p>
-            </button>
+        ) : (
+          <div className="flex items-center gap-2.5 px-4 py-2.5 rounded-2xl bg-slate-100 border border-slate-200 text-slate-700 text-xs font-medium">
+            <Lock className="w-4 h-4 text-slate-500 shrink-0" />
+            <span>
+              <strong>Mode Consultation :</strong> La modification des règles et modules applicatifs est strictement réservée au Super Administrateur (Direction).
+            </span>
           </div>
+        )}
+
+        {/* Mode de fonctionnement de la cuisine (Guide Genesis Digital Agency - Section 3, 6, 12) */}
+        {subTab === 'cuisine' && (
+          <div className="bg-gradient-to-br from-amber-50 to-orange-50/50 p-5 rounded-2xl border border-amber-200 space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <h4 className="text-sm font-bold text-amber-950 flex items-center gap-2">
+                  <ChefHat className="w-4 h-4 text-amber-600" />
+                  <span>Mode de fonctionnement de la cuisine</span>
+                </h4>
+                <p className="text-xs text-amber-800 mt-0.5">
+                  Conforme au Guide d'Utilisation Officiel (Section 3, 6 et 12)
+                </p>
+              </div>
+              <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-amber-200 text-amber-900 border border-amber-300">
+                {kitchenMode === 'ecran_cuisine' ? 'Mode Écran KDS' : 'Sans Compte Cuisinier'}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+              <button
+                type="button"
+                disabled={!isSuperAdmin}
+                onClick={() => isSuperAdmin && setKitchenMode('ecran_cuisine')}
+                className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer ${
+                  kitchenMode === 'ecran_cuisine'
+                    ? 'bg-white border-amber-500 shadow-sm ring-2 ring-amber-400/20'
+                    : 'bg-white/60 border-amber-200 hover:bg-white text-slate-600'
+                } ${!isSuperAdmin ? 'opacity-70 cursor-not-allowed' : ''}`}
+              >
+                <div className="flex items-center justify-between mb-1">
+                  <span className="font-bold text-xs text-slate-900">1. Mode Écran Cuisine</span>
+                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+                </div>
+                <p className="text-xs text-slate-500 leading-snug">
+                  Les cuisiniers disposent de comptes individuels et d'un écran tactile KDS pour valider la préparation des plats ("En préparation" &rarr; "Prêt").
+                </p>
+              </button>
+
+              <button
+                type="button"
+                disabled={!isSuperAdmin}
+                onClick={() => isSuperAdmin && setKitchenMode('sans_compte')}
+                className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer ${
+                  kitchenMode === 'sans_compte'
+                    ? 'bg-white border-amber-500 shadow-sm ring-2 ring-amber-400/20'
+                    : 'bg-white/60 border-amber-200 hover:bg-white text-slate-600'
+                } ${!isSuperAdmin ? 'opacity-70 cursor-not-allowed' : ''}`}
+              >
+                <div className="flex items-center justify-between mb-1">
+                  <span className="font-bold text-xs text-slate-900">2. Mode Sans Compte Cuisinier</span>
+                  <span className="w-2.5 h-2.5 rounded-full bg-amber-500"></span>
+                </div>
+                <p className="text-xs text-slate-500 leading-snug">
+                  La caisse ou le serveur transmet les commandes en cuisine (bon imprimé ou écran partagé) et gère directement les statuts à la place d'un compte dédié.
+                </p>
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Modern Rule Toggles Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+          {filteredItems.map((item) => (
+            <ModernRuleToggle
+              key={item.key}
+              id={item.key}
+              label={item.label}
+              description={item.description}
+              badge={(item as any).badge}
+              icon={(item as any).icon || Icon}
+              checked={options[item.key] ?? false}
+              onChange={() => toggleOption(item.key)}
+              isSensitive={SENSITIVE_RULE_KEYS.has(item.key)}
+              sensitiveWarning="Cette règle modifie les contraintes de sécurité ou de validation du restaurant."
+            />
+          ))}
         </div>
+
+        <div className="pt-4 border-t border-slate-100 flex items-center justify-between">
+          <span className="text-xs text-slate-500 font-medium">
+            {config.items.filter((i) => options[i.key]).length} sur {config.items.length} règles activées
+          </span>
+
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={!isSuperAdmin || isSaving}
+            className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-xs shadow-xs transition-colors cursor-pointer ${
+              isSuperAdmin
+                ? 'bg-slate-900 text-white hover:bg-slate-800'
+                : 'bg-slate-300 text-slate-500 cursor-not-allowed'
+            }`}
+          >
+            {isSuperAdmin ? <Save className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
+            <span>
+              {isSaving
+                ? 'Enregistrement...'
+                : isSuperAdmin
+                ? 'Enregistrer les règles'
+                : 'Modification verrouillée'}
+            </span>
+          </button>
+        </div>
+      </div>
+
+      {/* Barre d'action collante lors de modifications non enregistrées */}
+      {isSuperAdmin && (
+        <StickyActionBar
+          dirtyCount={dirtyCount}
+          onSave={handleSave}
+          onCancel={() => {
+            setOptions(operationRules);
+            setKitchenMode(settings.kitchenOperationMode || 'ecran_cuisine');
+          }}
+          isSaving={isSaving}
+          saveLabel="Enregistrer les règles"
+        />
       )}
-
-      {/* Modern Rule Toggles Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
-        {config.items.map((item) => (
-          <ModernRuleToggle
-            key={item.key}
-            id={item.key}
-            label={item.label}
-            description={item.description}
-            badge={(item as any).badge}
-            icon={(item as any).icon || Icon}
-            checked={options[item.key] ?? false}
-            onChange={() => toggleOption(item.key)}
-          />
-        ))}
-      </div>
-
-      <div className="pt-4 border-t border-slate-100 flex items-center justify-between">
-        <span className="text-[11px] text-slate-400 font-mono">
-          {config.items.filter((i) => options[i.key]).length} sur {config.items.length} règles activées
-        </span>
-
-        <button
-          type="button"
-          onClick={handleSave}
-          disabled={!isSuperAdmin}
-          className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-xs shadow-xs transition-colors ${
-            isSuperAdmin
-              ? 'bg-slate-900 text-white hover:bg-slate-800'
-              : 'bg-slate-300 text-slate-500 cursor-not-allowed'
-          }`}
-        >
-          {isSuperAdmin ? <Save className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
-          <span>{isSuperAdmin ? 'Enregistrer les règles' : 'Modification verrouillée'}</span>
-        </button>
-      </div>
-    </div>
+    </>
   );
 };
