@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRestaurant } from '../../context/RestaurantContext';
+import { useAuth } from '../../context/AuthContext';
 import {
   Thermometer,
   Plus,
@@ -16,6 +17,7 @@ import { HygieneCheck } from '../../types/restaurant';
 
 export const HygieneView: React.FC = () => {
   const { hygieneChecks, addHygieneCheck } = useRestaurant();
+  const { currentUser } = useAuth();
 
   const [modalOpen, setModalOpen] = useState(false);
   const [filterCategory, setFilterCategory] = useState<string>('all');
@@ -23,7 +25,13 @@ export const HygieneView: React.FC = () => {
   // Form State
   const [category, setCategory] = useState<HygieneCheck['category']>('temperature');
   const [equipmentOrZone, setEquipmentOrZone] = useState('Chambre Froide Positive (+2°C / +4°C)');
-  const [inspectorName, setInspectorName] = useState('Chef Marc Ndongo');
+  const [inspectorName, setInspectorName] = useState(currentUser?.name || '');
+
+  useEffect(() => {
+    if (currentUser?.name && !inspectorName) {
+      setInspectorName(currentUser.name);
+    }
+  }, [currentUser?.name]);
   const [measuredValue, setMeasuredValue] = useState('+3.0°C');
   const [thresholdOrStandard, setThresholdOrStandard] = useState('Entre +0°C et +4°C');
   const [result, setResult] = useState<HygieneCheck['result']>('conforme');
