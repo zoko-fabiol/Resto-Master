@@ -3,14 +3,16 @@ import {
   collection,
   doc,
   setDoc,
+  getDoc,
   updateDoc,
   deleteDoc,
   onSnapshot,
   query,
   where,
   writeBatch,
+  runTransaction,
 } from 'firebase/firestore';
-import { RestaurantTable, TableStatus, Zone, DecorElement } from '../../types/restaurant';
+import { RestaurantTable, TableStatus, Zone, DecorElement, LayoutLock } from '../../types/restaurant';
 import { offlineSyncService } from './offlineSyncService';
 import { FloorPlanDiffResult } from '../../components/tables/floorPlanDiff';
 
@@ -478,6 +480,107 @@ export const tablesFirestoreService = {
       );
     } catch {
       return () => {};
+    }
+  },
+
+  /**
+   * Tente d'acquérir le verrou d'édition pour une salle (D-06).
+   * Durée du verrou : 2 minutes (120 000 ms).
+   */
+  async acquireLayoutLock(
+    restaurantId: string,
+    zoneId: string,
+    user: { id: string; name: string; role?: string }
+  ): Promise<{ success: boolean; lock?: LayoutLock; message?: string }> {
+    const lockId = `${restaurantId}_${zoneId}`;
+    const lockRef = doc(db, 'layout_locks', lockId);
+    const now = Date.now();
+    const lockDurationMs = 120_000;
+
+    try {
+      const result = await runTransaction(db, async (tx) => {
+        const snap = await tx.get(lockRef);
+        if (snap.exists()) {
+          const data = snap.data() as LayoutLock;
+          const expiresAtMs = new Date(data.expiresAt).getTime();
+          const isExpired = expiresAtMs <= now;
+          const isSameUser = data.userId === user.id;
+
+          if (!isExpired && !isSameUser) {
+            return {
+              success: false,
+              lock: data,
+              message: `Le plan de salle est en cours de modification par ${data.userName || 'un autre utilisateur'}.`,
+            };
+          }
+        }
+
+        const newLock: LayoutLock = {
+          id: lockId,
+          restaurantId,
+          zoneId,
+          userId: user.id,
+          userName: user.name,
+          userRole: user.role,
+          acquiredAt: new Date(now).toISOString(),
+          expiresAt: new Date(now + lockDurationMs).toISOString(),
+        };
+
+        tx.set(lockRef, newLock);
+        return { success: true, lock: newLock };
+      });
+
+      return result;
+    } catch (err) {
+      console.error('[tablesFirestoreService] Erreur acquireLayoutLock:', err);
+      // En mode hors ligne ou en cas de problème de réseau temporaire, autoriser l'édition locale
+      return { success: true };
+    }
+  },
+
+  /**
+   * Prolonge le verrou d'édition actif (heartbeat toutes les 45s).
+   */
+  async renewLayoutLock(restaurantId: string, zoneId: string, userId: string): Promise<boolean> {
+    const lockId = `${restaurantId}_${zoneId}`;
+    const lockRef = doc(db, 'layout_locks', lockId);
+    const now = Date.now();
+    const lockDurationMs = 120_000;
+
+    try {
+      const snap = await getDoc(lockRef);
+      if (snap.exists()) {
+        const data = snap.data() as LayoutLock;
+        if (data.userId === userId) {
+          await updateDoc(lockRef, {
+            expiresAt: new Date(now + lockDurationMs).toISOString(),
+          });
+          return true;
+        }
+      }
+      return false;
+    } catch {
+      return false;
+    }
+  },
+
+  /**
+   * Libère le verrou d'édition à la fermeture ou sauvegarde du mode édition.
+   */
+  async releaseLayoutLock(restaurantId: string, zoneId: string, userId: string): Promise<void> {
+    const lockId = `${restaurantId}_${zoneId}`;
+    const lockRef = doc(db, 'layout_locks', lockId);
+
+    try {
+      const snap = await getDoc(lockRef);
+      if (snap.exists()) {
+        const data = snap.data() as LayoutLock;
+        if (data.userId === userId) {
+          await deleteDoc(lockRef);
+        }
+      }
+    } catch (err) {
+      console.warn('[tablesFirestoreService] Erreur releaseLayoutLock:', err);
     }
   },
 };

@@ -20,6 +20,7 @@ import { AddEditTableModal } from './AddEditTableModal';
 import { AddZoneModal } from './AddZoneModal';
 import { floorPlanReducer, cloneSnapshot, LayoutSnapshot } from './floorPlanReducer';
 import { computeFloorPlanDiff } from './floorPlanDiff';
+import { findOccupiedTablesInZone } from './floorPlanLock';
 import { generateSecureId } from '../../lib/utils';
 import {
   Utensils,
@@ -69,6 +70,9 @@ export const TablesView: React.FC<TablesViewProps> = ({ onOpenOrder, onPayOrder,
     batchSaveTables,
     batchSaveDecorElements,
     saveFloorPlanDiff,
+    acquireLayoutLock,
+    renewLayoutLock,
+    releaseLayoutLock,
     addTablesBatch,
     saveDecorElement,
     deleteDecorElement,
@@ -232,8 +236,31 @@ export const TablesView: React.FC<TablesViewProps> = ({ onOpenOrder, onPayOrder,
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isEditMode, handleUndo, handleRedo]);
 
-  // Enter Edit Mode
-  const handleEnterEditMode = () => {
+  // Renouvellement périodique du verrou d'édition (heartbeat toutes les 45s)
+  useEffect(() => {
+    if (!isEditMode) return;
+    const interval = setInterval(() => {
+      if (currentUser?.id) {
+        renewLayoutLock(selectedZoneId, currentUser.id);
+      }
+    }, 45_000);
+
+    return () => {
+      clearInterval(interval);
+    };
+  }, [isEditMode, selectedZoneId, currentUser?.id, renewLayoutLock]);
+
+  // Libération du verrou si démontage inopiné du composant
+  useEffect(() => {
+    return () => {
+      if (isEditMode && currentUser?.id) {
+        releaseLayoutLock(selectedZoneId, currentUser.id);
+      }
+    };
+  }, [isEditMode, selectedZoneId, currentUser?.id, releaseLayoutLock]);
+
+  // Enter Edit Mode (avec Verrou d'édition D-06 et Alerte tables occupées)
+  const handleEnterEditMode = async () => {
     if (!canEditLayout) {
       showToast({
         type: 'warning',
@@ -242,6 +269,36 @@ export const TablesView: React.FC<TablesViewProps> = ({ onOpenOrder, onPayOrder,
       });
       return;
     }
+
+    // 1. Alerte si des tables sont actuellement occupées ou en commande dans cette zone
+    const occupiedTables = findOccupiedTablesInZone(tables, selectedZoneId, activeZoneObj?.name);
+    if (occupiedTables.length > 0) {
+      const ok = await confirm({
+        title: 'Tables en service dans cette salle',
+        message: `Attention : ${occupiedTables.length} table(s) (${occupiedTables.map((t) => t.number).join(', ')}) sont actuellement occupées ou en cours de commande. La modification de leur position n'altérera pas les commandes, mais peut désorienter le personnel en salle. Confirmez-vous l'ouverture du mode édition ?`,
+        confirmLabel: 'Poursuivre l\'édition',
+        cancelLabel: 'Annuler',
+        variant: 'normal',
+      });
+      if (!ok) return;
+    }
+
+    // 2. Acquisition du verrou d'édition multi-utilisateurs (D-06)
+    const lockRes = await acquireLayoutLock(selectedZoneId, {
+      id: currentUser?.id || 'unknown',
+      name: currentUser?.name || 'Superviseur',
+      role: currentUser?.role,
+    });
+
+    if (!lockRes.success) {
+      showToast({
+        type: 'warning',
+        title: 'Édition verrouillée',
+        message: lockRes.message || 'Le plan de salle est en cours de modification par un autre utilisateur.',
+      });
+      return;
+    }
+
     dispatchFloorPlan({
       type: 'INIT',
       payload: { tables, decor: decorElements },
@@ -250,7 +307,7 @@ export const TablesView: React.FC<TablesViewProps> = ({ onOpenOrder, onPayOrder,
     setIsEditMode(true);
   };
 
-  // Exit / Save Edit Mode (Diff-based Batch Save D-01, D-02)
+  // Exit / Save Edit Mode (Diff-based Batch Save D-01, D-02 + Libération du verrou D-06)
   const handleSaveEditMode = async () => {
     try {
       const diff = computeFloorPlanDiff(
@@ -264,6 +321,10 @@ export const TablesView: React.FC<TablesViewProps> = ({ onOpenOrder, onPayOrder,
 
       if (diff.hasChanges) {
         await saveFloorPlanDiff(diff);
+      }
+
+      if (currentUser?.id) {
+        await releaseLayoutLock(selectedZoneId, currentUser.id);
       }
 
       setIsEditMode(false);
@@ -284,7 +345,7 @@ export const TablesView: React.FC<TablesViewProps> = ({ onOpenOrder, onPayOrder,
     }
   };
 
-  // Cancel Edit Mode - Abandon complet sans fuite Firestore (D-05)
+  // Cancel Edit Mode - Abandon complet sans fuite Firestore (D-05) + Libération verrou (D-06)
   const handleCancelEditMode = async () => {
     if (isDirty) {
       const ok = await confirm({
@@ -301,6 +362,11 @@ export const TablesView: React.FC<TablesViewProps> = ({ onOpenOrder, onPayOrder,
       payload: { tables, decor: decorElements },
     });
     dragStartSnapshotRef.current = null;
+
+    if (currentUser?.id) {
+      await releaseLayoutLock(selectedZoneId, currentUser.id);
+    }
+
     setIsEditMode(false);
     setSelectedTableId(null);
     setSelectedDecorId(null);

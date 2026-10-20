@@ -201,6 +201,11 @@ service cloud.firestore {
       allow write: if isManager() || isDirection();
     }
 
+    match /layout_locks/{lockId} {
+      allow read: if isAuthenticated() && hasDocRestaurantAccess();
+      allow write: if isManager() || isDirection();
+    }
+
     // =========================================================================
     // 5. CAISSES, TERMINAUX & PÉRIPHÉRIQUES
     // =========================================================================

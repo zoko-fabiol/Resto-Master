@@ -47,6 +47,7 @@ import {
   AccountType,
   WeeklySchedule,
   DecorElement,
+  LayoutLock,
 } from '../types/restaurant';
 import { FloorPlanDiffResult } from '../components/tables/floorPlanDiff';
 import {
@@ -335,6 +336,9 @@ interface RestaurantContextType {
   decorElements: DecorElement[];
   saveDecorElement: (decor: DecorElement) => Promise<void>;
   deleteDecorElement: (decorId: string) => Promise<void>;
+  acquireLayoutLock: (zoneId: string, user: { id: string; name: string; role?: string }) => Promise<{ success: boolean; lock?: LayoutLock; message?: string }>;
+  renewLayoutLock: (zoneId: string, userId: string) => Promise<boolean>;
+  releaseLayoutLock: (zoneId: string, userId: string) => Promise<void>;
 
   // Caisses
   addCashRegister: (reg: Omit<CashRegister, 'id'>) => Promise<void>;
@@ -3766,6 +3770,24 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     );
   };
 
+  const acquireLayoutLock = async (
+    zoneId: string,
+    user: { id: string; name: string; role?: string }
+  ) => {
+    const restaurantId = selectedOutletId || activeRestaurant?.id || '';
+    return tablesFirestoreService.acquireLayoutLock(restaurantId, zoneId, user);
+  };
+
+  const renewLayoutLock = async (zoneId: string, userId: string) => {
+    const restaurantId = selectedOutletId || activeRestaurant?.id || '';
+    return tablesFirestoreService.renewLayoutLock(restaurantId, zoneId, userId);
+  };
+
+  const releaseLayoutLock = async (zoneId: string, userId: string) => {
+    const restaurantId = selectedOutletId || activeRestaurant?.id || '';
+    return tablesFirestoreService.releaseLayoutLock(restaurantId, zoneId, userId);
+  };
+
   const addTablesBatch = async (newTablesData: Omit<RestaurantTable, 'id'>[]): Promise<RestaurantTable[]> => {
     const now = new Date().toISOString();
     const created: RestaurantTable[] = newTablesData.map((td) => ({
@@ -3945,6 +3967,9 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         batchSaveTables,
         batchSaveDecorElements,
         saveFloorPlanDiff,
+        acquireLayoutLock,
+        renewLayoutLock,
+        releaseLayoutLock,
         addTablesBatch,
         decorElements: activeDecorElements,
         saveDecorElement,

@@ -292,6 +292,17 @@ export interface DecorElement {
   updatedAt?: string;
 }
 
+export interface LayoutLock {
+  id: string; // `${restaurantId}_${zoneId}`
+  restaurantId: string;
+  zoneId: string;
+  userId: string;
+  userName: string;
+  userRole?: string;
+  acquiredAt: string; // ISO
+  expiresAt: string; // ISO
+}
+
 export interface CashRegister {
   id: string;
   restaurantId: string;
