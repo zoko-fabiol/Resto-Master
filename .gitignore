@@ -14,3 +14,8 @@ coverage/
 # Fonctions Firebase
 functions/lib/
 functions/node_modules/
+
+# Identifiants et clés de service Firebase Admin (ne JAMAIS commiter)
+serviceAccountKey.json
+*serviceAccount*.json
+*firebase-adminsdk*.json
