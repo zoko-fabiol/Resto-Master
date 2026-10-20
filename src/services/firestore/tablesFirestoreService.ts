@@ -12,8 +12,76 @@ import {
 } from 'firebase/firestore';
 import { RestaurantTable, TableStatus, Zone, DecorElement } from '../../types/restaurant';
 import { offlineSyncService } from './offlineSyncService';
+import { FloorPlanDiffResult } from '../../components/tables/floorPlanDiff';
 
 export const tablesFirestoreService = {
+  /**
+   * Sauvegarde atomique sélective du plan de table (D-01, D-02, D-05)
+   * N'écrit QUE les champs géométriques de layout pour les tables existantes.
+   * Ne modifie JAMAIS le statut opérationnel (status, currentOrderId, timeOccupied...).
+   * Supprime réellement les documents désignés dans Firestore.
+   */
+  async batchApplyFloorPlanDiff(diff: FloorPlanDiffResult, restaurantId?: string): Promise<void> {
+    const now = new Date().toISOString();
+    const batch = writeBatch(db);
+
+    // 1. Nouvelles tables créées dans le brouillon
+    for (const table of diff.tablesToCreate) {
+      const docRef = doc(db, 'tables', table.id);
+      const payload = {
+        ...table,
+        restaurantId: table.restaurantId || restaurantId || '',
+        coordVersion: 2,
+        status: table.status || 'libre',
+        createdAt: table.createdAt || now,
+        updatedAt: now,
+      };
+      batch.set(docRef, JSON.parse(JSON.stringify(payload)));
+    }
+
+    // 2. Mises à jour partielles géométriques (LAYOUT ONLY)
+    for (const layout of diff.tablesToUpdate) {
+      const docRef = doc(db, 'tables', layout.id);
+      const payload = {
+        ...layout,
+        coordVersion: 2,
+        updatedAt: now,
+      };
+      batch.update(docRef, JSON.parse(JSON.stringify(payload)));
+    }
+
+    // 3. Suppressions réelles de tables
+    for (const tableId of diff.tablesToDelete) {
+      const docRef = doc(db, 'tables', tableId);
+      batch.delete(docRef);
+    }
+
+    // 4. Upsert décor
+    for (const decor of diff.decorToUpsert) {
+      const docRef = doc(db, 'decor_elements', decor.id);
+      const payload = {
+        ...decor,
+        restaurantId: decor.restaurantId || restaurantId || '',
+        coordVersion: 2,
+        updatedAt: now,
+      };
+      batch.set(docRef, JSON.parse(JSON.stringify(payload)), { merge: true });
+    }
+
+    // 5. Suppressions réelles de décor
+    for (const decorId of diff.decorToDelete) {
+      const docRef = doc(db, 'decor_elements', decorId);
+      batch.delete(docRef);
+    }
+
+    try {
+      await batch.commit();
+    } catch (err) {
+      console.error('[tablesFirestoreService] Échec du batchApplyFloorPlanDiff:', err);
+      throw err;
+    }
+  },
+
   /**
    * Save or update a table in Firestore
    */
@@ -34,6 +102,7 @@ export const tablesFirestoreService = {
         const cleanPayload = JSON.parse(JSON.stringify(table));
         offlineSyncService.enqueue('tables', 'CREATE', table.id, cleanPayload);
       } catch {}
+      throw err;
     }
   },
 
@@ -59,13 +128,14 @@ export const tablesFirestoreService = {
       }
       await batch.commit();
     } catch (err) {
-      console.warn('Erreur batchSaveTables Firestore:', err);
+      console.error('Erreur batchSaveTables Firestore:', err);
       for (const table of tables) {
         try {
           const cleanPayload = JSON.parse(JSON.stringify(table));
           offlineSyncService.enqueue('tables', 'CREATE', table.id, cleanPayload);
         } catch {}
       }
+      throw err;
     }
   },
 
@@ -82,10 +152,11 @@ export const tablesFirestoreService = {
       }
       await batch.commit();
     } catch (err) {
-      console.warn('Erreur batchDeleteTables Firestore:', err);
+      console.error('Erreur batchDeleteTables Firestore:', err);
       for (const id of tableIds) {
         offlineSyncService.enqueue('tables', 'DELETE', id, {});
       }
+      throw err;
     }
   },
 
@@ -286,7 +357,8 @@ export const tablesFirestoreService = {
       const docRef = doc(db, 'decor_elements', decor.id);
       await setDoc(docRef, payload, { merge: true });
     } catch (err) {
-      console.warn('Erreur saveDecorElement Firestore:', err);
+      console.error('Erreur saveDecorElement Firestore:', err);
+      throw err;
     }
   },
 
@@ -295,7 +367,8 @@ export const tablesFirestoreService = {
       const docRef = doc(db, 'decor_elements', decorId);
       await deleteDoc(docRef);
     } catch (err) {
-      console.warn('Erreur deleteDecorElement Firestore:', err);
+      console.error('Erreur deleteDecorElement Firestore:', err);
+      throw err;
     }
   },
 
@@ -325,7 +398,8 @@ export const tablesFirestoreService = {
 
       await batch.commit();
     } catch (err) {
-      console.warn('Erreur batchSaveDecor Firestore:', err);
+      console.error('Erreur batchSaveDecor Firestore:', err);
+      throw err;
     }
   },
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useReducer, useRef } from 'react';
 import { useRestaurant } from '../../context/RestaurantContext';
 import { useToast } from '../../context/ToastContext';
 import { useConfirm, usePrompt } from '../ui/ConfirmDialog';
@@ -18,6 +18,9 @@ import { DecorElementModal } from './DecorElementModal';
 import { TableDetailModal } from './TableDetailModal';
 import { AddEditTableModal } from './AddEditTableModal';
 import { AddZoneModal } from './AddZoneModal';
+import { floorPlanReducer, cloneSnapshot, LayoutSnapshot } from './floorPlanReducer';
+import { computeFloorPlanDiff } from './floorPlanDiff';
+import { generateSecureId } from '../../lib/utils';
 import {
   Utensils,
   Plus,
@@ -65,6 +68,7 @@ export const TablesView: React.FC<TablesViewProps> = ({ onOpenOrder, onPayOrder,
     deleteTable,
     batchSaveTables,
     batchSaveDecorElements,
+    saveFloorPlanDiff,
     addTablesBatch,
     saveDecorElement,
     deleteDecorElement,
@@ -120,22 +124,36 @@ export const TablesView: React.FC<TablesViewProps> = ({ onOpenOrder, onPayOrder,
     }
   }, [zones, selectedZoneId]);
 
-  // Local draft states for non-destructive vector layout manipulation (G2)
-  const [draftTables, setDraftTables] = useState<RestaurantTable[]>(tables);
-  const [draftDecor, setDraftDecor] = useState<DecorElement[]>(decorElements);
-  const [isDirty, setIsDirty] = useState(false);
+  // Unified history and draft reducer (D-04, D-05)
+  const [historyState, dispatchFloorPlan] = useReducer(floorPlanReducer, {
+    past: [],
+    present: {
+      tables,
+      decor: decorElements,
+      removedTableIds: [],
+      removedDecorIds: [],
+    },
+    future: [],
+  });
 
-  // Undo / Redo history stack (G11)
-  const [history, setHistory] = useState<Array<{ tables: RestaurantTable[]; decor: DecorElement[] }>>([]);
-  const [historyIndex, setHistoryIndex] = useState(-1);
+  const draftTables = historyState.present.tables;
+  const draftDecor = historyState.present.decor;
+  const isDirty = historyState.past.length > 0;
+  const canUndo = historyState.past.length > 0;
+  const canRedo = historyState.future.length > 0;
 
-  // Sync draft states when real tables or decor update from Firestore (if not dirty)
+  // Snapshot capturé avant une interaction continue (drag/resize/rotate)
+  const dragStartSnapshotRef = useRef<LayoutSnapshot | null>(null);
+
+  // Sync draft states when real tables or decor update from Firestore (if not editing)
   useEffect(() => {
-    if (!isDirty && !isEditMode) {
-      setDraftTables(tables);
-      setDraftDecor(decorElements);
+    if (!isEditMode) {
+      dispatchFloorPlan({
+        type: 'INIT',
+        payload: { tables, decor: decorElements },
+      });
     }
-  }, [tables, decorElements, isDirty, isEditMode]);
+  }, [tables, decorElements, isEditMode]);
 
   // Selection states
   const [selectedTableId, setSelectedTableId] = useState<string | null>(null);
@@ -182,41 +200,15 @@ export const TablesView: React.FC<TablesViewProps> = ({ onOpenOrder, onPayOrder,
     return map;
   }, [orders]);
 
-  // Push history snapshot for Undo / Redo (G11)
-  const pushHistorySnapshot = useCallback(() => {
-    const nextSnapshot = {
-      tables: JSON.parse(JSON.stringify(draftTables)),
-      decor: JSON.parse(JSON.stringify(draftDecor)),
-    };
-    setHistory((prev) => {
-      const sliced = prev.slice(0, historyIndex + 1);
-      return [...sliced, nextSnapshot];
-    });
-    setHistoryIndex((prev) => prev + 1);
-    setIsDirty(true);
-  }, [draftTables, draftDecor, historyIndex]);
-
-  // Undo (Ctrl+Z)
+  // Undo (Ctrl+Z) - Réducteur unifié sans cran mort (D-04)
   const handleUndo = useCallback(() => {
-    if (historyIndex > 0) {
-      const targetIndex = historyIndex - 1;
-      const snapshot = history[targetIndex];
-      setDraftTables(snapshot.tables);
-      setDraftDecor(snapshot.decor);
-      setHistoryIndex(targetIndex);
-    }
-  }, [history, historyIndex]);
+    dispatchFloorPlan({ type: 'UNDO' });
+  }, []);
 
   // Redo (Ctrl+Y)
   const handleRedo = useCallback(() => {
-    if (historyIndex < history.length - 1) {
-      const targetIndex = historyIndex + 1;
-      const snapshot = history[targetIndex];
-      setDraftTables(snapshot.tables);
-      setDraftDecor(snapshot.decor);
-      setHistoryIndex(targetIndex);
-    }
-  }, [history, historyIndex]);
+    dispatchFloorPlan({ type: 'REDO' });
+  }, []);
 
   // Keyboard shortcut listener for Ctrl+Z / Ctrl+Y
   useEffect(() => {
@@ -250,25 +242,30 @@ export const TablesView: React.FC<TablesViewProps> = ({ onOpenOrder, onPayOrder,
       });
       return;
     }
+    dispatchFloorPlan({
+      type: 'INIT',
+      payload: { tables, decor: decorElements },
+    });
+    dragStartSnapshotRef.current = null;
     setIsEditMode(true);
-    setDraftTables(tables);
-    setDraftDecor(decorElements);
-    setHistory([
-      {
-        tables: JSON.parse(JSON.stringify(tables)),
-        decor: JSON.parse(JSON.stringify(decorElements)),
-      },
-    ]);
-    setHistoryIndex(0);
-    setIsDirty(false);
   };
 
-  // Exit / Save Edit Mode (Batch Save G1, G2)
+  // Exit / Save Edit Mode (Diff-based Batch Save D-01, D-02)
   const handleSaveEditMode = async () => {
     try {
-      await batchSaveTables(draftTables);
-      await batchSaveDecorElements(draftDecor);
-      setIsDirty(false);
+      const diff = computeFloorPlanDiff(
+        tables,
+        draftTables,
+        historyState.present.removedTableIds,
+        decorElements,
+        draftDecor,
+        historyState.present.removedDecorIds
+      );
+
+      if (diff.hasChanges) {
+        await saveFloorPlanDiff(diff);
+      }
+
       setIsEditMode(false);
       setSelectedTableId(null);
       setSelectedDecorId(null);
@@ -277,7 +274,8 @@ export const TablesView: React.FC<TablesViewProps> = ({ onOpenOrder, onPayOrder,
         title: 'Plan de salle enregistré',
         message: 'L\'ensemble des modifications d\'agencement a été synchronisé avec succès.',
       });
-    } catch {
+    } catch (err: unknown) {
+      console.error('Erreur lors de la sauvegarde du plan de table:', err);
       showToast({
         type: 'error',
         title: 'Erreur d\'enregistrement',
@@ -286,7 +284,7 @@ export const TablesView: React.FC<TablesViewProps> = ({ onOpenOrder, onPayOrder,
     }
   };
 
-  // Cancel Edit Mode
+  // Cancel Edit Mode - Abandon complet sans fuite Firestore (D-05)
   const handleCancelEditMode = async () => {
     if (isDirty) {
       const ok = await confirm({
@@ -298,24 +296,39 @@ export const TablesView: React.FC<TablesViewProps> = ({ onOpenOrder, onPayOrder,
       });
       if (!ok) return;
     }
-    setDraftTables(tables);
-    setDraftDecor(decorElements);
-    setIsDirty(false);
+    dispatchFloorPlan({
+      type: 'DISCARD_CHANGES',
+      payload: { tables, decor: decorElements },
+    });
+    dragStartSnapshotRef.current = null;
     setIsEditMode(false);
     setSelectedTableId(null);
     setSelectedDecorId(null);
   };
 
-  // Batch Add Tables (G8)
+  // Batch Add Tables (G8) - En mode édition, stocke en local sans fuite Firestore (D-05)
   const handleBatchAddTables = async (newTablesData: Omit<RestaurantTable, 'id'>[]) => {
-    const created = await addTablesBatch(newTablesData);
-    setDraftTables((prev) => [...prev, ...created]);
-    pushHistorySnapshot();
-    showToast({
-      type: 'success',
-      title: 'Tables générées',
-      message: `${created.length} tables ont été ajoutées sur le plan de salle.`,
-    });
+    if (isEditMode) {
+      const created: RestaurantTable[] = newTablesData.map((data) => ({
+        ...data,
+        id: generateSecureId('tbl'),
+        status: data.status || 'libre',
+        coordVersion: 2,
+      })) as RestaurantTable[];
+      dispatchFloorPlan({ type: 'ADD_TABLES_BATCH', payload: created });
+      showToast({
+        type: 'success',
+        title: 'Tables générées (Brouillon)',
+        message: `${created.length} tables ont été ajoutées en brouillon sur le plan de salle.`,
+      });
+    } else {
+      const created = await addTablesBatch(newTablesData);
+      showToast({
+        type: 'success',
+        title: 'Tables générées',
+        message: `${created.length} tables ont été ajoutées sur le plan de salle.`,
+      });
+    }
   };
 
   // Tablet Kiosk Remote stats
@@ -539,7 +552,7 @@ export const TablesView: React.FC<TablesViewProps> = ({ onOpenOrder, onPayOrder,
             {/* Undo / Redo buttons (G11) */}
             <div className="flex items-center gap-1 bg-white p-0.5 rounded-xl border border-slate-200">
               <button
-                disabled={historyIndex <= 0}
+                disabled={!canUndo}
                 onClick={handleUndo}
                 className="p-1.5 rounded-lg text-slate-700 hover:bg-slate-100 disabled:opacity-30 transition-colors"
                 title="Annuler (Ctrl+Z)"
@@ -547,7 +560,7 @@ export const TablesView: React.FC<TablesViewProps> = ({ onOpenOrder, onPayOrder,
                 <Undo2 className="w-3.5 h-3.5" />
               </button>
               <button
-                disabled={historyIndex >= history.length - 1}
+                disabled={!canRedo}
                 onClick={handleRedo}
                 className="p-1.5 rounded-lg text-slate-700 hover:bg-slate-100 disabled:opacity-30 transition-colors"
                 title="Rétablir (Ctrl+Y)"
@@ -678,14 +691,26 @@ export const TablesView: React.FC<TablesViewProps> = ({ onOpenOrder, onPayOrder,
             }
           }}
           onUpdateDraftTables={(updated) => {
-            setDraftTables(updated);
-            setIsDirty(true);
+            if (!dragStartSnapshotRef.current) {
+              dragStartSnapshotRef.current = cloneSnapshot(historyState.present);
+            }
+            dispatchFloorPlan({ type: 'SET_TABLES_TRANSIENT', payload: updated });
           }}
           onUpdateDraftDecor={(updated) => {
-            setDraftDecor(updated);
-            setIsDirty(true);
+            if (!dragStartSnapshotRef.current) {
+              dragStartSnapshotRef.current = cloneSnapshot(historyState.present);
+            }
+            dispatchFloorPlan({ type: 'SET_DECOR_TRANSIENT', payload: updated });
           }}
-          onPushHistory={pushHistorySnapshot}
+          onPushHistory={() => {
+            if (dragStartSnapshotRef.current) {
+              dispatchFloorPlan({
+                type: 'COMMIT_TRANSACTION',
+                payload: { startSnapshot: dragStartSnapshotRef.current },
+              });
+              dragStartSnapshotRef.current = null;
+            }
+          }}
           onAddTableClick={() => setShowAddTableModal(true)}
           onBatchAddClick={() => setShowBatchAddModal(true)}
         />
@@ -845,10 +870,10 @@ export const TablesView: React.FC<TablesViewProps> = ({ onOpenOrder, onPayOrder,
           onClose={() => setEditTableModal(null)}
           onSave={(updates) => {
             if (isEditMode) {
-              setDraftTables((prev) =>
-                prev.map((t) => (t.id === editTableModal.id ? ({ ...t, ...updates } as RestaurantTable) : t))
-              );
-              pushHistorySnapshot();
+              dispatchFloorPlan({
+                type: 'UPDATE_SINGLE_TABLE',
+                payload: { id: editTableModal.id, updates },
+              });
             } else {
               updateTable(editTableModal.id, updates);
             }
@@ -856,8 +881,11 @@ export const TablesView: React.FC<TablesViewProps> = ({ onOpenOrder, onPayOrder,
           }}
           onDelete={(id) => {
             if (isEditMode) {
-              setDraftTables((prev) => prev.filter((t) => t.id !== id));
-              pushHistorySnapshot();
+              const isPersisted = tables.some((t) => t.id === id);
+              dispatchFloorPlan({
+                type: 'REMOVE_TABLE',
+                payload: { id, isPersisted },
+              });
             } else {
               deleteTable(id);
             }
@@ -874,10 +902,16 @@ export const TablesView: React.FC<TablesViewProps> = ({ onOpenOrder, onPayOrder,
           restaurantId={activeRestaurant?.id || ''}
           onClose={() => setShowAddTableModal(false)}
           onSave={async (newTableData) => {
-            const created = await addTable(newTableData as Omit<RestaurantTable, 'id'>);
             if (isEditMode) {
-              setDraftTables((prev) => [...prev, created]);
-              pushHistorySnapshot();
+              const newTable: RestaurantTable = {
+                ...newTableData,
+                id: generateSecureId('tbl'),
+                status: newTableData.status || 'libre',
+                coordVersion: 2,
+              } as RestaurantTable;
+              dispatchFloorPlan({ type: 'ADD_TABLE', payload: newTable });
+            } else {
+              await addTable(newTableData as Omit<RestaurantTable, 'id'>);
             }
             setShowAddTableModal(false);
           }}
@@ -908,12 +942,13 @@ export const TablesView: React.FC<TablesViewProps> = ({ onOpenOrder, onPayOrder,
           }}
           onSave={async (decor) => {
             if (isEditMode) {
-              setDraftDecor((prev) => {
-                const exists = prev.some((d) => d.id === decor.id);
-                if (exists) return prev.map((d) => (d.id === decor.id ? decor : d));
-                return [...prev, decor];
+              const decorToSave: DecorElement = decor.id
+                ? { ...decor, coordVersion: 2 }
+                : { ...decor, id: generateSecureId('decor'), coordVersion: 2 };
+              dispatchFloorPlan({
+                type: 'SAVE_DECOR_ELEMENT',
+                payload: decorToSave,
               });
-              pushHistorySnapshot();
             } else {
               await saveDecorElement(decor);
             }
@@ -922,8 +957,11 @@ export const TablesView: React.FC<TablesViewProps> = ({ onOpenOrder, onPayOrder,
           }}
           onDelete={async (id) => {
             if (isEditMode) {
-              setDraftDecor((prev) => prev.filter((d) => d.id !== id));
-              pushHistorySnapshot();
+              const isPersisted = decorElements.some((d) => d.id === id);
+              dispatchFloorPlan({
+                type: 'REMOVE_DECOR',
+                payload: { id, isPersisted },
+              });
             } else {
               await deleteDecorElement(id);
             }

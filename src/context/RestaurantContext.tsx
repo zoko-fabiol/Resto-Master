@@ -48,6 +48,7 @@ import {
   WeeklySchedule,
   DecorElement,
 } from '../types/restaurant';
+import { FloorPlanDiffResult } from '../components/tables/floorPlanDiff';
 import {
   FeatureItem,
   FeatureStatus,
@@ -329,6 +330,7 @@ interface RestaurantContextType {
   splitTables: (tableId: string) => Promise<void>;
   batchSaveTables: (tables: RestaurantTable[]) => Promise<void>;
   batchSaveDecorElements: (elements: DecorElement[], removedIds?: string[]) => Promise<void>;
+  saveFloorPlanDiff: (diff: FloorPlanDiffResult) => Promise<void>;
   addTablesBatch: (tables: Omit<RestaurantTable, 'id'>[]) => Promise<RestaurantTable[]>;
   decorElements: DecorElement[];
   saveDecorElement: (decor: DecorElement) => Promise<void>;
@@ -3718,6 +3720,52 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     addAuditLog('Plan de salle', 'Tables', `Éléments de décor mis à jour (${elements.length} modifiés, ${removedIds.length} supprimés)`);
   };
 
+  const saveFloorPlanDiff = async (diff: FloorPlanDiffResult) => {
+    await tablesFirestoreService.batchApplyFloorPlanDiff(diff, selectedOutletId);
+
+    // Mettre à jour l'état local tables
+    setTables((prev) => {
+      // 1. Filtrer les tables supprimées
+      const filtered = prev.filter((t) => !diff.tablesToDelete.includes(t.id));
+      const map = new Map(filtered.map((t) => [t.id, t]));
+
+      // 2. Mettre à jour les champs géométriques (LAYOUT ONLY)
+      for (const layout of diff.tablesToUpdate) {
+        const existing = map.get(layout.id);
+        if (existing) {
+          map.set(layout.id, {
+            ...existing,
+            ...layout,
+            updatedAt: new Date().toISOString(),
+          });
+        }
+      }
+
+      // 3. Ajouter les nouvelles tables créées
+      for (const created of diff.tablesToCreate) {
+        map.set(created.id, created);
+      }
+
+      return Array.from(map.values());
+    });
+
+    // Mettre à jour l'état local décor
+    setDecorElements((prev) => {
+      const filtered = prev.filter((d) => !diff.decorToDelete.includes(d.id));
+      const map = new Map(filtered.map((d) => [d.id, d]));
+      for (const decor of diff.decorToUpsert) {
+        map.set(decor.id, decor);
+      }
+      return Array.from(map.values());
+    });
+
+    addAuditLog(
+      'Plan de salle',
+      'Tables',
+      `Plan de salle synchronisé (${diff.tablesToCreate.length} créées, ${diff.tablesToUpdate.length} modifiées, ${diff.tablesToDelete.length} supprimées)`
+    );
+  };
+
   const addTablesBatch = async (newTablesData: Omit<RestaurantTable, 'id'>[]): Promise<RestaurantTable[]> => {
     const now = new Date().toISOString();
     const created: RestaurantTable[] = newTablesData.map((td) => ({
@@ -3896,6 +3944,7 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         splitTables,
         batchSaveTables,
         batchSaveDecorElements,
+        saveFloorPlanDiff,
         addTablesBatch,
         decorElements: activeDecorElements,
         saveDecorElement,
