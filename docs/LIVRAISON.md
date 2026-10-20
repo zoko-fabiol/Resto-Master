@@ -77,15 +77,26 @@ Ce script vérifie l'absence absolue de :
 
 ---
 
-## 6. Outil de Purge des Anciennes Données de Test (Firebase)
+## 6. Outil Sécurisé de Purge des Anciennes Données de Test (Firebase Admin SDK)
 
-En cas de réinitialisation complète de l'environnement de base de données Firebase pour un nouveau client :
+Le script `scripts/purge-test-data.ts` permet de nettoyer intégralement un projet Firebase ayant servi aux essais ou tests d'intégration avant sa remise officielle au restaurant client.
+
+### Garde-Fous Inviolables :
+1. **Mode Simulation (Dry-Run) par Défaut** : Aucune suppression n'a lieu sans l'argument explicite `--execute`.
+2. **Confirmation Stricte du Project ID** : En mode exécution, l'argument `--confirm-project=<ID>` doit correspondre exactement au `projectId` actif pour prévenir toute destruction sur une base inadéquate.
+3. **Bouclier Super Administrateur** : Tout compte possédant le rôle `superadmin` ou des Custom Claims superadmin est strictement préservé de toute suppression.
+4. **Purge Ciblée d'Anciens Comptes de Test** : Détection des adresses `@demo.restaurant`, `@resto.cm`, `@example.com`, etc.
+5. **Suppression par Lots Firestore** : Nettoyage atomique (`db.batch()`) par blocs de 500 documents pour les identifiants d'essai (`org-cameroun-hospitality`, `out-1..3`, `demo-*`, `test-*`).
+6. **Nettoyage Storage & Rapport JSON** : Fichiers orphelins supprimés et rapport horodaté consigné dans `docs/reports/purge-report-*.json`.
+
+### Commandes d'Exécution :
+
 ```bash
-# Simulation sans écriture (Dry Run)
-npm run purge:test-data -- --dry-run
+# 1. Simulation sans écriture (Dry-Run actif par défaut)
+npm run purge:test-data
 
-# Exécution réelle avec confirmation
-npm run purge:test-data -- --confirm-project-id=<PROJECT_ID>
+# 2. Exécution réelle avec confirmation obligatoire du projet cible
+npm run purge:test-data -- --execute --confirm-project=restomaster-os-firebase
 ```
 
 ---

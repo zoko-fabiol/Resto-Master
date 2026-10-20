@@ -1,0 +1,208 @@
+{
+  "timestamp": "2026-10-20T13:40:15.729Z",
+  "projectId": "resto-master-310f7",
+  "isDryRun": true,
+  "auth": {
+    "scanned": 0,
+    "purged": 0,
+    "preserved": 1,
+    "purgedUsers": [],
+    "preservedUsers": [
+      {
+        "uid": "superadmin-shield-active",
+        "email": "superadmin@restaurant.cm",
+        "role": "superadmin"
+      }
+    ],
+    "mode": "simulation_dry_run"
+  },
+  "firestore": {
+    "collectionsScanned": 35,
+    "totalDocsPurged": 0,
+    "byCollection": {
+      "organizations": {
+        "scanned": 0,
+        "purged": 0,
+        "sampleIds": []
+      },
+      "outlets": {
+        "scanned": 0,
+        "purged": 0,
+        "sampleIds": []
+      },
+      "zones": {
+        "scanned": 0,
+        "purged": 0,
+        "sampleIds": []
+      },
+      "tables": {
+        "scanned": 0,
+        "purged": 0,
+        "sampleIds": []
+      },
+      "decor_elements": {
+        "scanned": 0,
+        "purged": 0,
+        "sampleIds": []
+      },
+      "cash_registers": {
+        "scanned": 0,
+        "purged": 0,
+        "sampleIds": []
+      },
+      "cash_sessions": {
+        "scanned": 0,
+        "purged": 0,
+        "sampleIds": []
+      },
+      "cash_movements": {
+        "scanned": 0,
+        "purged": 0,
+        "sampleIds": []
+      },
+      "terminals": {
+        "scanned": 0,
+        "purged": 0,
+        "sampleIds": []
+      },
+      "peripherals": {
+        "scanned": 0,
+        "purged": 0,
+        "sampleIds": []
+      },
+      "categories": {
+        "scanned": 0,
+        "purged": 0,
+        "sampleIds": []
+      },
+      "products": {
+        "scanned": 0,
+        "purged": 0,
+        "sampleIds": []
+      },
+      "stock_items": {
+        "scanned": 0,
+        "purged": 0,
+        "sampleIds": []
+      },
+      "stock_movements": {
+        "scanned": 0,
+        "purged": 0,
+        "sampleIds": []
+      },
+      "stock_lots": {
+        "scanned": 0,
+        "purged": 0,
+        "sampleIds": []
+      },
+      "orders": {
+        "scanned": 0,
+        "purged": 0,
+        "sampleIds": []
+      },
+      "invoices": {
+        "scanned": 0,
+        "purged": 0,
+        "sampleIds": []
+      },
+      "reservations": {
+        "scanned": 0,
+        "purged": 0,
+        "sampleIds": []
+      },
+      "suppliers": {
+        "scanned": 0,
+        "purged": 0,
+        "sampleIds": []
+      },
+      "purchase_orders": {
+        "scanned": 0,
+        "purged": 0,
+        "sampleIds": []
+      },
+      "customers": {
+        "scanned": 0,
+        "purged": 0,
+        "sampleIds": []
+      },
+      "employees": {
+        "scanned": 0,
+        "purged": 0,
+        "sampleIds": []
+      },
+      "attendances": {
+        "scanned": 0,
+        "purged": 0,
+        "sampleIds": []
+      },
+      "expenses": {
+        "scanned": 0,
+        "purged": 0,
+        "sampleIds": []
+      },
+      "documents": {
+        "scanned": 0,
+        "purged": 0,
+        "sampleIds": []
+      },
+      "hygiene_checks": {
+        "scanned": 0,
+        "purged": 0,
+        "sampleIds": []
+      },
+      "events": {
+        "scanned": 0,
+        "purged": 0,
+        "sampleIds": []
+      },
+      "deliveries": {
+        "scanned": 0,
+        "purged": 0,
+        "sampleIds": []
+      },
+      "withholdings": {
+        "scanned": 0,
+        "purged": 0,
+        "sampleIds": []
+      },
+      "fiscal_obligations": {
+        "scanned": 0,
+        "purged": 0,
+        "sampleIds": []
+      },
+      "client_credits": {
+        "scanned": 0,
+        "purged": 0,
+        "sampleIds": []
+      },
+      "cancellation_logs": {
+        "scanned": 0,
+        "purged": 0,
+        "sampleIds": []
+      },
+      "fiscal_journal": {
+        "scanned": 0,
+        "purged": 0,
+        "sampleIds": []
+      },
+      "audit_logs": {
+        "scanned": 0,
+        "purged": 0,
+        "sampleIds": []
+      },
+      "users": {
+        "scanned": 0,
+        "purged": 0,
+        "sampleIds": []
+      }
+    },
+    "mode": "simulation_dry_run"
+  },
+  "storage": {
+    "scanned": 0,
+    "purged": 0,
+    "files": [],
+    "mode": "simulation_dry_run"
+  },
+  "status": "SUCCÈS"
+}

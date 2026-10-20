@@ -238,5 +238,29 @@ Ce document consigne les décisions d'architecture prises pour la livraison d'un
     - Modales équipées de piège à focus (navigation Tab / Shift+Tab cyclique), focus automatique sur le premier champ interactif à l'ouverture, et association sémantique `aria-labelledby` / `aria-modal="true"`.
 - **Conséquences** : Ergonomie fluide et non bloquante, résilience éprouvée face aux pannes ou coupures réseau, conformité PWA installable sur tablette/mobile/desktop, et architecture frontend modulaire et typée.
 
+---
+
+### ADR-014 : Outil Sécurisé de Purge des Données d'Essai Firebase et Garde-Fous de Pré-Livraison (Phase J)
+- **Date** : 2026-10-20
+- **Statut** : Accepté & Implémenté
+- **Contexte** : Avant de livrer un environnement Firebase à un restaurant client, l'équipe technique doit pouvoir éliminer de manière exhaustive et vérifiable les comptes utilisateurs et documents de test résiduels accumulés pendant le développement ou les tests d'intégration, tout en garantissant qu'aucun accident de suppression ne puisse cibler le compte Super Administrateur ni un mauvais projet Firebase.
+- **Décision** :
+  - **J1 (Simulation Dry-Run & Validation Stricte du Projet)** :
+    - Le script `scripts/purge-test-data.ts` (`npm run purge:test-data`) s'exécute par défaut en mode simulation inoffensive (`dry-run: true`).
+    - L'exécution réelle exige formellement le drapeau `--execute` combiné au paramètre de confirmation `--confirm-project=<PROJECT_ID>`. En cas de discordance avec le projet actif, l'exécution s'interrompt immédiatement avec code d'erreur 1.
+  - **J2 (Bouclier Super Administrateur & Détection des Domaines d'Essai)** :
+    - Tout utilisateur disposant des custom claims `role: 'superadmin'` ou du drapeau superadmin est formellement immunisé contre toute purge.
+    - Détection ciblée des comptes d'anciens tests (`@demo.restaurant`, `@resto.cm`, `@example.com`, `@test.com`, préfixes `demo`, `test`, `mock`).
+  - **J3 (Purge Transactionnelle par Lots Firestore)** :
+    - Analyse de 35 collections Firestore avec sélecteurs stricts (préfixes `org-cameroun-hospitality`, `out-1..3`, `demo-*`, `test-*`).
+    - Suppression atomique par blocs de 500 documents via `db.batch()`.
+  - **J4 & J5 (Nettoyage Storage & Rapport JSON Daté)** :
+    - Balayage des fichiers d'essai (`temp/`, `samples/`, `demo*`) sur Firebase Storage.
+    - Émission systématique d'un rapport de conformité JSON horodaté dans `docs/reports/purge-report-*.json` détaillant les comptes préservés, purgés, et documents inspectés.
+  - **J6 (Documentation d'Exploitation)** :
+    - Procédure officielle de purge et d'audit consignée dans `docs/LIVRAISON.md`.
+- **Conséquences** : Nettoyage pré-livraison zéro risque, base client livrée vierge de toute pollution d'essai, et traçabilité technique absolue par rapport JSON.
+
+
 
 
