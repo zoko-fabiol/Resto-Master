@@ -301,16 +301,18 @@ const AppContent: React.FC = () => {
   // Mode Écran TV Retrait Client (QSR / Fast-Food)
   if (currentDeviceProfile?.type === 'ecran_retrait' || isDisplayTvOpen) {
     return (
-      <Suspense fallback={<ModuleSkeleton moduleName="Écran Retrait" />}>
-        <CustomerOrderDisplayView
-          onExit={async () => {
-            setIsDisplayTvOpen(false);
-            if (currentDeviceProfile?.type === 'ecran_retrait') {
-              await unpairCurrentDevice();
-            }
-          }}
-        />
-      </Suspense>
+      <ModuleErrorBoundary moduleName="Écran Retrait">
+        <Suspense fallback={<ModuleSkeleton moduleName="Écran Retrait" />}>
+          <CustomerOrderDisplayView
+            onExit={async () => {
+              setIsDisplayTvOpen(false);
+              if (currentDeviceProfile?.type === 'ecran_retrait') {
+                await unpairCurrentDevice();
+              }
+            }}
+          />
+        </Suspense>
+      </ModuleErrorBoundary>
     );
   }
 
@@ -318,23 +320,25 @@ const AppContent: React.FC = () => {
   if (currentTab === 'kiosk' && !isTabletKioskUnlocked) {
     return (
       <div className="fixed inset-0 z-50 bg-slate-900 text-slate-100 overflow-hidden w-screen h-screen select-none">
-        <Suspense fallback={<ModuleSkeleton moduleName="Kiosk Client" />}>
-          <TableKioskView
-            initialTableId={kioskTableId}
-            onExit={async (shouldUnpair?: boolean, supervisor?: UserProfile) => {
-              setIsTabletKioskUnlocked(true);
-              if (shouldUnpair && currentDeviceProfile?.type === 'tablette_table') {
-                await unpairCurrentDevice();
-              }
-              if (supervisor) {
-                setCurrentUser(supervisor);
-              } else if (currentUser.role === 'tablette') {
-                lockSession();
-              }
-              navigate('/tables');
-            }}
-          />
-        </Suspense>
+        <ModuleErrorBoundary moduleName="Kiosk Client">
+          <Suspense fallback={<ModuleSkeleton moduleName="Kiosk Client" />}>
+            <TableKioskView
+              initialTableId={kioskTableId}
+              onExit={async (shouldUnpair?: boolean, supervisor?: UserProfile) => {
+                setIsTabletKioskUnlocked(true);
+                if (shouldUnpair && currentDeviceProfile?.type === 'tablette_table') {
+                  await unpairCurrentDevice();
+                }
+                if (supervisor) {
+                  setCurrentUser(supervisor);
+                } else if (currentUser.role === 'tablette') {
+                  lockSession();
+                }
+                navigate('/tables');
+              }}
+            />
+          </Suspense>
+        </ModuleErrorBoundary>
         {/* Tactile PIN Lock Screen Overlay si verrouillage activé */}
         {isTerminalLocked && <PinLockScreen />}
       </div>

@@ -3,7 +3,7 @@
 // Modale accessible, moderne et réutilisable pour RestoMaster OS
 // ============================================================
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { X, Layers } from 'lucide-react';
 
 export interface ModalProps {
@@ -42,17 +42,52 @@ export const Modal: React.FC<ModalProps> = ({
   onBatchModeChange,
   className = '',
 }) => {
+  const modalRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
+    if (!isOpen) return;
+
+    // Piégeage du focus & navigation au clavier
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && isOpen) {
+      if (e.key === 'Escape') {
+        e.preventDefault();
         onClose();
+        return;
+      }
+      if (e.key === 'Tab' && modalRef.current) {
+        const focusable = modalRef.current.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        );
+        if (focusable.length === 0) return;
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
       }
     };
-    if (isOpen) {
-      document.body.style.overflow = 'hidden';
-      window.addEventListener('keydown', handleKeyDown);
-    }
+
+    document.body.style.overflow = 'hidden';
+    window.addEventListener('keydown', handleKeyDown);
+
+    // Focus automatique sur le premier élément interactif
+    const focusTimer = setTimeout(() => {
+      if (modalRef.current) {
+        const focusable = modalRef.current.querySelectorAll<HTMLElement>(
+          'input:not([disabled]), select:not([disabled]), textarea:not([disabled]), button:not([disabled])'
+        );
+        if (focusable.length > 0) {
+          focusable[0].focus();
+        }
+      }
+    }, 50);
+
     return () => {
+      clearTimeout(focusTimer);
       document.body.style.overflow = '';
       window.removeEventListener('keydown', handleKeyDown);
     };
@@ -73,9 +108,11 @@ export const Modal: React.FC<ModalProps> = ({
 
       {/* Modal Dialog Card */}
       <div
+        ref={modalRef}
         className={`relative w-full ${widthClass} bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh] z-10 transition-all animate-fade-scale ${className}`}
         role="dialog"
         aria-modal="true"
+        aria-labelledby="modal-dialog-title"
       >
         {/* Header */}
         {(title || icon) && (
@@ -83,9 +120,9 @@ export const Modal: React.FC<ModalProps> = ({
             <div className="flex items-center gap-2.5 font-bold text-slate-800 dark:text-slate-100 flex-1 pr-4">
               {icon && <div className="text-emerald-600 shrink-0">{icon}</div>}
               {typeof title === 'string' ? (
-                <h3 className="text-base sm:text-lg text-slate-900 dark:text-white font-extrabold">{title}</h3>
+                <h3 id="modal-dialog-title" className="text-base sm:text-lg text-slate-900 dark:text-white font-extrabold">{title}</h3>
               ) : (
-                title
+                <div id="modal-dialog-title">{title}</div>
               )}
             </div>
 

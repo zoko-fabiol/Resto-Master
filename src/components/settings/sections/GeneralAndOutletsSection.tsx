@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { useRestaurant } from '../../../context/RestaurantContext';
 import { Building, Save, CheckCircle2, Plus, Phone, MapPin, Globe, Sparkles, X, Trash2 } from 'lucide-react';
 import { Outlet } from '../../../types/configuration';
+import { useConfirm } from '../../ui/ConfirmDialog';
+import { useToast } from '../../ui/Toast';
 
 interface Props {
   subTab: 'general' | 'etablissement';
@@ -18,6 +20,9 @@ export const GeneralAndOutletsSection: React.FC<Props> = ({ subTab }) => {
     deleteOutlet,
     organization,
   } = useRestaurant();
+
+  const confirm = useConfirm();
+  const toast = useToast();
 
   // General Identity
   const [name, setName] = useState(settings.name);
@@ -317,7 +322,7 @@ export const GeneralAndOutletsSection: React.FC<Props> = ({ subTab }) => {
 
               <div className="pt-3 border-t border-slate-200/60 flex items-center justify-between">
                 <span
-                  className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                  className={`text-xs font-bold px-2.5 py-0.5 rounded-full ${
                     outlet.active ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-700'
                   }`}
                 >
@@ -330,11 +335,18 @@ export const GeneralAndOutletsSection: React.FC<Props> = ({ subTab }) => {
                       type="button"
                       onClick={async () => {
                         if (settings.configurationVerrouillee) {
-                          alert('La plateforme est verrouillée pour livraison. Seul le Super-Administrateur peut supprimer un établissement.');
+                          toast.warning('La plateforme est verrouillée pour livraison. Seul le Super-Administrateur peut supprimer un établissement.');
                           return;
                         }
-                        if (window.confirm(`Supprimer l'établissement "${outlet.name}" ?`)) {
+                        const ok = await confirm({
+                          title: 'Supprimer l\'établissement',
+                          message: `Êtes-vous certain de vouloir supprimer l'établissement "${outlet.name}" ? Cette action est irréversible.`,
+                          confirmText: 'Supprimer',
+                          variant: 'danger',
+                        });
+                        if (ok) {
                           await deleteOutlet(outlet.id);
+                          toast.success('Établissement supprimé avec succès.');
                         }
                       }}
                       className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 transition cursor-pointer"

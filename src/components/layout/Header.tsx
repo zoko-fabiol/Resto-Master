@@ -103,7 +103,7 @@ export const Header: React.FC<HeaderProps> = ({
     currentDeviceProfile,
     syncError,
     clearSyncError,
-  } = useRestaurant() as any;
+  } = useRestaurant();
 
   const [roleMenuOpen, setRoleMenuOpen] = useState(false);
   const [outletMenuOpen, setOutletMenuOpen] = useState(false);

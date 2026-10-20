@@ -22,14 +22,13 @@ import {
   Plus,
   FileText,
 } from 'lucide-react';
-import { TaxRegime, Invoice, Order } from '../../types/restaurant';
+import { TaxRegime, Invoice, Order, FiscalJournalItem } from '../../types/restaurant';
 
 export const FiscalCenterView: React.FC = () => {
   const {
     settings,
     updateSettings,
     orders,
-    payments,
     expenses,
     cashSession,
     fiscalJournal,
@@ -38,7 +37,7 @@ export const FiscalCenterView: React.FC = () => {
     fiscalObligations,
     updateFiscalObligationStatus,
     recordWithholding,
-  } = useRestaurant() as any;
+  } = useRestaurant();
 
   const [activeTab, setActiveTab] = useState<
     'profil' | 'journal' | 'withholding' | 'ebilling' | 'obligations' | 'syscohada'
@@ -110,7 +109,7 @@ export const FiscalCenterView: React.FC = () => {
 
   const handleExportSyscohadaCash = () => {
     const entries = AccountingExportService.generateCashJournal(
-      orders.flatMap((o: any) => o.payments || []),
+      orders.flatMap((o: Order) => o.payments || []),
       expenses,
       [cashSession]
     );
@@ -121,7 +120,7 @@ export const FiscalCenterView: React.FC = () => {
     AccountingExportService.exportFiscalJournalDgiCsv(fiscalJournal, settings, invoices);
   };
 
-  const handleDownloadJournalInvoicePdf = async (item: any) => {
+  const handleDownloadJournalInvoicePdf = async (item: FiscalJournalItem) => {
     setDownloadingInvoiceId(item.id);
     try {
       // 1. Chercher dans les factures existantes

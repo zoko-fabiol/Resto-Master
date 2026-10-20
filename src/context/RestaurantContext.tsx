@@ -3945,3 +3945,14 @@ export const useRestaurant = () => {
   }
   return context;
 };
+
+// Re-export des hooks métier spécialisés pour modularité et découpage propre
+export {
+  useTables,
+  useOrders,
+  useStock,
+  useCashRegister,
+  useStaff,
+  useRestaurantSettings,
+} from '../hooks/restaurant';
+

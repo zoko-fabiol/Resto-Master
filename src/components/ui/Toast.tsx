@@ -98,3 +98,14 @@ export const ToastContainer: React.FC = () => {
     </div>
   );
 };
+
+export const useToast = () => {
+  return {
+    show: showToast,
+    success: (msg: string, duration?: number) => showToast(msg, 'success', duration),
+    error: (msg: string, duration?: number) => showToast(msg, 'error', duration),
+    warning: (msg: string, duration?: number) => showToast(msg, 'warning', duration),
+    info: (msg: string, duration?: number) => showToast(msg, 'info', duration),
+  };
+};
+

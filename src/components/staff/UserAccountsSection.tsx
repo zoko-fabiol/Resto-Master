@@ -4,6 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 import { UserAccount, UserRole, AccountType, TabPermission } from '../../types/restaurant';
 import { ROLE_LABELS } from '../../lib/utils';
 import { useConfirm } from '../ui/ConfirmDialog';
+import { useToast } from '../ui/Toast';
 import { cloudFunctionsService } from '../../services/functions/cloudFunctionsService';
 import { CredentialHandoverModal, CredentialHandoverData } from './CredentialHandoverModal';
 import {
@@ -80,10 +81,11 @@ export const UserAccountsSection: React.FC = () => {
     tables,
     employees,
     settings,
-  } = useRestaurant() as any;
+  } = useRestaurant();
 
   const { unlockSessionWithPin, updateCurrentUserPin, currentUser } = useAuth();
   const confirm = useConfirm();
+  const toast = useToast();
 
   // Filtrage & Recherche
   const [filterType, setFilterType] = useState<'all' | 'staff' | 'tablette'>('all');
@@ -225,7 +227,7 @@ export const UserAccountsSection: React.FC = () => {
       setQuickNewPin('');
     } catch (err: any) {
       console.error('[UserAccountsSection] Erreur PIN:', err);
-      alert(err?.message || 'Erreur lors de la configuration du code PIN.');
+      toast.error(err?.message || 'Erreur lors de la configuration du code PIN.');
     } finally {
       setIsSubmitting(false);
     }

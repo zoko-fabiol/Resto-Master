@@ -215,4 +215,28 @@ Ce document consigne les décisions d'architecture prises pour la livraison d'un
     - Déploiement vérifié sur `europe-west1` pour toutes les Cloud Functions.
 - **Conséquences** : Intégrité financière et de stock de classe entreprise, conformité fiscale, traçabilité immuable des flux d'espèces et de cartes, résilience aux déconnexions réseau.
 
+---
+
+### ADR-013 : Élimination des Dialogues Natifs, Modularisation du Contexte et Architecture PWA Hors-Ligne (Phase I)
+- **Date** : 2026-10-20
+- **Statut** : Accepté & Implémenté
+- **Contexte** : Pour une expérience utilisateur de classe industrielle en environnement tactile (POS, KDS, bornes tablettes), les dialogues natifs bloquants du navigateur (`alert`, `confirm`, `prompt`) brisent le flux ergonomique et ne s'intègrent pas au design system. De plus, l'accès hors-ligne, la résilience aux erreurs par module et la maintenabilité TypeScript du grand contexte applicatif nécessitent un découpage modulaire en hooks spécialisés, une PWA conforme et des frontières d'erreurs renforcées.
+- **Décision** :
+  - **I1 (Éradication des Dialogues Natifs)** :
+    - Remplacement de 100% des appels natifs `alert()`, `confirm()` et `prompt()` par les composants asynchrones personnalisés `ConfirmDialog` et `useToast`.
+    - Aucune interruption bloquante de la boucle d'événements du navigateur.
+  - **I2 (Encapsulation d'Erreur & Code-Splitting)** :
+    - Chaque module principal et vue spécialisée (Écran Retrait, Kiosk Borne Tablette) est isolé dans un `ModuleErrorBoundary` avec reprise immédiate et `Suspense` avec squelette de chargement (`ModuleSkeleton`).
+    - Empêche tout écran blanc global : l'échec d'un module n'affecte pas le reste de l'exploitation du restaurant.
+  - **I4 (Configuration PWA & Cache Applicatif)** :
+    - Intégration de `vite-plugin-pwa` avec génération automatique du Service Worker (`dist/sw.js`) et stratégie Workbox pour mise en cache complète des ressources statiques (HTML, CSS, JS, SVG, PNG) et polices distantes.
+    - Création des 4 icônes normalisées PWA (`pwa-192x192.png`, `pwa-512x512.png`, `maskable-icon-512x512.png`, `apple-touch-icon.png`) respectant la zone de sécurité (safe zone) et l'identité de marque RestoMaster OS.
+  - **I5 (Modularisation en Hooks Métier Spécialisés & Typage Strict)** :
+    - Création de hooks spécialisés dans `src/hooks/restaurant/` : `useTables`, `useOrders`, `useStock`, `useCashRegister`, `useStaff`, `useRestaurantSettings`.
+    - Élimination de tous les contournements `as any` sur le contexte applicatif.
+  - **I6 (Accessibilité ARIA & Focus Trap)** :
+    - Modales équipées de piège à focus (navigation Tab / Shift+Tab cyclique), focus automatique sur le premier champ interactif à l'ouverture, et association sémantique `aria-labelledby` / `aria-modal="true"`.
+- **Conséquences** : Ergonomie fluide et non bloquante, résilience éprouvée face aux pannes ou coupures réseau, conformité PWA installable sur tablette/mobile/desktop, et architecture frontend modulaire et typée.
+
+
 

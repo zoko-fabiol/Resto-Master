@@ -65,7 +65,6 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
     addPeripheral,
     categories,
     products,
-    updateRestaurantSettings,
   } = useRestaurant() as any;
 
   const { currentUser } = useAuth();
