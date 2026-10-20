@@ -46,6 +46,7 @@ import {
   TabPermission,
   AccountType,
   WeeklySchedule,
+  DecorElement,
 } from '../types/restaurant';
 import {
   FeatureItem,
@@ -325,6 +326,12 @@ interface RestaurantContextType {
   deleteTable: (tableId: string) => Promise<void>;
   mergeTables: (targetTableId: string, sourceTableId: string) => Promise<void>;
   splitTables: (tableId: string) => Promise<void>;
+  batchSaveTables: (tables: RestaurantTable[]) => Promise<void>;
+  batchSaveDecorElements: (elements: DecorElement[], removedIds?: string[]) => Promise<void>;
+  addTablesBatch: (tables: Omit<RestaurantTable, 'id'>[]) => Promise<RestaurantTable[]>;
+  decorElements: DecorElement[];
+  saveDecorElement: (decor: DecorElement) => Promise<void>;
+  deleteDecorElement: (decorId: string) => Promise<void>;
 
   // Caisses
   addCashRegister: (reg: Omit<CashRegister, 'id'>) => Promise<void>;
@@ -503,6 +510,7 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const [organization, setOrganization] = useState<Organization>(() => loadState('organization', DEFAULT_ORGANIZATION));
   const [zones, setZones] = useState<Zone[]>([]);
   const [cashRegisters, setCashRegisters] = useState<CashRegister[]>([]);
+  const [decorElements, setDecorElements] = useState<DecorElement[]>([]);
   const [activeZoneId, setActiveZoneId] = useState<string | 'all'>(() => loadState('activeZoneId', 'all'));
   const [activeCashRegisterId, setActiveCashRegisterId] = useState<string>(() => loadState('activeCashRegisterId', ''));
 
@@ -514,6 +522,10 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const activeTables = useMemo(() => {
     return tables.filter((t) => !t.restaurantId || t.restaurantId === selectedOutletId);
   }, [tables, selectedOutletId]);
+
+  const activeDecorElements = useMemo(() => {
+    return decorElements.filter((d) => !d.restaurantId || d.restaurantId === selectedOutletId);
+  }, [decorElements, selectedOutletId]);
 
   const activeOrders = useMemo(() => {
     return orders.filter((o) => !o.restaurantId || o.restaurantId === selectedOutletId);
@@ -581,6 +593,16 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         setZones((prev) => {
           const others = prev.filter((z) => z.restaurantId && z.restaurantId !== selectedOutletId);
           return [...remoteZones, ...others];
+        });
+      }
+    );
+
+    const unsubDecor = tablesFirestoreService.subscribeToRestaurantDecorElements(
+      selectedOutletId,
+      (remoteDecor) => {
+        setDecorElements((prev) => {
+          const others = prev.filter((d) => d.restaurantId && d.restaurantId !== selectedOutletId);
+          return [...remoteDecor, ...others];
         });
       }
     );
@@ -671,6 +693,7 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       unsubOrders();
       unsubTables();
       unsubZones();
+      unsubDecor();
       unsubDocs();
       unsubAssets();
       unsubProducts();
@@ -3609,31 +3632,107 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     addAuditLog('Suppression table', 'Tables', `Table ${tableId} supprimée`);
   };
 
+  const batchSaveTables = async (updatedTables: RestaurantTable[]) => {
+    setTables((prev) => {
+      const map = new Map(prev.map((t) => [t.id, t]));
+      updatedTables.forEach((t) => map.set(t.id, t));
+      return Array.from(map.values());
+    });
+    await tablesFirestoreService.batchSaveTables(updatedTables);
+    addAuditLog('Plan de salle', 'Tables', `${updatedTables.length} tables mises à jour (sauvegarde par lot)`);
+  };
+
+  const batchSaveDecorElements = async (elements: DecorElement[], removedIds: string[] = []) => {
+    setDecorElements((prev) => {
+      const filtered = prev.filter((d) => !removedIds.includes(d.id));
+      const map = new Map(filtered.map((d) => [d.id, d]));
+      elements.forEach((e) => map.set(e.id, e));
+      return Array.from(map.values());
+    });
+    await tablesFirestoreService.batchSaveDecor(elements, removedIds);
+    addAuditLog('Plan de salle', 'Tables', `Éléments de décor mis à jour (${elements.length} modifiés, ${removedIds.length} supprimés)`);
+  };
+
+  const addTablesBatch = async (newTablesData: Omit<RestaurantTable, 'id'>[]): Promise<RestaurantTable[]> => {
+    const now = new Date().toISOString();
+    const created: RestaurantTable[] = newTablesData.map((td) => ({
+      ...td,
+      id: generateSecureId('tbl'),
+      restaurantId: td.restaurantId || selectedOutletId,
+      createdAt: now,
+      updatedAt: now,
+    }));
+    setTables((prev) => [...prev, ...created]);
+    await tablesFirestoreService.batchSaveTables(created);
+    addAuditLog('Création de tables par lot', 'Tables', `${created.length} tables générées par lot`);
+    return created;
+  };
+
+  const saveDecorElement = async (decor: DecorElement) => {
+    const target = { ...decor, updatedAt: new Date().toISOString() };
+    setDecorElements((prev) => {
+      const exists = prev.some((d) => d.id === target.id);
+      if (exists) return prev.map((d) => (d.id === target.id ? target : d));
+      return [...prev, target];
+    });
+    await tablesFirestoreService.saveDecorElement(target);
+  };
+
+  const deleteDecorElement = async (decorId: string) => {
+    setDecorElements((prev) => prev.filter((d) => d.id !== decorId));
+    await tablesFirestoreService.deleteDecorElement(decorId);
+    addAuditLog('Suppression décor', 'Tables', `Élément de décor ${decorId} supprimé`);
+  };
+
   const mergeTables = async (targetTableId: string, sourceTableId: string) => {
+    const target = tables.find((t) => t.id === targetTableId);
+    const source = tables.find((t) => t.id === sourceTableId);
+    if (!target || !source) return;
+
+    const mergedList = Array.from(new Set([...(target.mergedTableIds || []), sourceTableId]));
+    const updatedTarget: RestaurantTable = {
+      ...target,
+      mergedTableIds: mergedList,
+      status: 'occupee' as TableStatus,
+      updatedAt: new Date().toISOString(),
+    };
+    const updatedSource: RestaurantTable = {
+      ...source,
+      mergedWithTableId: targetTableId,
+      status: 'occupee' as TableStatus,
+      updatedAt: new Date().toISOString(),
+    };
+
     setTables((prev) =>
-      prev.map((t) => {
-        if (t.id === sourceTableId) {
-          return { ...t, mergedWithTableId: targetTableId, status: 'occupee' as TableStatus };
-        }
-        if (t.id === targetTableId) {
-          return { ...t, status: 'occupee' as TableStatus };
-        }
-        return t;
-      })
+      prev.map((t) => (t.id === targetTableId ? updatedTarget : t.id === sourceTableId ? updatedSource : t))
     );
-    addAuditLog('Fusion de tables', 'Tables', `Table ${sourceTableId} fusionnée avec Table ${targetTableId}`);
+
+    await tablesFirestoreService.mergeTablesAtomic(target, source);
+    addAuditLog('Fusion de tables', 'Tables', `Table ${source.number} fusionnée avec Table ${target.number}`);
   };
 
   const splitTables = async (tableId: string) => {
+    const target = tables.find((t) => t.id === tableId);
+    if (!target) return;
+
+    const primaryId = target.mergedWithTableId || target.id;
+    const secondaryTables = tables.filter((t) => t.mergedWithTableId === primaryId);
+    const secondaryIds = secondaryTables.map((t) => t.id);
+
     setTables((prev) =>
       prev.map((t) => {
-        if (t.id === tableId || t.mergedWithTableId === tableId) {
-          return { ...t, mergedWithTableId: undefined, status: 'libre' as TableStatus };
+        if (t.id === primaryId) {
+          return { ...t, mergedTableIds: [], mergedWithTableId: undefined, updatedAt: new Date().toISOString() };
+        }
+        if (secondaryIds.includes(t.id)) {
+          return { ...t, mergedWithTableId: undefined, status: 'libre' as TableStatus, updatedAt: new Date().toISOString() };
         }
         return t;
       })
     );
-    addAuditLog('Séparation de tables', 'Tables', `Table ${tableId} séparée`);
+
+    await tablesFirestoreService.splitTablesAtomic(primaryId, secondaryIds);
+    addAuditLog('Séparation de tables', 'Tables', `Séparation des tables associées à Table ${target.number}`);
   };
 
   const addCashRegister = async (regData: Omit<CashRegister, 'id'>) => {
@@ -3730,6 +3829,12 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         deleteTable,
         mergeTables,
         splitTables,
+        batchSaveTables,
+        batchSaveDecorElements,
+        addTablesBatch,
+        decorElements: activeDecorElements,
+        saveDecorElement,
+        deleteDecorElement,
         addCashRegister,
 
         createOrder,

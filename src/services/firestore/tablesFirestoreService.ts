@@ -8,8 +8,9 @@ import {
   onSnapshot,
   query,
   where,
+  writeBatch,
 } from 'firebase/firestore';
-import { RestaurantTable, TableStatus, Zone } from '../../types/restaurant';
+import { RestaurantTable, TableStatus, Zone, DecorElement } from '../../types/restaurant';
 import { offlineSyncService } from './offlineSyncService';
 
 export const tablesFirestoreService = {
@@ -33,6 +34,58 @@ export const tablesFirestoreService = {
         const cleanPayload = JSON.parse(JSON.stringify(table));
         offlineSyncService.enqueue('tables', 'CREATE', table.id, cleanPayload);
       } catch {}
+    }
+  },
+
+  /**
+   * Batch save or update multiple tables atomically
+   */
+  async batchSaveTables(tables: RestaurantTable[]): Promise<void> {
+    if (!tables.length) return;
+    const now = new Date().toISOString();
+
+    try {
+      const batch = writeBatch(db);
+      for (const table of tables) {
+        const payload = JSON.parse(
+          JSON.stringify({
+            ...table,
+            restaurantId: table.restaurantId || '',
+            updatedAt: now,
+          })
+        );
+        const docRef = doc(db, 'tables', table.id);
+        batch.set(docRef, payload, { merge: true });
+      }
+      await batch.commit();
+    } catch (err) {
+      console.warn('Erreur batchSaveTables Firestore:', err);
+      for (const table of tables) {
+        try {
+          const cleanPayload = JSON.parse(JSON.stringify(table));
+          offlineSyncService.enqueue('tables', 'CREATE', table.id, cleanPayload);
+        } catch {}
+      }
+    }
+  },
+
+  /**
+   * Batch delete multiple tables atomically
+   */
+  async batchDeleteTables(tableIds: string[]): Promise<void> {
+    if (!tableIds.length) return;
+    try {
+      const batch = writeBatch(db);
+      for (const id of tableIds) {
+        const docRef = doc(db, 'tables', id);
+        batch.delete(docRef);
+      }
+      await batch.commit();
+    } catch (err) {
+      console.warn('Erreur batchDeleteTables Firestore:', err);
+      for (const id of tableIds) {
+        offlineSyncService.enqueue('tables', 'DELETE', id, {});
+      }
     }
   },
 
@@ -126,6 +179,62 @@ export const tablesFirestoreService = {
   },
 
   /**
+   * Atomically merge two tables in Firestore
+   */
+  async mergeTablesAtomic(targetTable: RestaurantTable, sourceTable: RestaurantTable): Promise<void> {
+    const now = new Date().toISOString();
+    const batch = writeBatch(db);
+
+    const mergedList = Array.from(new Set([...(targetTable.mergedTableIds || []), sourceTable.id]));
+
+    // Update target table
+    const targetRef = doc(db, 'tables', targetTable.id);
+    batch.update(targetRef, {
+      mergedTableIds: mergedList,
+      status: 'occupee',
+      updatedAt: now,
+    });
+
+    // Update source table
+    const sourceRef = doc(db, 'tables', sourceTable.id);
+    batch.update(sourceRef, {
+      mergedWithTableId: targetTable.id,
+      status: 'occupee',
+      updatedAt: now,
+    });
+
+    await batch.commit();
+  },
+
+  /**
+   * Atomically split merged tables in Firestore
+   */
+  async splitTablesAtomic(primaryTableId: string, secondaryTableIds: string[]): Promise<void> {
+    const now = new Date().toISOString();
+    const batch = writeBatch(db);
+
+    // Reset primary table
+    const primaryRef = doc(db, 'tables', primaryTableId);
+    batch.update(primaryRef, {
+      mergedTableIds: [],
+      mergedWithTableId: null,
+      updatedAt: now,
+    });
+
+    // Reset all secondary tables
+    for (const secId of secondaryTableIds) {
+      const secRef = doc(db, 'tables', secId);
+      batch.update(secRef, {
+        mergedWithTableId: null,
+        status: 'libre',
+        updatedAt: now,
+      });
+    }
+
+    await batch.commit();
+  },
+
+  /**
    * Zones CRUD
    */
   async saveZone(zone: Zone): Promise<void> {
@@ -158,6 +267,65 @@ export const tablesFirestoreService = {
       await deleteDoc(docRef);
     } catch {
       offlineSyncService.enqueue('zones', 'DELETE', zoneId, {});
+    }
+  },
+
+  /**
+   * Decor Elements CRUD
+   */
+  async saveDecorElement(decor: DecorElement): Promise<void> {
+    const payload = JSON.parse(
+      JSON.stringify({
+        ...decor,
+        restaurantId: decor.restaurantId || '',
+        updatedAt: new Date().toISOString(),
+      })
+    );
+
+    try {
+      const docRef = doc(db, 'decor_elements', decor.id);
+      await setDoc(docRef, payload, { merge: true });
+    } catch (err) {
+      console.warn('Erreur saveDecorElement Firestore:', err);
+    }
+  },
+
+  async deleteDecorElement(decorId: string): Promise<void> {
+    try {
+      const docRef = doc(db, 'decor_elements', decorId);
+      await deleteDoc(docRef);
+    } catch (err) {
+      console.warn('Erreur deleteDecorElement Firestore:', err);
+    }
+  },
+
+  async batchSaveDecor(elements: DecorElement[], removedIds: string[] = []): Promise<void> {
+    const now = new Date().toISOString();
+    try {
+      const batch = writeBatch(db);
+
+      // Upsert modified decor elements
+      for (const el of elements) {
+        const payload = JSON.parse(
+          JSON.stringify({
+            ...el,
+            restaurantId: el.restaurantId || '',
+            updatedAt: now,
+          })
+        );
+        const docRef = doc(db, 'decor_elements', el.id);
+        batch.set(docRef, payload, { merge: true });
+      }
+
+      // Delete removed decor elements
+      for (const id of removedIds) {
+        const docRef = doc(db, 'decor_elements', id);
+        batch.delete(docRef);
+      }
+
+      await batch.commit();
+    } catch (err) {
+      console.warn('Erreur batchSaveDecor Firestore:', err);
     }
   },
 
@@ -207,6 +375,31 @@ export const tablesFirestoreService = {
         },
         (err) => {
           console.warn('[tablesFirestoreService] Écoute zones interrompue:', err);
+        }
+      );
+    } catch {
+      return () => {};
+    }
+  },
+
+  subscribeToRestaurantDecorElements(
+    restaurantId: string | undefined,
+    callback: (decor: DecorElement[]) => void
+  ): () => void {
+    try {
+      const colRef = collection(db, 'decor_elements');
+      const q = restaurantId && restaurantId !== 'all'
+        ? query(colRef, where('restaurantId', '==', restaurantId))
+        : query(colRef);
+
+      return onSnapshot(
+        q,
+        (snapshot) => {
+          const list = snapshot.docs.map((d) => d.data() as DecorElement);
+          callback(list);
+        },
+        (err) => {
+          console.warn('[tablesFirestoreService] Écoute decor_elements interrompue:', err);
         }
       );
     } catch {

@@ -151,3 +151,39 @@ Ce document consigne les décisions d'architecture prises pour la livraison d'un
     - Protection contre la suppression accidentelle des comptes superadmin ou du compte actif connecté.
 - **Conséquences** : Zéro code PIN en clair en base ou à l'écran, conformité RBAC via Custom Claims Firebase Auth, fiches de remise officielles imprimables pour la remise au personnel, traçabilité serveur complète via les journaux d'audit.
 
+---
+
+### ADR-011 : Plan de Salle 2D Vectoriel, Persistance par Lot et Éléments de Décor Architectural (Phase G)
+- **Date** : 2026-10-20
+- **Statut** : Accepté & Implémenté
+- **Contexte** : Les versions précédentes utilisaient un modèle mixte de pourcentages et de pixels déclenchant des écritures Firestore à chaque événement `mousemove`, générant des latences et des surcoûts d'écritures. Le personnel de service pouvait accidentellement déplacer des tables en voulant ouvrir une commande, les textes s'orientaient de façon illisible lors des rotations de tables, les éléments d'architecture (murs, comptoirs, bar, portes, colonnes) n'étaient pas modélisés, et la fusion de tables ne persistait pas atomiquement en base.
+- **Décision** :
+  - **G1 & G14 (Séparation Stricte Service vs Édition & Sécurité Firestore)** :
+    - Le mode Service est dédié à l'exploitation (prise de commande, suivi du statut, encaissement, temps d'occupation) avec cibles tactiles $\ge 44\text{ px}$. Tout glisser-déposer de table y est proscrit.
+    - Le mode Édition est réservé aux rôles `superadmin`, `direction` et `manager`. Les serveurs et barmen ne peuvent pas entrer en mode édition.
+    - Dans `firestore.rules`, les mises à jour structurelles de tables (`x`, `y`, `width`, `height`, `rotation`, `shape`, `capacity`, `zoneId`, `number`) sont formellement rejetées pour les rôles non-managers.
+  - **G2, G3 & G11 (Déplacement Vectoriel Fluide, Seuil Anti-Clic 4px & Historique)** :
+    - Utilisation de `setPointerCapture` pour un dragging fluide indépendant de la vitesse du curseur.
+    - Seuil anti-clic parasite de 4px : tout geste inférieur à 4px est interprété comme un clic franc de sélection ou d'action de service.
+    - Aucune écriture Firestore pendant les déplacements : les coordonnées sont gérées en mémoire dans un état brouillon (`draftTables`, `draftDecor`). L'écriture en base s'effectue exclusivement lors de la validation explicite "Enregistrer le Plan" via des `writeBatch` atomiques.
+    - Pile d'historique locale avec raccourcis clavier `Ctrl+Z` (Annuler) et `Ctrl+Y` (Rétablir).
+  - **G4 (Contre-Rotation Systématique des Libellés)** :
+    - Application mathématique d'une transformation inverse `rotate(-θ)` sur le groupe SVG intérieur des libellés (numéro de table, capacité, nom du serveur, badge montant et temps d'occupation) : tous les textes restent strictement horizontaux et lisibles quel que soit l'angle de la table.
+  - **G5 & G6 (Repère Logique 1200 x 800 & Plan Dédié par Zone)** :
+    - Viewport SVG standardisé `1200 x 800` garantissant un ratio fixe (3:2) et un rendu parfaitement identique sur tablettes POS, smartphones et écrans muraux.
+    - Un plan vectoriel dédié est rendu pour chaque zone/salle sélectionnée, évitant la surcharge visuelle.
+  - **G7 (Grille Magnétique 10px, Alignement et Détection des Collisions)** :
+    - Grille magnétique de 10 unités avec repères visuels d'alignement dynamique (lignes guides pointillées) lors du déplacement près d'une table voisine.
+    - Détection temps réel des chevauchements avec surbrillance d'avertissement et compteur de collisions.
+  - **G8 (Génération par Lot de Tables)** :
+    - Modal de création automatisée permettant d'ajouter en 1 clic un ensemble de tables ordonnées (préfixe, numéro de début, capacité, disposition en ligne/grille/colonne) avec espacement calculé.
+  - **G9 (Éléments de Décor Architectural)** :
+    - Collection dédiée `decor_elements` avec typage strict (`mur`, `comptoir`, `bar`, `porte`, `colonne`, `entree`, `escalier`, `fenetre`, `plante`).
+    - Rendu vectoriel SVG stylisé (hachures murales, texture bar avec tabourets, arc d'ouverture 90° de porte, colonnes massives).
+  - **G10 (Fusion et Séparation Atomiques)** :
+    - La fusion et la séparation mettent à jour les tables cibles atomiquement via `writeBatch` (`mergedTableIds` et `mergedWithTableId`).
+    - Rendu sur le plan d'un contour unifié SVG en pointillés reliant les tables fusionnées avec badge récapitulatif de capacité.
+  - **G13 (État d'Accueil Épuré)** :
+    - Affichage d'un état d'accueil chaleureux avec boutons d'action rapide si une salle ne comporte encore aucune table.
+- **Conséquences** : Ergonomie tactile professionnelle de niveau industriel, intégrité des données sans écritures superflues, plan lisible sur tout écran et conformité totale aux exigences d'exploitation restaurant.
+

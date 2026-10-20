@@ -232,11 +232,11 @@ export interface RestaurantTable {
   zone: string;
   status: TableStatus;
   shape?: TableShape;
-  x?: number; // X coordinate percentage (0 - 100) or px
-  y?: number; // Y coordinate percentage (0 - 100) or px
-  width?: number; // Width relative size
-  height?: number; // Height relative size
-  rotation?: number; // Angle 0, 45, 90, 180
+  x?: number; // Logical X coordinate (0 - 1200) or historical percentage
+  y?: number; // Logical Y coordinate (0 - 800) or historical percentage
+  width?: number; // Logical width in px (default 100)
+  height?: number; // Logical height in px (default 100)
+  rotation?: number; // Angle 0..360
   currentOrderId?: string;
   currentReservationId?: string;
   assignedServerId?: string;
@@ -245,6 +245,7 @@ export interface RestaurantTable {
   timeOccupied?: string;
   active?: boolean;
   mergedWithTableId?: string;
+  mergedTableIds?: string[]; // IDs des tables fusionnées avec cette table principale
   createdAt?: string;
   updatedAt?: string;
 
@@ -258,6 +259,34 @@ export interface RestaurantTable {
   tabletAllowSelfOrdering?: boolean;
   tabletCallWaiterPending?: boolean;
   tabletBillRequested?: boolean;
+}
+
+export type DecorType =
+  | 'mur'
+  | 'comptoir'
+  | 'bar'
+  | 'porte'
+  | 'colonne'
+  | 'entree'
+  | 'escalier'
+  | 'fenetre'
+  | 'plante';
+
+export interface DecorElement {
+  id: string;
+  restaurantId: string;
+  zoneId: string;
+  type: DecorType;
+  name?: string;
+  x: number; // Coordonnée logique X (0 - 1200)
+  y: number; // Coordonnée logique Y (0 - 800)
+  width: number; // Largeur logique
+  height: number; // Hauteur logique
+  rotation?: number; // Rotation en degrés (0..360)
+  color?: string; // Couleur personnalisée
+  label?: string; // Libellé affiché sur le plan
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface CashRegister {

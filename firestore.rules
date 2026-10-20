@@ -165,12 +165,26 @@ service cloud.firestore {
       allow read: if isAuthenticated() && hasDocRestaurantAccess();
       // Création / suppression par les managers / direction
       allow create, delete: if isManager() || isDirection();
-      // Mise à jour (occupation, statut) par les serveurs autorisés sur l'établissement
-      allow update: if isAuthenticated() && (
-        isManager() ||
-        isDirection() ||
-        hasDocRestaurantAccess()
+      // Modification structurelle complète réservée aux managers / direction
+      // Les serveurs et personnel de salle peuvent mettre à jour le statut opérationnel uniquement
+      allow update: if isManager() || isDirection() || (
+        isAuthenticated() && hasDocRestaurantAccess() && (
+          (!('x' in request.resource.data) || request.resource.data.x == resource.data.x) &&
+          (!('y' in request.resource.data) || request.resource.data.y == resource.data.y) &&
+          (!('width' in request.resource.data) || request.resource.data.width == resource.data.width) &&
+          (!('height' in request.resource.data) || request.resource.data.height == resource.data.height) &&
+          (!('rotation' in request.resource.data) || request.resource.data.rotation == resource.data.rotation) &&
+          (!('shape' in request.resource.data) || request.resource.data.shape == resource.data.shape) &&
+          (!('capacity' in request.resource.data) || request.resource.data.capacity == resource.data.capacity) &&
+          (!('zoneId' in request.resource.data) || request.resource.data.zoneId == resource.data.zoneId) &&
+          (!('number' in request.resource.data) || request.resource.data.number == resource.data.number)
+        )
       );
+    }
+
+    match /decor_elements/{elementId} {
+      allow read: if isAuthenticated() && hasDocRestaurantAccess();
+      allow write: if isManager() || isDirection();
     }
 
     // =========================================================================
