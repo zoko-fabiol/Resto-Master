@@ -47,7 +47,7 @@ import { UserGuideModal } from './components/common/UserGuideModal';
 import { PaymentModal } from './components/pos/PaymentModal';
 import { OnboardingWizard } from './components/admin/OnboardingWizard';
 import { UserRole, UserProfile } from './types/restaurant';
-import { ShieldAlert, Utensils } from 'lucide-react';
+import { ShieldAlert, ShieldCheck, Utensils } from 'lucide-react';
 
 export const ROLE_DEFAULT_TAB: Record<UserRole, string> = {
   superadmin: 'settings',
@@ -93,6 +93,7 @@ const AppContent: React.FC = () => {
     setCurrentUser,
     lockSession,
     logout,
+    claimInitialSuperadmin,
   } = useAuth();
   const {
     seatReservation,
@@ -120,6 +121,7 @@ const AppContent: React.FC = () => {
   const [isDisplayTvOpen, setIsDisplayTvOpen] = useState(false);
   const [isUserGuideOpen, setIsUserGuideOpen] = useState(false);
   const [isOnboardingOpen, setIsOnboardingOpen] = useState(false);
+  const [isClaimingSuperadmin, setIsClaimingSuperadmin] = useState(false);
 
   // Auto-launch OnboardingWizard for Superadmin on fresh install if not yet certified and no outlets configured
   useEffect(() => {
@@ -285,14 +287,28 @@ const AppContent: React.FC = () => {
           </div>
           <h2 className="text-xl font-bold text-white mb-2">Compte en attente d'activation</h2>
           <p className="text-xs text-slate-400 mb-6 leading-relaxed">
-            Votre compte <span className="text-slate-200 font-semibold">{currentUser.email}</span> est authentifié mais n'a aucun rôle actif attribué. Veuillez vous adresser à la direction ou au responsable d'établissement pour activer vos privilèges.
+            Votre compte <span className="text-slate-200 font-semibold">{currentUser.email}</span> est authentifié. Aucun administrateur n'ayant encore été configuré sur cette base, vous pouvez activer immédiatement votre profil en tant que <strong>Super Administrateur</strong>.
           </p>
-          <button
-            onClick={() => logout()}
-            className="px-6 py-2.5 bg-slate-800 hover:bg-slate-700 active:scale-95 text-white rounded-xl text-xs font-semibold transition cursor-pointer"
-          >
-            Se déconnecter
-          </button>
+          <div className="flex flex-col sm:flex-row gap-3 w-full">
+            <button
+              disabled={isClaimingSuperadmin}
+              onClick={async () => {
+                setIsClaimingSuperadmin(true);
+                await claimInitialSuperadmin();
+                setIsClaimingSuperadmin(false);
+              }}
+              className="flex-1 px-5 py-3 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 disabled:opacity-50 text-slate-950 font-bold rounded-xl text-xs transition shadow-lg shadow-amber-500/20 active:scale-95 cursor-pointer flex items-center justify-center gap-2"
+            >
+              <ShieldCheck className="w-4 h-4" />
+              {isClaimingSuperadmin ? 'Activation en cours...' : 'Activer en Super Administrateur'}
+            </button>
+            <button
+              onClick={() => logout()}
+              className="px-5 py-3 bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-300 rounded-xl text-xs font-semibold transition cursor-pointer"
+            >
+              Se déconnecter
+            </button>
+          </div>
         </div>
       </div>
     );
