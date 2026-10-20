@@ -117,6 +117,13 @@ export const ClientsView: React.FC = () => {
                   </div>
                 )}
 
+                {/* Surveillance Anniversaire (Section 13) */}
+                {isRuleEnabled('clients_birthdays', true) && (
+                  <div className="text-[10px] font-bold text-pink-700 bg-pink-50 px-2 py-0.5 rounded-md border border-pink-200 mt-1.5 inline-flex items-center gap-1">
+                    <span>🎂 Anniversaire client surveillé</span>
+                  </div>
+                )}
+
                 {/* NIU contribuable (Section 13) */}
                 {isRuleEnabled('clients_card', true) && (
                   <div className="text-[10px] font-mono text-slate-500 mt-1.5">
@@ -161,13 +168,15 @@ export const ClientsView: React.FC = () => {
                       <Send className="w-3.5 h-3.5" />
                     </button>
                   )}
-                  <button
-                    onClick={() => setSelectedCustomer(customer)}
-                    className="flex items-center gap-1 text-xs font-semibold text-amber-600 hover:text-amber-800"
-                  >
-                    <Eye className="w-3.5 h-3.5" />
-                    <span>Historique ({customer.totalVisits}v)</span>
-                  </button>
+                  {isRuleEnabled('clients_history', true) && (
+                    <button
+                      onClick={() => setSelectedCustomer(customer)}
+                      className="flex items-center gap-1 text-xs font-semibold text-amber-600 hover:text-amber-800"
+                    >
+                      <Eye className="w-3.5 h-3.5" />
+                      <span>Historique ({customer.totalVisits}v)</span>
+                    </button>
+                  )}
                 </div>
               </div>
             </div>

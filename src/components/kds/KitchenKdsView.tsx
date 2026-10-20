@@ -38,6 +38,8 @@ export const KitchenKdsView: React.FC = () => {
     updateOrderStatus,
     updateOrderItemStatus,
     isRuleEnabled,
+    isFeatureEnabled,
+    addNotification,
     products,
     toggleProduct86,
     settings,
@@ -85,12 +87,12 @@ export const KitchenKdsView: React.FC = () => {
     ).length;
 
     if (previousKitchenOrdersCount.current !== null && kitchenOrdersCount > previousKitchenOrdersCount.current) {
-      if (soundEnabled) {
+      if (soundEnabled && isFeatureEnabled('kds_audio_chimes')) {
         playAudioChime('kitchen');
       }
     }
     previousKitchenOrdersCount.current = kitchenOrdersCount;
-  }, [orders, soundEnabled, playAudioChime]);
+  }, [orders, soundEnabled, playAudioChime, isFeatureEnabled]);
 
   // Règles Opérationnelles (Section 9 Cuisine & KDS)
   const isPrepTimerAllowed = isRuleEnabled('cuisine_prep_timer', true);
@@ -98,6 +100,7 @@ export const KitchenKdsView: React.FC = () => {
   const isNotifyDelayAllowed = isRuleEnabled('cuisine_notify_delay', true);
   const isPrintTicketAllowed = isRuleEnabled('cuisine_print_ticket', true);
   const isPrepCategoriesAllowed = isRuleEnabled('cuisine_prep_categories', true);
+  const isNotifyReadyAllowed = isRuleEnabled('cuisine_notify_ready', true);
 
   const [categoryFilter, setCategoryFilter] = useState<'tous' | 'chaud' | 'froid' | 'grillades'>('tous');
 
@@ -327,6 +330,16 @@ export const KitchenKdsView: React.FC = () => {
       spread: 50,
       origin: { y: 0.6 },
     });
+
+    if (isNotifyReadyAllowed) {
+      addNotification(
+        'Commande Cuisine Prête',
+        `La commande ${order.orderNumber} (${order.tableName || 'À emporter'}) est prête pour le service en salle.`,
+        'success',
+        'Cuisine',
+        'moyenne'
+      );
+    }
 
     showToast({
       type: 'success',

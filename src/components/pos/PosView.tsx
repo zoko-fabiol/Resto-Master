@@ -80,6 +80,8 @@ export const PosView: React.FC<PosViewProps> = ({ initialTableId, onOpenPayment,
   const isCancelReasonRequired = isRuleEnabled('pos_require_cancel_reason', true);
   const isZeroPriceAllowed = isRuleEnabled('pos_zero_price', false);
   const isCaisseMandatoryOpen = isRuleEnabled('caisse_mandatory_open', true);
+  const isEditOrderAllowed = isRuleEnabled('pos_edit_order', true);
+  const isCuisineAutoSend = isRuleEnabled('cuisine_auto_send', true);
 
   const [showCancelReasonModal, setShowCancelReasonModal] = useState(false);
   const [selectedCancelReason, setSelectedCancelReason] = useState('Erreur de commande');
@@ -485,6 +487,16 @@ export const PosView: React.FC<PosViewProps> = ({ initialTableId, onOpenPayment,
       let finalOrder: Order;
 
       if (orderType === 'sur_place' && existingTableOrder) {
+        if (!isEditOrderAllowed) {
+          showToast({
+            type: 'error',
+            title: 'Modification de commande désactivée',
+            message: 'La règle pos_edit_order interdit l\'ajout d\'articles ou la modification d\'une commande déjà transmise.',
+          });
+          setIsSubmitting(false);
+          return;
+        }
+
         // Ajouter les nouveaux articles à la commande déjà active sur la table (synchronisé tablette & caisse)
         finalOrder = await addItemsToOrder(existingTableOrder.id, cart, totalSeats);
 
@@ -554,6 +566,7 @@ export const PosView: React.FC<PosViewProps> = ({ initialTableId, onOpenPayment,
           isProforma,
           companyBillingName: companyBillingName || undefined,
           companyBillingNiu: companyBillingNiu || undefined,
+          status: isCuisineAutoSend ? 'envoye' : 'nouveau',
         });
 
         // Auto-print kitchen & bar tickets to hardware peripherals if enabled
@@ -769,6 +782,7 @@ export const PosView: React.FC<PosViewProps> = ({ initialTableId, onOpenPayment,
                       <div className="text-xs font-bold text-slate-900 truncate">{p.name}</div>
                       <div className="text-xs font-black text-amber-900 tabular-nums mt-0.5">
                         {formatCurrency(p.price, settings.currency)}
+                        <span className="text-[9px] font-bold text-slate-400 ml-1">{settings.priceDisplayMode || 'TTC'}</span>
                       </div>
                     </div>
                   </button>
@@ -854,6 +868,7 @@ export const PosView: React.FC<PosViewProps> = ({ initialTableId, onOpenPayment,
                   <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between">
                     <span className="text-sm sm:text-base font-black text-slate-900 tabular-nums">
                       {formatCurrency(product.price, settings.currency)}
+                      <span className="text-[10px] font-bold text-slate-400 ml-1">{settings.priceDisplayMode || 'TTC'}</span>
                     </span>
                     <button
                       disabled={!product.available}

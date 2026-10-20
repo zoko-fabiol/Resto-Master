@@ -28,7 +28,7 @@ import confetti from 'canvas-confetti';
 import { EmptyState } from '../ui/EmptyState';
 
 export const BarKdsView: React.FC = () => {
-  const { orders, updateOrderItemStatus, updateOrderStatus, isRuleEnabled } = useRestaurant();
+  const { orders, updateOrderItemStatus, updateOrderStatus, isRuleEnabled, isFeatureEnabled } = useRestaurant();
   const { showToast, playAudioChime } = useToast();
 
   // Maintien de l'écran allumé (Screen Wake Lock API) pour tablette du bar
@@ -81,12 +81,12 @@ export const BarKdsView: React.FC = () => {
     ).length;
 
     if (previousBarOrdersCount.current !== null && barOrdersCount > previousBarOrdersCount.current) {
-      if (soundEnabled) {
+      if (soundEnabled && isFeatureEnabled('kds_audio_chimes')) {
         playAudioChime('kitchen');
       }
     }
     previousBarOrdersCount.current = barOrdersCount;
-  }, [orders, soundEnabled, playAudioChime]);
+  }, [orders, soundEnabled, playAudioChime, isFeatureEnabled]);
 
   const [filterState, setFilterState] = useState<'active' | 'in_prep' | 'ready' | 'servi' | 'history'>('active');
 

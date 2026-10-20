@@ -112,6 +112,7 @@ export const CashRegisterView: React.FC<CashRegisterViewProps> = ({ onOpenPaymen
   const isExpensesAllowed = isRuleEnabled('caisse_expenses', true);
   const isWithdrawalsAllowed = isRuleEnabled('caisse_withdrawals', true);
   const isVarianceStrict = isRuleEnabled('caisse_variance_control', true);
+  const isZReportEnabled = isRuleEnabled('caisse_z_report', true);
 
   // Active orders (tables awaiting bill or active meals)
   const activeOrders = useMemo(() => {
@@ -418,13 +419,15 @@ export const CashRegisterView: React.FC<CashRegisterViewProps> = ({ onOpenPaymen
                 <Coins className="w-3.5 h-3.5" />
                 <span>Entrée / Sortie</span>
               </button>
-              <button
-                onClick={handleOpenClosingModal}
-                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold shadow-xs transition-colors"
-              >
-                <Lock className="w-3.5 h-3.5" />
-                <span>Clôturer Caisse (Z)</span>
-              </button>
+              {isZReportEnabled && (
+                <button
+                  onClick={handleOpenClosingModal}
+                  className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold shadow-xs transition-colors"
+                >
+                  <Lock className="w-3.5 h-3.5" />
+                  <span>Clôturer Caisse (Z)</span>
+                </button>
+              )}
             </>
           ) : (
             <button

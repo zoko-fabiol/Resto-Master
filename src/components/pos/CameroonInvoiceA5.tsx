@@ -122,14 +122,25 @@ export const CameroonInvoiceA5: React.FC<CameroonInvoiceA5Props> = ({
           <div className="flex justify-between items-start border-b-2 border-slate-900 pb-4">
             <div>
               <h1 className="text-xl font-black uppercase tracking-wider font-sans text-slate-900">
-                {settings.name}
+                {settings.nomCommercial || settings.name}
               </h1>
               <div className="text-xs text-slate-700 mt-1 font-sans space-y-0.5">
+                {settings.raisonSociale && (
+                  <div className="font-semibold text-slate-800">
+                    {settings.raisonSociale} {settings.formeJuridique && `(${settings.formeJuridique})`}
+                  </div>
+                )}
                 <div>{settings.slogan}</div>
-                <div>{settings.address} — {settings.bp} {settings.city?.toUpperCase() || 'YAOUNDE'} - CAMEROUN</div>
+                <div>{settings.adresseFiscale || settings.address} — {settings.bp} {settings.city?.toUpperCase() || 'YAOUNDE'} - CAMEROUN</div>
+                {settings.activitePrincipale && (
+                  <div className="text-[11px] text-slate-600">Activité : {settings.activitePrincipale}</div>
+                )}
                 <div>Tél : {settings.phone} • Email : {settings.email}</div>
                 <div className="font-bold text-[11px] text-slate-900">
                   NIU : {settings.niu || 'M012012345678A'} • RCCM : {settings.rccm || 'RC/YAO/2024/B/1894'}
+                  {settings.taxCenter && ` • Centre : ${settings.taxCenter}`}
+                  {settings.regimeFiscal && ` • Régime : ${settings.regimeFiscal.toUpperCase()}`}
+                  {settings.statutContribuable && ` • Statut : ${settings.statutContribuable}`}
                 </div>
               </div>
             </div>

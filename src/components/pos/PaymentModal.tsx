@@ -54,8 +54,15 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, onClose }) 
   const isInvoiceA5Enabled = isFeatureEnabled('invoice_laser_a5');
 
   // Règles Opérationnelles
-  const isSplitBillAllowed = isRuleEnabled('pos_split_bill', true);
-  const isPartialPaymentAllowed = isRuleEnabled('pos_partial_payment', true);
+  const isSplitBillAllowed = isRuleEnabled('pos_split_bill', true) && isRuleEnabled('pay_multiple', true);
+  const isPartialPaymentAllowed = isRuleEnabled('pos_partial_payment', true) && isRuleEnabled('pay_partiel', true);
+  const isPayEspecesAllowed = isRuleEnabled('pay_especes', true);
+  const isPayCbAllowed = isRuleEnabled('pay_cb', true);
+  const isPayMomoAllowed = isRuleEnabled('pay_mtn_momo', true);
+  const isPayOrangeAllowed = isRuleEnabled('pay_orange_money', true);
+  const isPayVirementAllowed = isRuleEnabled('pay_virement', true);
+  const isPayChequeAllowed = isRuleEnabled('pay_cheque', true);
+  const isPayCreditAllowed = isRuleEnabled('pay_credit_client', true);
 
   const targetOrder = orders.find((o) => o.id === orderId);
 
@@ -668,7 +675,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, onClose }) 
                 </label>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                   {/* Orange Money */}
-                  {isOrangeEnabled && (
+                  {isOrangeEnabled && isPayOrangeAllowed && (
                     <button
                       type="button"
                       onClick={() => setPaymentMethod('orange_money')}
@@ -684,7 +691,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, onClose }) 
                   )}
 
                   {/* MTN MoMo */}
-                  {isMomoEnabled && (
+                  {isMomoEnabled && isPayMomoAllowed && (
                     <button
                       type="button"
                       onClick={() => setPaymentMethod('mtn_momo')}
@@ -699,36 +706,40 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, onClose }) 
                     </button>
                   )}
 
-                  {/* Espèces */}
-                  <button
-                    type="button"
-                    onClick={() => setPaymentMethod('especes')}
-                    className={`p-2.5 rounded-xl border flex items-center gap-2 font-bold text-xs transition-all ${
-                      paymentMethod === 'especes'
-                        ? 'bg-slate-900 text-white border-slate-900 shadow-sm'
-                        : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
-                    }`}
-                  >
-                    <Coins className="w-4 h-4 text-amber-400" />
-                    <span>Espèces FCFA</span>
-                  </button>
+                  {/* Espèces (Reste actif par défaut ou secours si les autres sont désactivés) */}
+                  {(isPayEspecesAllowed || (!isPayCbAllowed && !isPayOrangeAllowed && !isPayMomoAllowed)) && (
+                    <button
+                      type="button"
+                      onClick={() => setPaymentMethod('especes')}
+                      className={`p-2.5 rounded-xl border flex items-center gap-2 font-bold text-xs transition-all ${
+                        paymentMethod === 'especes'
+                          ? 'bg-slate-900 text-white border-slate-900 shadow-sm'
+                          : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                      }`}
+                    >
+                      <Coins className="w-4 h-4 text-amber-400" />
+                      <span>Espèces FCFA</span>
+                    </button>
+                  )}
 
                   {/* Carte Bancaire */}
-                  <button
-                    type="button"
-                    onClick={() => setPaymentMethod('carte')}
-                    className={`p-2.5 rounded-xl border flex items-center gap-2 font-bold text-xs transition-all ${
-                      paymentMethod === 'carte'
-                        ? 'bg-slate-900 text-white border-slate-900 shadow-sm'
-                        : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
-                    }`}
-                  >
-                    <CreditCard className="w-4 h-4 text-blue-400" />
-                    <span>Carte Bancaire</span>
-                  </button>
+                  {isPayCbAllowed && (
+                    <button
+                      type="button"
+                      onClick={() => setPaymentMethod('carte')}
+                      className={`p-2.5 rounded-xl border flex items-center gap-2 font-bold text-xs transition-all ${
+                        paymentMethod === 'carte'
+                          ? 'bg-slate-900 text-white border-slate-900 shadow-sm'
+                          : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                      }`}
+                    >
+                      <CreditCard className="w-4 h-4 text-blue-400" />
+                      <span>Carte Bancaire</span>
+                    </button>
+                  )}
 
                   {/* Crédit Entreprise */}
-                  {isCreditEnabled && (
+                  {isCreditEnabled && isPayCreditAllowed && (
                     <button
                       type="button"
                       onClick={() => setPaymentMethod('credit_entreprise')}
@@ -744,18 +755,36 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, onClose }) 
                   )}
 
                   {/* Virement Bancaire */}
-                  <button
-                    type="button"
-                    onClick={() => setPaymentMethod('virement')}
-                    className={`p-2.5 rounded-xl border flex items-center gap-2 font-bold text-xs transition-all ${
-                      paymentMethod === 'virement'
-                        ? 'bg-slate-900 text-white border-slate-900 shadow-sm'
-                        : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
-                    }`}
-                  >
-                    <Building className="w-4 h-4 text-emerald-400" />
-                    <span>Virement</span>
-                  </button>
+                  {isPayVirementAllowed && (
+                    <button
+                      type="button"
+                      onClick={() => setPaymentMethod('virement')}
+                      className={`p-2.5 rounded-xl border flex items-center gap-2 font-bold text-xs transition-all ${
+                        paymentMethod === 'virement'
+                          ? 'bg-slate-900 text-white border-slate-900 shadow-sm'
+                          : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                      }`}
+                    >
+                      <Building className="w-4 h-4 text-emerald-400" />
+                      <span>Virement</span>
+                    </button>
+                  )}
+
+                  {/* Chèque */}
+                  {isPayChequeAllowed && (
+                    <button
+                      type="button"
+                      onClick={() => setPaymentMethod('autre')}
+                      className={`p-2.5 rounded-xl border flex items-center gap-2 font-bold text-xs transition-all ${
+                        paymentMethod === 'autre'
+                          ? 'bg-slate-900 text-white border-slate-900 shadow-sm'
+                          : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                      }`}
+                    >
+                      <FileText className="w-4 h-4 text-purple-400" />
+                      <span>Chèque</span>
+                    </button>
+                  )}
                 </div>
               </div>
 

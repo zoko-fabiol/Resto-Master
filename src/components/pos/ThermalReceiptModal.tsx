@@ -29,7 +29,7 @@ export const ThermalReceiptModal: React.FC<ThermalReceiptModalProps> = ({
   folio,
   onClose,
 }) => {
-  const { peripherals, isFeatureEnabled, isRuleEnabled } = useRestaurant();
+  const { peripherals, isFeatureEnabled, isRuleEnabled, printerSettings } = useRestaurant();
   const { showToast, playAudioChime } = useToast();
   const [qrDataUrl, setQrDataUrl] = useState<string>('');
   const [fiscalSeal, setFiscalSeal] = useState<string>('');
@@ -101,18 +101,22 @@ export const ThermalReceiptModal: React.FC<ThermalReceiptModalProps> = ({
     playAudioChime();
 
     try {
-      const res = await printerService.printCustomerReceipt(
-        order,
-        settings,
-        activeCashPrinter,
-        { cashGiven, changeDue, folio }
-      );
+      const copies = Math.max(1, printerSettings?.receiptCopiesCount || 1);
+      let lastRes = { message: 'Impression effectuée avec succès' };
+      for (let c = 0; c < copies; c++) {
+        lastRes = await printerService.printCustomerReceipt(
+          order,
+          settings,
+          activeCashPrinter,
+          { cashGiven, changeDue, folio }
+        );
+      }
 
       playAudioChime('kitchen');
       showToast({
         type: 'success',
-        title: 'Impression Matérielle POS',
-        message: res.message,
+        title: copies > 1 ? `Impression Matérielle (${copies} exemplaires)` : 'Impression Matérielle POS',
+        message: lastRes.message,
       });
     } catch (err: any) {
       showToast({

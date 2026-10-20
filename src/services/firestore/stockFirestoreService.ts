@@ -102,18 +102,20 @@ export const stockFirestoreService = {
   /**
    * Déstockage des lots en FEFO (First Expired, First Out)
    */
-  async deductLotsFEFO(
+  async deductLots(
     stockItemId: string,
-    quantityToDeduct: number
+    quantityToDeduct: number,
+    strategy: 'fefo' | 'fifo' = 'fefo'
   ): Promise<Array<{ lotId: string; lotNumber: string; deducted: number; remainingLotQty: number }>> {
     if (quantityToDeduct <= 0) return [];
     try {
       const lotsCol = collection(db, 'stock_lots');
+      const sortField = strategy === 'fifo' ? 'receptionDate' : 'expiryDate';
       const q = query(
         lotsCol,
         where('stockItemId', '==', stockItemId),
         where('remainingQuantity', '>', 0),
-        orderBy('expiryDate', 'asc')
+        orderBy(sortField, 'asc')
       );
 
       const snapshot = await getDocs(q);
@@ -147,9 +149,16 @@ export const stockFirestoreService = {
 
       return deductions;
     } catch (err) {
-      console.warn('Erreur deductLotsFEFO Firestore:', err);
+      console.warn(`Erreur deductLots (${strategy}) Firestore:`, err);
       return [];
     }
+  },
+
+  async deductLotsFEFO(
+    stockItemId: string,
+    quantityToDeduct: number
+  ): Promise<Array<{ lotId: string; lotNumber: string; deducted: number; remainingLotQty: number }>> {
+    return this.deductLots(stockItemId, quantityToDeduct, 'fefo');
   },
 
   /**

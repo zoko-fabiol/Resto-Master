@@ -17,6 +17,19 @@ export interface PrinterDiscoveryResult {
 }
 
 export class PrinterService {
+  private hardwareEnabled: boolean = true;
+
+  /**
+   * Configure whether hardware printer transmission is allowed
+   */
+  setHardwareEnabled(enabled: boolean): void {
+    this.hardwareEnabled = enabled;
+  }
+
+  isHardwareEnabled(): boolean {
+    return this.hardwareEnabled;
+  }
+
   /**
    * Check if WebUSB is supported by the current browser
    */
@@ -107,6 +120,17 @@ export class PrinterService {
     peripheral: Peripheral,
     data: Uint8Array
   ): Promise<{ success: boolean; message: string }> {
+    // 0. Feature check: if printers_hardware is disabled, simulate virtually
+    if (!this.hardwareEnabled) {
+      console.info(
+        `[RestoMaster Hardware Printer] Module matériel désactivé (printers_hardware=false). Simulation virtuelle pour [${peripheral.name}] (${data.length} octets).`
+      );
+      return {
+        success: true,
+        message: `Simulation d'impression virtuelle (${peripheral.name}) : module matériel désactivé.`,
+      };
+    }
+
     // 1. WebUSB Direct Print
     if (peripheral.connectionType === 'usb' && this.isWebUsbSupported()) {
       try {

@@ -135,6 +135,7 @@ import { fiscalFirestoreService } from '../services/firestore/fiscalFirestoreSer
 import { configFirestoreService } from '../services/firestore/configFirestoreService';
 import { firebaseSeedService } from '../services/firestore/firebaseSeedService';
 import { offlineSyncService } from '../services/firestore/offlineSyncService';
+import { printerService } from '../services/printing/printerService';
 import { cloudinaryService } from '../services/media/cloudinaryService';
 import { customersFirestoreService } from '../services/firestore/customersFirestoreService';
 
@@ -242,6 +243,14 @@ interface RestaurantContextType {
   syncOfflineData: () => Promise<void>;
   syncError: string | null;
   clearSyncError: () => void;
+  addNotification: (
+    title: string,
+    message: string,
+    type: NotificationItem['type'],
+    module: string,
+    priority?: NotificationItem['priority'],
+    actionUrl?: string
+  ) => void;
   markNotificationRead: (id: string) => void;
   markAllNotificationsRead: () => void;
   deleteNotification: (id: string) => void;
@@ -552,15 +561,6 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     });
     return () => unsub();
   }, []);
-
-  // When network comes back online, trigger queue processing
-  useEffect(() => {
-    if (isOnline) {
-      offlineSyncService.processQueue().catch((err) => {
-        handleSyncError('Traitement file hors-ligne', err);
-      });
-    }
-  }, [isOnline, handleSyncError]);
 
   // Firestore Real-Time Sync Listeners scoped to Active Outlet & Group
   useEffect(() => {
@@ -896,7 +896,7 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
               userName: currentUser.name,
             })
             .then((res) => {
-              if (res.isNegative) {
+              if (res.isNegative && isRuleEnabled('notif_stock_critique', true)) {
                 addNotification(
                   'Alerte Stock Négatif Critique',
                   `L'article "${ing.stockItemName}" est en rupture / stock négatif (${res.newQuantity} ${ing.unit}). Réapprovisionnement urgent requis.`,
@@ -910,9 +910,11 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
               handleSyncError('Déduction stock atomique', err);
             });
 
-          // Déstockage des lots en FEFO
-          stockFirestoreService.deductLotsFEFO(ing.stockItemId, consumedQty).catch((err) => {
-            console.warn('[RestaurantContext] Erreur déduction FEFO lots:', err);
+          // Déstockage des lots selon stratégie FIFO ou FEFO (Section 11)
+          const useFifo = isRuleEnabled('stock_fifo', false) && !isRuleEnabled('stock_fefo', true);
+          const strategy = useFifo ? 'fifo' : 'fefo';
+          stockFirestoreService.deductLots(ing.stockItemId, consumedQty, strategy).catch((err) => {
+            console.warn(`[RestaurantContext] Erreur déduction ${strategy.toUpperCase()} lots:`, err);
           });
         }
       }
@@ -2315,7 +2317,7 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       `Caisse fermée par ${currentUser.name}. Montant attendu: ${cashSession.expectedTotal} ${settings.currency}, Compté: ${countedTotal} ${settings.currency}, Écart: ${variance} ${settings.currency}`
     );
 
-    if (Math.abs(variance) > settings.minCashVarianceAlert) {
+    if (Math.abs(variance) > settings.minCashVarianceAlert && isRuleEnabled('notif_ecart_caisse', true)) {
       addNotification(
         'Écart de caisse important détecté',
         `Écart de clôture de ${variance} ${settings.currency} constaté par ${currentUser.name}. Justification requise.`,
@@ -2441,6 +2443,7 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   };
 
   const syncOfflineData = async () => {
+    if (!isFeatureEnabled('offline_sync_engine')) return;
     await offlineSyncService.processQueue();
   };
 
@@ -2804,6 +2807,20 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     },
     [features]
   );
+
+  // When network comes back online, trigger queue processing if offline sync is enabled
+  useEffect(() => {
+    if (isOnline && isFeatureEnabled('offline_sync_engine')) {
+      offlineSyncService.processQueue().catch((err) => {
+        handleSyncError('Traitement file hors-ligne', err);
+      });
+    }
+  }, [isOnline, isFeatureEnabled, handleSyncError]);
+
+  // Synchronize hardware printer availability with printers_hardware feature
+  useEffect(() => {
+    printerService.setHardwareEnabled(isFeatureEnabled('printers_hardware'));
+  }, [isFeatureEnabled]);
 
   const updateFeatureStatus = async (featureId: string, status: FeatureStatus) => {
     const targetFeat = features.find((f) => f.id === featureId);
@@ -3722,6 +3739,7 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         syncOfflineData,
         syncError,
         clearSyncError,
+        addNotification,
         markNotificationRead,
         markAllNotificationsRead,
         deleteNotification,
