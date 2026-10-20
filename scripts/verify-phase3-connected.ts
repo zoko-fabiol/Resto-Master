@@ -113,8 +113,8 @@ async function runPhase3Verification() {
   };
   const testData = new Uint8Array([0x1b, 0x40]); // ESC @
   const simResult = await printerService.sendRawToPrinter(dummyPeripheral, testData);
-  assert(simResult.success, 'La simulation virtuelle doit réussir');
-  assert(simResult.message.includes('Simulation'), 'Le message doit refléter la simulation virtuelle');
+  assert(!simResult.success, 'L\'impression matérielle doit être refusée quand le coupe-circuit est désactivé');
+  assert(simResult.message.includes('désactivé'), 'Le message doit refléter la désactivation du matériel');
 
   // Réactiver
   printerService.setHardwareEnabled(true);
