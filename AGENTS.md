@@ -69,9 +69,26 @@ Lorsque vous intervenez sur le projet, adoptez l'un des profils d'agent ECC selo
 ### Stack Technologique
 - **Framework** : React 19 (Hooks fonctionnels, `useState`, `useEffect`, `useMemo`, `useCallback`)
 - **Langage** : TypeScript 5.8+ (mode strict, typage exhaustif)
-- **Styling** : Tailwind CSS v4 (classes utilitaires, flexbox/grid, palette moderne, dark mode)
+- **Styling** : Tailwind CSS v4 (classes utilitaires, tokens `@theme`, palette sémantique)
 - **Base de données** : Firebase Firestore (SDK modulaire v12, `onSnapshot`, `runTransaction`, `writeBatch`)
 - **Icônes & Animation** : `lucide-react`, `motion`, `canvas-confetti`
+
+### Règles d'Équipe UI & Typographie (Design System)
+1. **Échelle Typographique Minimale** :
+   - Texte $\ge$ 12 px (`text-xs`) sur l'ensemble de l'interface (labels secondaires, badges).
+   - Texte $\ge$ 14 px (`text-sm`) pour tous les contenus de lecture, descriptions, listes et champs de saisie.
+   - **Interdiction formelle** d'utiliser des polices arbitraires minuscules (`text-[8px]`, `text-[9px]`, `text-[10px]`) dans le code nouveau ou modifié.
+2. **Chiffres Tabulaires Obligatoires** :
+   - Tout montant financier (FCFA, taxes), solde de caisse, décompte KDS ou compteur doit utiliser la classe `tabular-nums` ou l'attribut `data-tabular-nums="true"` pour garantir un alignement vertical parfait.
+3. **Usage Strict de la Palette Sémantique** :
+   - **Amber (`--color-brand-*`)** : réservé exclusivement à l'identité de marque et à l'action principale (bouton primaire, élément actif de navigation de marque).
+   - **Interdiction formelle** d'utiliser l'amber pour signifier un état "activé" (utiliser systématiquement le vert/émeraude `success`).
+   - **Vert / Émeraude (`--color-success-*`)** : statut actif, en service, payé, opérationnel.
+   - **Rouge / Rose (`--color-danger-*`)** : suppression, annulation, erreur, retard critique.
+   - **Orange (`--color-warning-*`)** : attente, avertissement, attention.
+   - **Bleu (`--color-info-*`)** : information, transfert, synchronisation.
+4. **Cibles Tactiles pour Tablettes & POS** :
+   - Tout élément interactif sur POS, Tables et KDS doit respecter une cible tactile $\ge 44 \times 44\text{ px}$ (idéalement $\ge 48\text{ px}$ via la taille tactile `Button size="touch"`).
 
 ### Structure des Dossiers
 ```text

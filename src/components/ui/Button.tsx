@@ -1,0 +1,97 @@
+// ============================================================
+// src/components/ui/Button.tsx
+// Bouton standardisé et tactile pour RestoMaster OS
+// ============================================================
+
+import React from 'react';
+import { Loader2 } from 'lucide-react';
+
+export type ButtonVariant = 'primary' | 'secondary' | 'outline' | 'danger' | 'ghost' | 'success';
+export type ButtonSize = 'sm' | 'md' | 'lg' | 'touch';
+
+export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+  variant?: ButtonVariant;
+  size?: ButtonSize;
+  isLoading?: boolean;
+  leftIcon?: React.ReactNode;
+  rightIcon?: React.ReactNode;
+  fullWidth?: boolean;
+}
+
+const VARIANT_STYLES: Record<ButtonVariant, string> = {
+  primary:
+    'bg-brand-500 hover:bg-brand-600 active:bg-brand-700 text-slate-950 font-bold shadow-xs border border-brand-400/30 focus-visible:ring-brand-500',
+  secondary:
+    'bg-slate-900 hover:bg-slate-800 active:bg-slate-950 text-white font-semibold shadow-xs border border-slate-800 focus-visible:ring-slate-400',
+  outline:
+    'bg-white hover:bg-slate-50 active:bg-slate-100 text-slate-700 border border-slate-200 hover:border-slate-300 font-semibold shadow-xs focus-visible:ring-slate-400',
+  danger:
+    'bg-danger-600 hover:bg-danger-700 active:bg-danger-800 text-white font-bold shadow-xs border border-danger-500/30 focus-visible:ring-danger-500',
+  ghost:
+    'bg-transparent hover:bg-slate-100 active:bg-slate-200 text-slate-700 font-medium focus-visible:ring-slate-400',
+  success:
+    'bg-success-600 hover:bg-success-700 active:bg-success-800 text-white font-bold shadow-xs border border-success-500/30 focus-visible:ring-success-500',
+};
+
+const SIZE_STYLES: Record<ButtonSize, string> = {
+  sm: 'text-xs px-2.5 py-1.5 rounded-lg gap-1.5',
+  md: 'text-sm px-4 py-2 rounded-xl gap-2',
+  lg: 'text-base px-5 py-2.5 rounded-xl gap-2.5',
+  touch: 'text-sm sm:text-base min-h-[48px] min-w-[48px] px-5 py-3 rounded-xl gap-2.5 font-bold',
+};
+
+export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
+  (
+    {
+      children,
+      variant = 'secondary',
+      size = 'md',
+      isLoading = false,
+      leftIcon,
+      rightIcon,
+      fullWidth = false,
+      disabled = false,
+      className = '',
+      type = 'button',
+      ...props
+    },
+    ref
+  ) => {
+    const isDisabled = disabled || isLoading;
+
+    return (
+      <button
+        ref={ref}
+        type={type}
+        disabled={isDisabled}
+        aria-busy={isLoading}
+        aria-disabled={isDisabled}
+        className={`
+          inline-flex items-center justify-center transition-all select-none
+          focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-offset-2
+          active:scale-98 cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 disabled:active:scale-100
+          ${VARIANT_STYLES[variant]}
+          ${SIZE_STYLES[size]}
+          ${fullWidth ? 'w-full' : ''}
+          ${className}
+        `}
+        {...props}
+      >
+        {isLoading ? (
+          <>
+            <Loader2 className="w-4 h-4 animate-spin shrink-0" aria-hidden="true" />
+            <span>{children}</span>
+          </>
+        ) : (
+          <>
+            {leftIcon && <span className="shrink-0" aria-hidden="true">{leftIcon}</span>}
+            {children && <span>{children}</span>}
+            {rightIcon && <span className="shrink-0" aria-hidden="true">{rightIcon}</span>}
+          </>
+        )}
+      </button>
+    );
+  }
+);
+
+Button.displayName = 'Button';

@@ -17,13 +17,24 @@
 
 ---
 
-## Vérifications Techniques Phase A
-- **TypeScript (`npm run lint` / `tsc --noEmit`)** : Validé (0 erreur).
-- **Vite Production Build (`npm run build`)** : Validé (0 erreur de compilation, génération des bundles `dist/`).
-- **Grep natif** : 0 `window.alert()`, `window.confirm()`, `window.prompt()` restant dans `src/`.
+## Phase B — Design System & Composants UI (Statut : TERMINÉE)
+
+| Constat / Point | Statut | Fichiers Modifiés | Détails & Justifications |
+| :--- | :--- | :--- | :--- |
+| **1. Tokens `@theme` dans Tailwind CSS v4** | Confirmé & Implémenté | `src/index.css` | Définition des variables sémantiques : `--color-brand-*` (amber), `--color-success-*` (vert émeraude), `--color-danger-*` (rouge/rose), `--color-warning-*` (orange), `--color-info-*` (bleu ciel), rayons `--radius-*` (xs à 3xl). |
+| **2. Bibliothèque de composants UI standardisés** | Confirmé & Créé | `src/components/ui/Button.tsx`, `src/components/ui/Switch.tsx`, `src/components/ui/Field.tsx`, `src/components/ui/Card.tsx`, `src/components/ui/Badge.tsx`, `src/components/ui/EmptyState.tsx`, `src/components/ui/PageHeader.tsx`, `src/components/ui/StickyActionBar.tsx`, `src/components/ui/index.ts` | Composants accessibles avec support des cibles tactiles (taille `touch` $\ge 48$ px), focus-visible, ARIA complet et variantes sémantiques. |
+| **3. Règle de couleur stricte (Marque vs Statuts)** | Confirmé & Appliqué | `src/index.css`, composants UI, `AGENTS.md` | L'amber est réservé aux actions de marque et boutons principaux. Le vert est strictement appliqué aux statuts activés/en service. Aucun amber n'est utilisé pour signifier "activé". |
+| **4. Neutralisation du mode sombre automatique Tailwind v4** | Confirmé & Corrigé | `src/index.css` | Ajout de `@custom-variant dark (&:where(.dark, .dark *));`. Les 497 classes `dark:` du code ne réagissent plus au mode sombre automatique du navigateur (`prefers-color-scheme`), éliminant tout affichage mi-clair mi-sombre accidentel. |
+| **5. Règle d'équipe documentée** | Confirmé & Documenté | `AGENTS.md` | Règle gravée dans les directives d'ingénierie : texte $\ge 12$ px partout, $\ge 14$ px pour les contenus de lecture, interdiction formelle de `text-[8px]`, `text-[9px]`, `text-[10px]` dans le code nouveau ou modifié, cibles tactiles $\ge 44-48$ px. |
 
 ---
 
-## Points de Décision en Attente (Avant Phase B & C)
-1. **Mode Sombre (Phase B.4)** : Vérification de la gestion actuelle par Tailwind v4 (`dark:` réagit par défaut au `prefers-color-scheme`). Décision requise : bascule manuelle complète vs désactivation de la variante.
-2. **Routeur (Phase C.1)** : Choix du gestionnaire de routes pour les 24 modules applicatifs.
+## Vérifications Techniques Phase B
+- **TypeScript (`npm run lint` / `tsc --noEmit`)** : Validé (0 erreur).
+- **Vite Production Build (`npm run build`)** : Validé (0 erreur de compilation, succès en 1.78s).
+
+---
+
+## Points de Décision en Attente (Avant Phase C)
+1. **Routeur (Phase C.1)** : Le projet utilise actuellement un `useState('dashboard')` dans `App.tsx`.
+   - Option proposée pour la Phase C : `react-router-dom` v7 (pré-autorisé par vos instructions, standard éprouvé avec support complet des lazy routes et des historiques navigateur) ou alternative légère sans dépendance externe via un routeur Custom Hash / History HTML5.
