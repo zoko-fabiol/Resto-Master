@@ -29,10 +29,18 @@ import {
   RotateCw,
   Plus,
   Box,
+  Maximize2,
+  Magnet,
 } from 'lucide-react';
+import {
+  normalizeCoordinateX,
+  normalizeCoordinateY,
+  LOGICAL_WIDTH,
+  LOGICAL_HEIGHT,
+} from './floorPlanCoordinates';
 
-export const LOGICAL_WIDTH = 1200;
-export const LOGICAL_HEIGHT = 800;
+export { normalizeCoordinateX, normalizeCoordinateY, LOGICAL_WIDTH, LOGICAL_HEIGHT };
+
 const SNAP_GRID = 10;
 const DRAG_THRESHOLD = 4;
 
@@ -44,6 +52,7 @@ interface VectorFloorPlanProps {
   activeZone?: Zone;
   isEditMode: boolean;
   snapToGrid: boolean;
+  snapToMagnet?: boolean;
   selectedTableId: string | null;
   selectedDecorId: string | null;
   onSelectTable: (table: RestaurantTable) => void;
@@ -56,19 +65,6 @@ interface VectorFloorPlanProps {
   onBatchAddClick: () => void;
 }
 
-// Convert table coordinates (handles historical percentages <= 100)
-export function normalizeCoordinateX(val: number | undefined): number {
-  if (val === undefined || val === null) return 200;
-  if (val > 0 && val <= 100) return (val / 100) * LOGICAL_WIDTH;
-  return val;
-}
-
-export function normalizeCoordinateY(val: number | undefined): number {
-  if (val === undefined || val === null) return 200;
-  if (val > 0 && val <= 100) return (val / 100) * LOGICAL_HEIGHT;
-  return val;
-}
-
 export const VectorFloorPlan: React.FC<VectorFloorPlanProps> = ({
   tables,
   decorElements,
@@ -77,6 +73,7 @@ export const VectorFloorPlan: React.FC<VectorFloorPlanProps> = ({
   activeZone,
   isEditMode,
   snapToGrid,
+  snapToMagnet = true,
   selectedTableId,
   selectedDecorId,
   onSelectTable,
@@ -89,12 +86,21 @@ export const VectorFloorPlan: React.FC<VectorFloorPlanProps> = ({
   onBatchAddClick,
 }) => {
   const svgRef = useRef<SVGSVGElement>(null);
+  const contentGroupRef = useRef<SVGGElement>(null);
 
-  // Zoom & Pan state
+  // Zoom & Pan state (bornes unifiées 0.5 à 3.0)
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState(false);
   const panStartRef = useRef({ x: 0, y: 0 });
+
+  // Multi-touch tracking (pincement et déplacement à 2 doigts)
+  const activePointersRef = useRef<Map<number, { clientX: number; clientY: number }>>(new Map());
+  const pinchStartRef = useRef<{
+    dist: number;
+    zoom: number;
+    midLogical: { x: number; y: number };
+  } | null>(null);
 
   // Dragging state
   const [draggingEntity, setDraggingEntity] = useState<{
@@ -105,31 +111,47 @@ export const VectorFloorPlan: React.FC<VectorFloorPlanProps> = ({
 
   const dragStartClientRef = useRef({ x: 0, y: 0 });
   const dragEntityStartPosRef = useRef({ x: 0, y: 0, width: 0, height: 0, rotation: 0 });
+  const grabOffsetRef = useRef({ x: 0, y: 0 });
   const dragHasExceededThresholdRef = useRef(false);
 
   // Alignment guide lines
   const [guideLines, setGuideLines] = useState<{ x?: number; y?: number }>({});
 
-  // Reset zoom & pan
+  // Reset zoom & pan à 100%
   const handleResetZoomPan = () => {
     setZoom(1);
     setPan({ x: 0, y: 0 });
   };
 
-  // Convert client coordinates to 1200x800 logical SVG coordinates
+  // Ajuster à l'écran (calcul d'échelle optimal pour le conteneur)
+  const handleFitToScreen = () => {
+    if (!svgRef.current) {
+      setZoom(1);
+      setPan({ x: 0, y: 0 });
+      return;
+    }
+    const rect = svgRef.current.getBoundingClientRect();
+    const padding = 24;
+    const availW = Math.max(100, rect.width - padding * 2);
+    const availH = Math.max(100, rect.height - padding * 2);
+    const scale = Math.min(3.0, Math.max(0.5, Math.min(availW / LOGICAL_WIDTH, availH / LOGICAL_HEIGHT) * (LOGICAL_WIDTH / rect.width)));
+    setZoom(scale || 1);
+    setPan({ x: 0, y: 0 });
+  };
+
+  // P-01 : Conversion universelle et exacte par matrice SVG CTM inverse
   const clientToLogical = useCallback(
     (clientX: number, clientY: number): { x: number; y: number } => {
-      if (!svgRef.current) return { x: 0, y: 0 };
-      const rect = svgRef.current.getBoundingClientRect();
-      const normX = (clientX - rect.left) / rect.width;
-      const normY = (clientY - rect.top) / rect.height;
-
-      // Account for pan and zoom
-      const logicalX = (normX * LOGICAL_WIDTH - pan.x) / zoom;
-      const logicalY = (normY * LOGICAL_HEIGHT - pan.y) / zoom;
-      return { x: logicalX, y: logicalY };
+      if (!contentGroupRef.current || !svgRef.current) return { x: 0, y: 0 };
+      const ctm = contentGroupRef.current.getScreenCTM();
+      if (!ctm) return { x: 0, y: 0 };
+      const pt = svgRef.current.createSVGPoint();
+      pt.x = clientX;
+      pt.y = clientY;
+      const transformed = pt.matrixTransform(ctm.inverse());
+      return { x: transformed.x, y: transformed.y };
     },
-    [zoom, pan]
+    []
   );
 
   // Collision detection between tables
@@ -165,29 +187,45 @@ export const VectorFloorPlan: React.FC<VectorFloorPlanProps> = ({
     return colliding;
   }, [tables]);
 
-  // Pointer Down on Table
+  // Pointer Down sur Table
   const handleTablePointerDown = (e: React.PointerEvent, table: RestaurantTable) => {
     e.stopPropagation();
+    activePointersRef.current.set(e.pointerId, { clientX: e.clientX, clientY: e.clientY });
+
+    const p = clientToLogical(e.clientX, e.clientY);
+    const tblX = normalizeCoordinateX(table.x);
+    const tblY = normalizeCoordinateY(table.y);
+
     dragStartClientRef.current = { x: e.clientX, y: e.clientY };
     dragEntityStartPosRef.current = {
-      x: normalizeCoordinateX(table.x),
-      y: normalizeCoordinateY(table.y),
+      x: tblX,
+      y: tblY,
       width: table.width || 100,
       height: table.height || 100,
       rotation: table.rotation || 0,
     };
+    grabOffsetRef.current = {
+      x: p.x - tblX,
+      y: p.y - tblY,
+    };
     dragHasExceededThresholdRef.current = false;
 
     if (isEditMode) {
+      try {
+        (e.currentTarget as Element).setPointerCapture(e.pointerId);
+      } catch {}
       setDraggingEntity({ type: 'table', id: table.id });
       onSelectTable(table);
     }
   };
 
-  // Pointer Down on Decor Element
+  // Pointer Down sur Élément de Décor
   const handleDecorPointerDown = (e: React.PointerEvent, decor: DecorElement) => {
     if (!isEditMode) return;
     e.stopPropagation();
+    activePointersRef.current.set(e.pointerId, { clientX: e.clientX, clientY: e.clientY });
+
+    const p = clientToLogical(e.clientX, e.clientY);
     dragStartClientRef.current = { x: e.clientX, y: e.clientY };
     dragEntityStartPosRef.current = {
       x: decor.x,
@@ -196,17 +234,25 @@ export const VectorFloorPlan: React.FC<VectorFloorPlanProps> = ({
       height: decor.height,
       rotation: decor.rotation || 0,
     };
+    grabOffsetRef.current = {
+      x: p.x - decor.x,
+      y: p.y - decor.y,
+    };
     dragHasExceededThresholdRef.current = false;
 
+    try {
+      (e.currentTarget as Element).setPointerCapture(e.pointerId);
+    } catch {}
     setDraggingEntity({ type: 'decor', id: decor.id });
     onSelectDecor(decor);
   };
 
-  // Pointer Down on Resize Handle (Edit Mode)
+  // Pointer Down sur Poignée de Redimensionnement (4 coins)
   const handleResizePointerDown = (e: React.PointerEvent, tableId: string, handle: string) => {
     e.stopPropagation();
     const table = tables.find((t) => t.id === tableId);
     if (!table) return;
+    activePointersRef.current.set(e.pointerId, { clientX: e.clientX, clientY: e.clientY });
 
     dragStartClientRef.current = { x: e.clientX, y: e.clientY };
     dragEntityStartPosRef.current = {
@@ -217,23 +263,90 @@ export const VectorFloorPlan: React.FC<VectorFloorPlanProps> = ({
       rotation: table.rotation || 0,
     };
     dragHasExceededThresholdRef.current = true;
-    (e.currentTarget as Element).setPointerCapture(e.pointerId);
+    try {
+      (e.currentTarget as Element).setPointerCapture(e.pointerId);
+    } catch {}
 
     setDraggingEntity({ type: 'resize', id: tableId, handle });
   };
 
-  // Pointer Down on Canvas (Pan or Deselect)
+  // Pointer Down sur Poignée de Rotation Libre
+  const handleRotatePointerDown = (e: React.PointerEvent, tableId: string) => {
+    e.stopPropagation();
+    const table = tables.find((t) => t.id === tableId);
+    if (!table) return;
+    activePointersRef.current.set(e.pointerId, { clientX: e.clientX, clientY: e.clientY });
+
+    dragStartClientRef.current = { x: e.clientX, y: e.clientY };
+    dragEntityStartPosRef.current = {
+      x: normalizeCoordinateX(table.x),
+      y: normalizeCoordinateY(table.y),
+      width: table.width || 100,
+      height: table.height || 100,
+      rotation: table.rotation || 0,
+    };
+    dragHasExceededThresholdRef.current = true;
+    try {
+      (e.currentTarget as Element).setPointerCapture(e.pointerId);
+    } catch {}
+
+    setDraggingEntity({ type: 'rotate', id: tableId });
+  };
+
+  // Pointer Down sur Canvas SVG (Panoramique ou sélection)
   const handleCanvasPointerDown = (e: React.PointerEvent) => {
-    // Left click on background: start pan if space held or middle click
-    if (e.button === 1 || (e.button === 0 && e.shiftKey)) {
+    activePointersRef.current.set(e.pointerId, { clientX: e.clientX, clientY: e.clientY });
+
+    // Clic milieu, Shift+clic, ou clic direct sur le fond du plan
+    if (e.button === 1 || (e.button === 0 && e.shiftKey) || e.target === svgRef.current) {
       setIsPanning(true);
       panStartRef.current = { x: e.clientX - pan.x, y: e.clientY - pan.y };
-      (e.currentTarget as Element).setPointerCapture(e.pointerId);
+      try {
+        (e.currentTarget as Element).setPointerCapture(e.pointerId);
+      } catch {}
     }
   };
 
-  // Pointer Move on SVG Canvas
+  // Pointer Move sur le Canvas SVG
   const handleCanvasPointerMove = (e: React.PointerEvent) => {
+    activePointersRef.current.set(e.pointerId, { clientX: e.clientX, clientY: e.clientY });
+
+    // 1. Support multi-touch tactile : Pincement pour zoomer & Panoramique à deux doigts (P-02)
+    if (activePointersRef.current.size >= 2) {
+      const pointers = Array.from(activePointersRef.current.values());
+      const p1 = pointers[0];
+      const p2 = pointers[1];
+      const dist = Math.hypot(p1.clientX - p2.clientX, p1.clientY - p2.clientY);
+      const midX = (p1.clientX + p2.clientX) / 2;
+      const midY = (p1.clientY + p2.clientY) / 2;
+
+      if (!pinchStartRef.current) {
+        pinchStartRef.current = {
+          dist,
+          zoom,
+          midLogical: clientToLogical(midX, midY),
+        };
+      } else {
+        const scaleFactor = dist / pinchStartRef.current.dist;
+        const newZoom = Math.min(3.0, Math.max(0.5, pinchStartRef.current.zoom * scaleFactor));
+        setZoom(newZoom);
+
+        const midLogical = pinchStartRef.current.midLogical;
+        if (svgRef.current) {
+          const rect = svgRef.current.getBoundingClientRect();
+          const scaleToSvg = LOGICAL_WIDTH / rect.width;
+          const svgMidX = (midX - rect.left) * scaleToSvg;
+          const svgMidY = (midY - rect.top) * scaleToSvg;
+          setPan({
+            x: svgMidX - midLogical.x * newZoom,
+            y: svgMidY - midLogical.y * newZoom,
+          });
+        }
+      }
+      return;
+    }
+
+    // 2. Panoramique mono-doigt ou souris
     if (isPanning) {
       setPan({
         x: e.clientX - panStartRef.current.x,
@@ -247,66 +360,82 @@ export const VectorFloorPlan: React.FC<VectorFloorPlanProps> = ({
     const dx = e.clientX - dragStartClientRef.current.x;
     const dy = e.clientY - dragStartClientRef.current.y;
 
-    // Check anti-click parasite threshold (4px)
+    // Seuil de déclenchement (4px) pour éviter les clics parasites
     if (!dragHasExceededThresholdRef.current) {
       if (Math.hypot(dx, dy) >= DRAG_THRESHOLD) {
         dragHasExceededThresholdRef.current = true;
-        try {
-          (e.currentTarget as Element).setPointerCapture(e.pointerId);
-        } catch {}
       } else {
         return;
       }
     }
 
-    // Scale delta into logical coordinates
-    const logicalDx = dx / zoom;
-    const logicalDy = dy / zoom;
+    // P-01 : Conversion directe exacte du pointeur vers le repère logique
+    const p = clientToLogical(e.clientX, e.clientY);
 
     if (draggingEntity.type === 'table') {
-      let targetX = dragEntityStartPosRef.current.x + logicalDx;
-      let targetY = dragEntityStartPosRef.current.y + logicalDy;
+      let targetX = p.x - grabOffsetRef.current.x;
+      let targetY = p.y - grabOffsetRef.current.y;
 
-      // Magnetic snapping (10 units)
+      // Alignement grille si activé
       if (snapToGrid) {
         targetX = Math.round(targetX / SNAP_GRID) * SNAP_GRID;
         targetY = Math.round(targetY / SNAP_GRID) * SNAP_GRID;
       }
 
-      // Constrain within logical boundaries
+      // Bornes du plan (marge de sécurité)
       const halfW = (dragEntityStartPosRef.current.width || 100) / 2;
       const halfH = (dragEntityStartPosRef.current.height || 100) / 2;
       targetX = Math.max(halfW + 10, Math.min(LOGICAL_WIDTH - halfW - 10, targetX));
       targetY = Math.max(halfH + 10, Math.min(LOGICAL_HEIGHT - halfH - 10, targetY));
 
-      // Dynamic alignment guide lines with neighbor tables
+      // P-04 : Aimant optionnel avec détection du plus proche voisin
       let guideX: number | undefined = undefined;
       let guideY: number | undefined = undefined;
 
-      for (const other of tables) {
-        if (other.id === draggingEntity.id) continue;
-        const otherX = normalizeCoordinateX(other.x);
-        const otherY = normalizeCoordinateY(other.y);
+      if (snapToMagnet) {
+        let closestDiffX = Infinity;
+        let closestX: number | undefined;
+        let closestDiffY = Infinity;
+        let closestY: number | undefined;
+        const threshold = Math.max(6, 12 / zoom);
 
-        if (Math.abs(targetX - otherX) <= 8) {
-          targetX = otherX;
-          guideX = otherX;
+        for (const other of tables) {
+          if (other.id === draggingEntity.id) continue;
+          const otherX = normalizeCoordinateX(other.x);
+          const otherY = normalizeCoordinateY(other.y);
+
+          const diffX = Math.abs(targetX - otherX);
+          if (diffX <= threshold && diffX < closestDiffX) {
+            closestDiffX = diffX;
+            closestX = otherX;
+          }
+
+          const diffY = Math.abs(targetY - otherY);
+          if (diffY <= threshold && diffY < closestDiffY) {
+            closestDiffY = diffY;
+            closestY = otherY;
+          }
         }
-        if (Math.abs(targetY - otherY) <= 8) {
-          targetY = otherY;
-          guideY = otherY;
+
+        if (closestX !== undefined) {
+          targetX = closestX;
+          guideX = closestX;
+        }
+        if (closestY !== undefined) {
+          targetY = closestY;
+          guideY = closestY;
         }
       }
 
       setGuideLines({ x: guideX, y: guideY });
 
-      // Update draft tables state locally without any Firestore write!
+      // Mise à jour locale du brouillon
       onUpdateDraftTables(
         tables.map((t) => (t.id === draggingEntity.id ? { ...t, x: targetX, y: targetY } : t))
       );
     } else if (draggingEntity.type === 'decor') {
-      let targetX = dragEntityStartPosRef.current.x + logicalDx;
-      let targetY = dragEntityStartPosRef.current.y + logicalDy;
+      let targetX = p.x - grabOffsetRef.current.x;
+      let targetY = p.y - grabOffsetRef.current.y;
 
       if (snapToGrid) {
         targetX = Math.round(targetX / SNAP_GRID) * SNAP_GRID;
@@ -320,11 +449,11 @@ export const VectorFloorPlan: React.FC<VectorFloorPlanProps> = ({
         decorElements.map((d) => (d.id === draggingEntity.id ? { ...d, x: targetX, y: targetY } : d))
       );
     } else if (draggingEntity.type === 'resize') {
-      const startW = dragEntityStartPosRef.current.width;
-      const startH = dragEntityStartPosRef.current.height;
+      const centerX = dragEntityStartPosRef.current.x;
+      const centerY = dragEntityStartPosRef.current.y;
 
-      let newW = Math.max(60, Math.min(300, startW + logicalDx));
-      let newH = Math.max(60, Math.min(300, startH + logicalDy));
+      let newW = Math.max(60, Math.min(400, Math.round(2 * Math.abs(p.x - centerX))));
+      let newH = Math.max(60, Math.min(400, Math.round(2 * Math.abs(p.y - centerY))));
 
       if (snapToGrid) {
         newW = Math.round(newW / SNAP_GRID) * SNAP_GRID;
@@ -334,11 +463,31 @@ export const VectorFloorPlan: React.FC<VectorFloorPlanProps> = ({
       onUpdateDraftTables(
         tables.map((t) => (t.id === draggingEntity.id ? { ...t, width: newW, height: newH } : t))
       );
+    } else if (draggingEntity.type === 'rotate') {
+      const centerX = dragEntityStartPosRef.current.x;
+      const centerY = dragEntityStartPosRef.current.y;
+
+      const angleRad = Math.atan2(p.y - centerY, p.x - centerX);
+      let angleDeg = Math.round((angleRad * 180) / Math.PI) + 90;
+      angleDeg = ((angleDeg % 360) + 360) % 360;
+
+      if (snapToGrid) {
+        angleDeg = Math.round(angleDeg / 15) * 15;
+      }
+
+      onUpdateDraftTables(
+        tables.map((t) => (t.id === draggingEntity.id ? { ...t, rotation: angleDeg } : t))
+      );
     }
   };
 
   // Pointer Up
   const handleCanvasPointerUp = (e: React.PointerEvent) => {
+    activePointersRef.current.delete(e.pointerId);
+    if (activePointersRef.current.size < 2) {
+      pinchStartRef.current = null;
+    }
+
     if (isPanning) {
       setIsPanning(false);
       try {
@@ -349,10 +498,9 @@ export const VectorFloorPlan: React.FC<VectorFloorPlanProps> = ({
 
     if (draggingEntity) {
       if (dragHasExceededThresholdRef.current) {
-        // Drag was completed: push state to undo stack
         onPushHistory();
       } else {
-        // Drag did NOT exceed 4px threshold -> Treat as clean click!
+        // Clic propre sans dépassement de seuil
         if (draggingEntity.type === 'table') {
           const table = tables.find((t) => t.id === draggingEntity.id);
           if (table) {
@@ -373,7 +521,25 @@ export const VectorFloorPlan: React.FC<VectorFloorPlanProps> = ({
     }
   };
 
-  // Rotate table by 45 degrees
+  // P-03 : Nettoyage propre sur PointerCancel ou LostPointerCapture
+  const handlePointerCancel = (e: React.PointerEvent) => {
+    activePointersRef.current.delete(e.pointerId);
+    if (activePointersRef.current.size < 2) {
+      pinchStartRef.current = null;
+    }
+    if (isPanning) {
+      setIsPanning(false);
+    }
+    if (draggingEntity) {
+      setDraggingEntity(null);
+      setGuideLines({});
+    }
+    try {
+      (e.currentTarget as Element).releasePointerCapture(e.pointerId);
+    } catch {}
+  };
+
+  // Rotation rapide par pas de 45°
   const handleRotateTable = (table: RestaurantTable, e: React.MouseEvent) => {
     e.stopPropagation();
     const nextRot = ((table.rotation || 0) + 45) % 360;
@@ -383,14 +549,40 @@ export const VectorFloorPlan: React.FC<VectorFloorPlanProps> = ({
     onPushHistory();
   };
 
-  // Wheel zoom (with Ctrl or standard wheel)
-  const handleWheel = (e: React.WheelEvent) => {
-    if (e.ctrlKey || e.metaKey) {
+  // P-02 : Écouteur de molette natif avec { passive: false } centré sur le curseur
+  useEffect(() => {
+    const svgEl = svgRef.current;
+    if (!svgEl) return;
+
+    const onWheelNative = (e: WheelEvent) => {
       e.preventDefault();
-      const zoomFactor = e.deltaY < 0 ? 1.1 : 0.9;
-      setZoom((z) => Math.max(0.6, Math.min(2.2, z * zoomFactor)));
-    }
-  };
+      const rect = svgEl.getBoundingClientRect();
+      if (!rect || rect.width <= 0) return;
+
+      const zoomFactor = e.deltaY < 0 ? 1.12 : 0.88;
+      const cursorX = e.clientX;
+      const cursorY = e.clientY;
+
+      setZoom((prevZoom) => {
+        const nextZoom = Math.min(3.0, Math.max(0.5, prevZoom * zoomFactor));
+        if (nextZoom === prevZoom) return prevZoom;
+
+        const scaleToSvg = LOGICAL_WIDTH / rect.width;
+        const logicalXAtCursor = ((cursorX - rect.left) * scaleToSvg - pan.x) / prevZoom;
+        const logicalYAtCursor = ((cursorY - rect.top) * scaleToSvg - pan.y) / prevZoom;
+
+        setPan({
+          x: (cursorX - rect.left) * scaleToSvg - logicalXAtCursor * nextZoom,
+          y: (cursorY - rect.top) * scaleToSvg - logicalYAtCursor * nextZoom,
+        });
+
+        return nextZoom;
+      });
+    };
+
+    svgEl.addEventListener('wheel', onWheelNative, { passive: false });
+    return () => svgEl.removeEventListener('wheel', onWheelNative);
+  }, [pan]);
 
   // Group merged tables for unified contour rendering (G10)
   const mergedClusters = useMemo(() => {
@@ -416,7 +608,7 @@ export const VectorFloorPlan: React.FC<VectorFloorPlanProps> = ({
       {/* Top Floating Control Bar (Zoom, Pan, Info) */}
       <div className="absolute top-4 right-4 z-20 flex items-center gap-1.5 p-1.5 rounded-2xl bg-slate-900/80 backdrop-blur-md border border-slate-800 text-white shadow-lg">
         <button
-          onClick={() => setZoom((z) => Math.min(2.0, z + 0.15))}
+          onClick={() => setZoom((z) => Math.min(3.0, Math.round((z + 0.15) * 100) / 100))}
           className="p-2 rounded-xl hover:bg-slate-800 text-slate-300 hover:text-white transition-colors"
           title="Zoom avant (+)"
         >
@@ -426,13 +618,20 @@ export const VectorFloorPlan: React.FC<VectorFloorPlanProps> = ({
           {Math.round(zoom * 100)}%
         </span>
         <button
-          onClick={() => setZoom((z) => Math.max(0.6, z - 0.15))}
+          onClick={() => setZoom((z) => Math.max(0.5, Math.round((z - 0.15) * 100) / 100))}
           className="p-2 rounded-xl hover:bg-slate-800 text-slate-300 hover:text-white transition-colors"
           title="Zoom arrière (-)"
         >
           <ZoomOut className="w-4 h-4" />
         </button>
         <div className="w-px h-4 bg-slate-700 mx-1" />
+        <button
+          onClick={handleFitToScreen}
+          className="p-2 rounded-xl hover:bg-slate-800 text-slate-300 hover:text-white transition-colors"
+          title="Ajuster à l'écran (cadrage optimal)"
+        >
+          <Maximize2 className="w-4 h-4" />
+        </button>
         <button
           onClick={handleResetZoomPan}
           className="p-2 rounded-xl hover:bg-slate-800 text-slate-300 hover:text-white transition-colors"
@@ -501,7 +700,8 @@ export const VectorFloorPlan: React.FC<VectorFloorPlanProps> = ({
         onPointerDown={handleCanvasPointerDown}
         onPointerMove={handleCanvasPointerMove}
         onPointerUp={handleCanvasPointerUp}
-        onWheel={handleWheel}
+        onPointerCancel={handlePointerCancel}
+        onLostPointerCapture={handlePointerCancel}
         style={{
           touchAction: 'none',
         }}
@@ -535,8 +735,8 @@ export const VectorFloorPlan: React.FC<VectorFloorPlanProps> = ({
           </linearGradient>
         </defs>
 
-        {/* Global Pan & Zoom SVG Group */}
-        <g transform={`translate(${pan.x}, ${pan.y}) scale(${zoom})`}>
+        {/* Global Pan & Zoom SVG Group with contentGroupRef */}
+        <g ref={contentGroupRef} transform={`translate(${pan.x}, ${pan.y}) scale(${zoom})`}>
           {/* Background Grid */}
           <rect width={LOGICAL_WIDTH} height={LOGICAL_HEIGHT} fill="#090d16" />
           <rect width={LOGICAL_WIDTH} height={LOGICAL_HEIGHT} fill="url(#majorGrid)" />
@@ -1042,26 +1242,88 @@ export const VectorFloorPlan: React.FC<VectorFloorPlanProps> = ({
                       rx="14"
                     />
 
-                    {/* Bottom-Right Resize Handle */}
+                    {/* 4 Corner Resize Handles (SE, SW, NE, NW) */}
                     <circle
                       cx={width / 2 + 6}
                       cy={height / 2 + 6}
-                      r="9"
+                      r="8"
                       fill="#f59e0b"
                       stroke="#ffffff"
                       strokeWidth="2"
                       className="cursor-nwse-resize"
                       onPointerDown={(e) => handleResizePointerDown(e, table.id, 'se')}
-                    />
+                    >
+                      <title>Redimensionner coin bas-droit</title>
+                    </circle>
+                    <circle
+                      cx={-width / 2 - 6}
+                      cy={height / 2 + 6}
+                      r="8"
+                      fill="#f59e0b"
+                      stroke="#ffffff"
+                      strokeWidth="2"
+                      className="cursor-nesw-resize"
+                      onPointerDown={(e) => handleResizePointerDown(e, table.id, 'sw')}
+                    >
+                      <title>Redimensionner coin bas-gauche</title>
+                    </circle>
+                    <circle
+                      cx={width / 2 + 6}
+                      cy={-height / 2 - 6}
+                      r="8"
+                      fill="#f59e0b"
+                      stroke="#ffffff"
+                      strokeWidth="2"
+                      className="cursor-nesw-resize"
+                      onPointerDown={(e) => handleResizePointerDown(e, table.id, 'ne')}
+                    >
+                      <title>Redimensionner coin haut-droit</title>
+                    </circle>
+                    <circle
+                      cx={-width / 2 - 6}
+                      cy={-height / 2 - 6}
+                      r="8"
+                      fill="#f59e0b"
+                      stroke="#ffffff"
+                      strokeWidth="2"
+                      className="cursor-nwse-resize"
+                      onPointerDown={(e) => handleResizePointerDown(e, table.id, 'nw')}
+                    >
+                      <title>Redimensionner coin haut-gauche</title>
+                    </circle>
 
-                    {/* Quick Rotation Handle */}
+                    {/* Free Rotation Handle with stem line */}
+                    <line
+                      x1="0"
+                      y1={-height / 2 - 6}
+                      x2="0"
+                      y2={-height / 2 - 26}
+                      stroke="#f59e0b"
+                      strokeWidth="2"
+                      strokeDasharray="2 2"
+                    />
+                    <circle
+                      cx={0}
+                      cy={-height / 2 - 26}
+                      r="9"
+                      fill="#f59e0b"
+                      stroke="#ffffff"
+                      strokeWidth="2"
+                      className="cursor-grab active:cursor-grabbing"
+                      onPointerDown={(e) => handleRotatePointerDown(e, table.id)}
+                    >
+                      <title>Rotation libre (glisser pour orienter)</title>
+                    </circle>
+
+                    {/* Quick +45° Step Rotation Button */}
                     <g
-                      transform={`translate(${width / 2 + 6}, ${-height / 2 - 6})`}
+                      transform={`translate(${width / 2 + 20}, ${-height / 2 - 10})`}
                       onClick={(e) => handleRotateTable(table, e)}
                       className="cursor-pointer"
                     >
-                      <circle cx="0" cy="0" r="11" fill="#f59e0b" stroke="#ffffff" strokeWidth="2" />
-                      <text x="0" y="3.5" textAnchor="middle" fill="#ffffff" fontSize="12" fontWeight="bold">
+                      <title>Rotation rapide +45°</title>
+                      <circle cx="0" cy="0" r="10" fill="#f59e0b" stroke="#ffffff" strokeWidth="2" />
+                      <text x="0" y="3.5" textAnchor="middle" fill="#ffffff" fontSize="11" fontWeight="bold">
                         ↻
                       </text>
                     </g>

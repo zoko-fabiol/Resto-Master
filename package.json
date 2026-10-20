@@ -12,6 +12,7 @@
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
+    "test": "vitest run",
     "test:phase1": "tsx scripts/verify-phase1.ts",
     "test:phase2": "tsx scripts/verify-phase2-fiscal.ts",
     "test:config-phase1": "tsx scripts/verify-phase1-persistence.ts",
@@ -55,6 +56,7 @@
     "tailwindcss": "^4.3.3",
     "tsx": "^4.21.0",
     "typescript": "^7.0.2",
-    "vite-plugin-pwa": "^2.0.0"
+    "vite-plugin-pwa": "^2.0.0",
+    "vitest": "^5.0.5"
   }
 }

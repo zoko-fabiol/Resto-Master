@@ -104,11 +104,21 @@ export const TablesView: React.FC<TablesViewProps> = ({ onOpenOrder, onPayOrder,
 
   // View Mode: 'plan' (2D Vectoriel), 'grille' (Tactile Grid), 'commandes' (Active multi-orders)
   const [viewMode, setViewMode] = useState<'plan' | 'grille' | 'commandes'>('plan');
-  const [selectedZoneId, setSelectedZoneId] = useState<string | 'all'>('all');
+  const [selectedZoneId, setSelectedZoneId] = useState<string | 'all'>(() => {
+    return zones[0]?.id || 'all';
+  });
 
   // Mode Édition du plan vs Mode Service (G1)
   const [isEditMode, setIsEditMode] = useState(false);
   const [snapToGrid, setSnapToGrid] = useState(true);
+  const [snapToMagnet, setSnapToMagnet] = useState(true);
+
+  // Synchroniser sur la 1ère salle disponible si initialisé avant chargement des zones (P-07)
+  useEffect(() => {
+    if (selectedZoneId === 'all' && zones.length > 0) {
+      setSelectedZoneId(zones[0].id);
+    }
+  }, [zones, selectedZoneId]);
 
   // Local draft states for non-destructive vector layout manipulation (G2)
   const [draftTables, setDraftTables] = useState<RestaurantTable[]>(tables);
@@ -508,8 +518,22 @@ export const TablesView: React.FC<TablesViewProps> = ({ onOpenOrder, onPayOrder,
               }`}
               title="Activer l'alignement magnétique sur la grille (10 unités)"
             >
-              <Magnet className="w-3.5 h-3.5" />
+              <Grid className="w-3.5 h-3.5" />
               <span>Grille 10px : {snapToGrid ? 'ON' : 'OFF'}</span>
+            </button>
+
+            {/* Magnetic Neighbor Snapping Toggle (P-04) */}
+            <button
+              onClick={() => setSnapToMagnet(!snapToMagnet)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                snapToMagnet
+                  ? 'bg-amber-600 text-white shadow-xs'
+                  : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-100'
+              }`}
+              title="Activer l'aimant d'alignement automatique entre tables proches"
+            >
+              <Magnet className="w-3.5 h-3.5" />
+              <span>Aimant : {snapToMagnet ? 'ON' : 'OFF'}</span>
             </button>
 
             {/* Undo / Redo buttons (G11) */}
@@ -634,6 +658,7 @@ export const TablesView: React.FC<TablesViewProps> = ({ onOpenOrder, onPayOrder,
           activeZone={activeZoneObj}
           isEditMode={isEditMode}
           snapToGrid={snapToGrid}
+          snapToMagnet={snapToMagnet}
           selectedTableId={selectedTableId}
           selectedDecorId={selectedDecorId}
           onSelectTable={(table) => {
