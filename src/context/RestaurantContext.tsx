@@ -244,6 +244,7 @@ interface RestaurantContextType {
   clearSyncError: () => void;
   markNotificationRead: (id: string) => void;
   markAllNotificationsRead: () => void;
+  deleteNotification: (id: string) => void;
   addAuditLog: (action: string, module: AuditLog['module'], details: string, entityId?: string) => void;
   resetToDemoData: () => void;
 
@@ -366,6 +367,8 @@ interface RestaurantContextType {
   applyConfigProfile: (profile: ConfigurationProfileType) => Promise<void>;
   addOutlet: (outlet: Omit<Outlet, 'id'>) => Promise<void>;
   addTerminal: (terminal: Omit<Terminal, 'id'>) => Promise<void>;
+  updateTerminal: (id: string, updates: Partial<Terminal>) => Promise<void>;
+  deleteTerminal: (id: string) => Promise<void>;
   addPeripheral: (periph: Omit<Peripheral, 'id'>) => Promise<void>;
   updatePeripheral: (id: string, updates: Partial<Peripheral>) => Promise<void>;
   deletePeripheral: (id: string) => Promise<void>;
@@ -409,6 +412,14 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       return item ? JSON.parse(item) : fallback;
     } catch {
       return fallback;
+    }
+  };
+
+  const saveState = <T,>(key: string, value: T): void => {
+    try {
+      localStorage.setItem(`restomaster_${key}`, JSON.stringify(value));
+    } catch {
+      // ignore
     }
   };
 
@@ -750,6 +761,9 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         actionUrl,
       };
       setNotifications((prev) => [newNotif, ...prev]);
+      configFirestoreService.saveNotification(newNotif).catch((err) => {
+        console.warn('Erreur écriture notification Firestore:', err);
+      });
     },
     []
   );
@@ -776,14 +790,53 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     });
   }, [stockItems, notifications, addNotification]);
 
-  // Update Settings
+  // Historique centralisé des modifications de configuration (Audit Trail)
+  const logConfigHistory = useCallback(
+    async (
+      category: string,
+      action: string,
+      detail: string,
+      oldValue?: string,
+      newValue?: string,
+      featureKey?: string
+    ) => {
+      try {
+        const historyItem: ConfigurationHistoryItem = {
+          id: generateSecureId('cfghist'),
+          timestamp: new Date().toISOString(),
+          user: currentUser?.name || 'Administrateur',
+          category,
+          action,
+          detail,
+          oldValue,
+          newValue,
+          featureKey,
+        };
+        setConfigHistory((prev) => [historyItem, ...prev.slice(0, 99)]);
+        await configFirestoreService.appendConfigHistory(historyItem);
+      } catch (err) {
+        console.warn('Erreur écriture historique configuration Firestore:', err);
+      }
+    },
+    [currentUser]
+  );
+
   // Update Settings
   const updateSettings = async (newSettings: Partial<RestaurantSettings>) => {
     const updated = { ...settings, ...newSettings };
     setSettings(updated);
     try {
       await restaurantFirestoreService.saveSettings(updated);
-    } catch {}
+      await logConfigHistory('Général', 'Mise à jour paramètres', 'Modification configuration générale');
+      showToast({
+        title: 'Paramètres enregistrés',
+        message: 'Configuration générale enregistrée avec succès.',
+        type: 'success',
+      });
+    } catch (err) {
+      handleSyncError('Paramètres restaurant', err);
+      throw err;
+    }
     addAuditLog('Mise à jour paramètres restaurant', 'Paramètres', 'Modification configuration générale');
   };
 
@@ -2394,12 +2447,30 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   // Notifications helpers
   const markNotificationRead = (id: string) => {
     setNotifications((prev) =>
-      prev.map((n) => (n.id === id ? { ...n, read: true } : n))
+      prev.map((n) => {
+        if (n.id === id) {
+          const updated = { ...n, read: true };
+          configFirestoreService.saveNotification(updated).catch(() => {});
+          return updated;
+        }
+        return n;
+      })
     );
   };
 
   const markAllNotificationsRead = () => {
-    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+    setNotifications((prev) => {
+      const updated = prev.map((n) => ({ ...n, read: true }));
+      updated.forEach((n) => {
+        configFirestoreService.saveNotification(n).catch(() => {});
+      });
+      return updated;
+    });
+  };
+
+  const deleteNotification = (id: string) => {
+    setNotifications((prev) => prev.filter((n) => n.id !== id));
+    configFirestoreService.deleteNotification(id).catch(() => {});
   };
 
   const unreadNotifsCount = notifications.filter((n) => !n.read).length;
@@ -2749,15 +2820,12 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         : f
     );
     setFeatures(updated);
-    try {
-      localStorage.setItem('restomaster_features', JSON.stringify(updated));
-    } catch {}
-    await configFirestoreService.saveFeatures(updated);
+    saveState('features', updated);
 
     const historyItem: ConfigurationHistoryItem = {
       id: generateSecureId('hist'),
       timestamp: new Date().toISOString(),
-      user: currentUser.name,
+      user: currentUser?.name || 'Administrateur',
       action: status === 'ACTIVÉ' ? 'ACTIVATION' : status === 'SUSPENDU' ? 'SUSPENSION' : 'DÉSACTIVATION',
       category: targetFeat.category,
       featureKey: targetFeat.id,
@@ -2768,10 +2836,23 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
     setConfigHistory((prev) => [historyItem, ...prev]);
 
+    try {
+      await configFirestoreService.saveFeatures(updated);
+      await configFirestoreService.appendConfigHistory(historyItem);
+      showToast({
+        title: 'Fonctionnalité mise à jour',
+        message: `La fonctionnalité "${targetFeat.name}" est désormais ${status.toLowerCase()}.`,
+        type: 'success',
+      });
+    } catch (err) {
+      handleSyncError('Mise à jour fonctionnalité', err);
+      throw err;
+    }
+
     addAuditLog(
       'Modification fonctionnalité',
       'Paramètres',
-      `Fonctionnalité "${targetFeat.name}" -> ${status} par ${currentUser.name}`
+      `Fonctionnalité "${targetFeat.name}" -> ${status} par ${currentUser?.name || 'Administrateur'}`
     );
   };
 
@@ -2785,15 +2866,32 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         : f
     );
     setFeatures(updated);
+    saveState('features', updated);
+
     try {
-      localStorage.setItem('restomaster_features', JSON.stringify(updated));
-    } catch {}
-    await configFirestoreService.saveFeatures(updated);
+      await configFirestoreService.saveFeatures(updated);
+      await logConfigHistory(
+        'Fonctionnalités',
+        'Configuration',
+        `Options de "${targetFeat.name}" mises à jour`,
+        undefined,
+        JSON.stringify(config),
+        targetFeat.id
+      );
+      showToast({
+        title: 'Configuration enregistrée',
+        message: `Les options de "${targetFeat.name}" ont été mises à jour.`,
+        type: 'success',
+      });
+    } catch (err) {
+      handleSyncError('Configuration fonctionnalité', err);
+      throw err;
+    }
 
     addAuditLog(
       'Configuration fonctionnalité',
       'Paramètres',
-      `Options de "${targetFeat.name}" mises à jour par ${currentUser.name}`
+      `Options de "${targetFeat.name}" mises à jour par ${currentUser?.name || 'Administrateur'}`
     );
   };
 
@@ -2803,20 +2901,37 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     action: PermissionAction,
     allowed: boolean
   ) => {
-    setRolePermissions((prev) => {
-      const currentRolePerms = (prev as any)[role] || {};
-      const currentModulePerms = currentRolePerms[module] || {};
-      return {
-        ...prev,
-        [role]: {
-          ...currentRolePerms,
-          [module]: {
-            ...currentModulePerms,
-            [action]: allowed,
-          },
+    const currentRolePerms = (rolePermissions as any)[role] || {};
+    const currentModulePerms = currentRolePerms[module] || {};
+    const updated: RolePermissionMatrix = {
+      ...rolePermissions,
+      [role]: {
+        ...currentRolePerms,
+        [module]: {
+          ...currentModulePerms,
+          [action]: allowed,
         },
-      };
-    });
+      },
+    };
+    setRolePermissions(updated);
+    saveState('rolePermissions', updated);
+
+    try {
+      await configFirestoreService.saveRolePermissions(updated);
+      await logConfigHistory(
+        'Permissions',
+        'Mise à jour RBAC',
+        `Rôle ${role} -> ${module}.${action} = ${allowed ? 'AUTORISÉ' : 'REFUSÉ'}`
+      );
+      showToast({
+        title: 'Permissions enregistrées',
+        message: `Droits d'accès mis à jour pour le rôle ${role}.`,
+        type: 'success',
+      });
+    } catch (err) {
+      handleSyncError('Permissions RBAC', err);
+      throw err;
+    }
 
     addAuditLog(
       'Modification permissions RBAC',
@@ -2826,13 +2941,32 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   };
 
   const updateRoleLimits = async (role: UserRole, limits: Partial<RoleLimits>) => {
-    setRoleLimits((prev) => ({
-      ...prev,
+    const updated = {
+      ...roleLimits,
       [role]: {
-        ...prev[role],
+        ...roleLimits[role],
         ...limits,
       },
-    }));
+    };
+    setRoleLimits(updated);
+    saveState('roleLimits', updated);
+
+    try {
+      await configFirestoreService.saveRoleLimits(updated);
+      await logConfigHistory(
+        'Limites',
+        'Mise à jour plafonds',
+        `Plafonds & approbations mis à jour pour ${role}`
+      );
+      showToast({
+        title: 'Limites enregistrées',
+        message: `Les plafonds d'autorisation pour le rôle ${role} ont été enregistrés.`,
+        type: 'success',
+      });
+    } catch (err) {
+      handleSyncError('Limites de rôle', err);
+      throw err;
+    }
 
     addAuditLog(
       'Modification limites de rôle',
@@ -2845,25 +2979,18 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     // 1. Mettre à jour et persister les fonctionnalités modulaires
     const updatedFeatures = FeatureService.applyProfile(features, profile);
     setFeatures(updatedFeatures);
-    try {
-      localStorage.setItem('restomaster_features', JSON.stringify(updatedFeatures));
-    } catch {}
-    await configFirestoreService.saveFeatures(updatedFeatures);
+    saveState('features', updatedFeatures);
 
     // 2. Mettre à jour et persister les règles de visibilité des modules
     const profileRules = FeatureService.getOperationRulesForProfile(profile);
-    setOperationRules((prev) => {
-      const next = { ...prev, ...profileRules };
-      try {
-        localStorage.setItem('restomaster_operations_rules', JSON.stringify(next));
-      } catch {}
-      return next;
-    });
+    const nextRules = { ...operationRules, ...profileRules };
+    setOperationRules(nextRules);
+    saveState('operations_rules', nextRules);
 
     const historyItem: ConfigurationHistoryItem = {
       id: generateSecureId('hist'),
       timestamp: new Date().toISOString(),
-      user: currentUser.name,
+      user: currentUser?.name || 'Administrateur',
       action: 'PROFIL_CONFIGURATION',
       category: 'operations',
       detail: `Application du profil prédéfini "${profile.replace('_', ' ').toUpperCase()}"`,
@@ -2871,10 +2998,24 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     };
     setConfigHistory((prev) => [historyItem, ...prev]);
 
+    try {
+      await configFirestoreService.saveFeatures(updatedFeatures);
+      await configFirestoreService.saveOperationRules(nextRules);
+      await configFirestoreService.appendConfigHistory(historyItem);
+      showToast({
+        title: 'Profil appliqué',
+        message: `Le profil "${profile.replace('_', ' ').toUpperCase()}" a été déployé avec succès.`,
+        type: 'success',
+      });
+    } catch (err) {
+      handleSyncError('Profil de configuration', err);
+      throw err;
+    }
+
     addAuditLog(
       'Application profil configuration',
       'Paramètres',
-      `Profil ${profile} déployé par ${currentUser.name}`
+      `Profil ${profile} déployé par ${currentUser?.name || 'Administrateur'}`
     );
   };
 
@@ -2904,15 +3045,29 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     return `${rand.slice(0, 4)}-${rand.slice(4, 8)}`;
   };
 
-  const addTerminal = async (terminal: Omit<Terminal, 'id'>) => {
+  const addTerminal = async (terminalData: Omit<Terminal, 'id'>) => {
     const code = `TRM-${generateCsprngPairingToken()}`;
     const newTerm: Terminal = {
-      ...terminal,
+      ...terminalData,
       id: generateSecureId('term'),
-      pairingCode: terminal.pairingCode || code,
-      pairingExpiresAt: terminal.pairingExpiresAt || new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+      pairingCode: terminalData.pairingCode || code,
+      pairingExpiresAt: terminalData.pairingExpiresAt || new Date(Date.now() + 15 * 60 * 1000).toISOString(),
+      active: terminalData.active ?? true,
+      allowedFeatures: terminalData.allowedFeatures || ['all'],
     };
     setTerminals((prev) => [...prev, newTerm]);
+    try {
+      await configFirestoreService.saveTerminal(newTerm);
+      await logConfigHistory('Terminaux', 'Ajout terminal', `Terminal ${newTerm.name} (${newTerm.type}) configuré`);
+      showToast({
+        title: 'Terminal créé',
+        message: `Le terminal ${newTerm.name} a été enregistré sur le serveur.`,
+        type: 'success',
+      });
+    } catch (err) {
+      handleSyncError('Création terminal', err);
+      throw err;
+    }
     addAuditLog(
       'Création terminal',
       'Paramètres',
@@ -2920,19 +3075,111 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     );
   };
 
-  const generateTerminalPairingCode = async (terminalId: string): Promise<string> => {
-    const code = `TRM-${generateCsprngPairingToken()}`;
-    const expires = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+  const updateTerminal = async (id: string, updates: Partial<Terminal>) => {
+    const existing = terminals.find((t) => t.id === id);
+    if (!existing) return;
+    const updated: Terminal = { ...existing, ...updates };
+    setTerminals((prev) => prev.map((t) => (t.id === id ? updated : t)));
+    try {
+      await configFirestoreService.saveTerminal(updated);
+      await logConfigHistory('Terminaux', 'Modification terminal', `Terminal ${updated.name} mis à jour`);
+      showToast({
+        title: 'Terminal mis à jour',
+        message: `Le terminal ${updated.name} a été synchronisé.`,
+        type: 'success',
+      });
+    } catch (err) {
+      handleSyncError('Mise à jour terminal', err);
+      throw err;
+    }
+    addAuditLog('Modification terminal', 'Paramètres', `Terminal ${updated.name} mis à jour`);
+  };
 
-    setTerminals((prev) =>
-      prev.map((t) => (t.id === terminalId ? { ...t, pairingCode: code, pairingExpiresAt: expires } : t))
-    );
-    addAuditLog('Code Appairage Généré (CSPRNG)', 'Paramètres', `Code ${code} généré pour terminal ${terminalId}`);
+  const deleteTerminal = async (id: string) => {
+    const target = terminals.find((t) => t.id === id);
+    setTerminals((prev) => prev.filter((t) => t.id !== id));
+    try {
+      await configFirestoreService.deleteTerminal(id);
+      await logConfigHistory('Terminaux', 'Suppression terminal', `Terminal ${target?.name || id} supprimé`);
+      showToast({
+        title: 'Terminal supprimé',
+        message: `Le terminal ${target?.name || id} a été retiré.`,
+        type: 'info',
+      });
+    } catch (err) {
+      handleSyncError('Suppression terminal', err);
+      throw err;
+    }
+    addAuditLog('Suppression terminal', 'Paramètres', `Terminal supprimé : ${target?.name || id}`);
+  };
+
+  const generateTerminalPairingCode = async (terminalId: string): Promise<string> => {
+    try {
+      const res = await cloudFunctionsService.generatePairingCode(terminalId);
+      if (res && res.pairingCode) {
+        setTerminals((prev) =>
+          prev.map((t) =>
+            t.id === terminalId ? { ...t, pairingCode: res.pairingCode, pairingExpiresAt: res.expiresAt } : t
+          )
+        );
+        addAuditLog('Code Appairage Généré (Cloud Function)', 'Paramètres', `Code ${res.pairingCode} généré pour terminal ${terminalId}`);
+        return res.pairingCode;
+      }
+    } catch (err) {
+      console.warn('Fallback direct pour generateTerminalPairingCode:', err);
+    }
+
+    const code = `TRM-${generateCsprngPairingToken()}`;
+    const expires = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+    const existing = terminals.find((t) => t.id === terminalId);
+    if (existing) {
+      const updated: Terminal = { ...existing, pairingCode: code, pairingExpiresAt: expires };
+      setTerminals((prev) => prev.map((t) => (t.id === terminalId ? updated : t)));
+      try {
+        await configFirestoreService.saveTerminal(updated);
+      } catch (err) {
+        console.warn('Erreur sauvegarde terminal Firestore:', err);
+      }
+    }
+    addAuditLog('Code Appairage Généré (Local)', 'Paramètres', `Code ${code} généré pour terminal ${terminalId}`);
     return code;
   };
 
   const pairDeviceWithCode = async (pairingCode: string): Promise<DeviceProfile | null> => {
     const clean = pairingCode.trim().toUpperCase().replace(/[\s-]+/g, '');
+
+    // 1. Tenter l'appairage via la Cloud Function atomique
+    try {
+      const res = await cloudFunctionsService.pairDevice({ pairingCode: clean });
+      if (res && res.terminal) {
+        const t = res.terminal;
+        const profile: DeviceProfile = {
+          terminalId: t.terminalId,
+          terminalName: t.terminalName,
+          type: t.type as any,
+          outletId: t.outletId,
+          assignedRole: t.assignedRole,
+          assignedTableId: t.assignedTableId,
+          assignedZone: t.assignedZone,
+          kdsStation: t.kdsStation as any,
+          pairedAt: t.pairedAt,
+          pairingCode: t.pairingCode,
+        };
+        try {
+          localStorage.setItem('restomaster_device_profile', JSON.stringify(profile));
+          if (profile.assignedTableId) {
+            localStorage.setItem('restomaster_tablet_table_id', profile.assignedTableId);
+          }
+        } catch {}
+        setCurrentDeviceProfile(profile);
+        addAuditLog('Appairage Réussi (Cloud Function)', 'Paramètres', `Appareil appairé au profil "${t.terminalName}"`);
+        return profile;
+      }
+    } catch (err) {
+      console.warn('Fallback direct pour pairDeviceWithCode:', err);
+    }
+
+    // 2. Fallback Firestore direct
     const found = terminals.find((t) => {
       if (!t.pairingCode) return false;
       const cleanTermCode = t.pairingCode.toUpperCase().replace(/[\s-]+/g, '');
@@ -2950,6 +3197,13 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     }
 
     const now = new Date().toISOString();
+    const updatedTerm: Terminal = { ...found, pairedAt: now, active: true };
+    try {
+      await configFirestoreService.saveTerminal(updatedTerm);
+    } catch (err) {
+      console.warn('Erreur mise à jour appairage terminal Firestore:', err);
+    }
+
     const profile: DeviceProfile = {
       terminalId: found.id,
       terminalName: found.name,
@@ -2968,16 +3222,12 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       if (profile.assignedTableId) {
         localStorage.setItem('restomaster_tablet_table_id', profile.assignedTableId);
       }
-    } catch {
-      // ignore
-    }
+    } catch {}
 
-    setTerminals((prev) =>
-      prev.map((t) => (t.id === found.id ? { ...t, pairedAt: now } : t))
-    );
+    setTerminals((prev) => prev.map((t) => (t.id === found.id ? updatedTerm : t)));
     setCurrentDeviceProfile(profile);
     addAuditLog(
-      'Appairage Réussi',
+      'Appairage Réussi (Direct)',
       'Paramètres',
       `Appareil appairé au profil "${found.name}" (${found.type})`
     );
@@ -3016,6 +3266,18 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       id: generateSecureId('periph'),
     };
     setPeripherals((prev) => [...prev, newP]);
+    try {
+      await configFirestoreService.savePeripheral(newP);
+      await logConfigHistory('Périphériques', 'Ajout périphérique', `Périphérique ${newP.name} (${newP.type}) configuré`);
+      showToast({
+        title: 'Périphérique ajouté',
+        message: `Le périphérique ${newP.name} a été enregistré.`,
+        type: 'success',
+      });
+    } catch (err) {
+      handleSyncError('Ajout périphérique', err);
+      throw err;
+    }
     addAuditLog(
       'Ajout périphérique',
       'Paramètres',
@@ -3024,19 +3286,59 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   };
 
   const updatePeripheral = async (id: string, updates: Partial<Peripheral>) => {
-    setPeripherals((prev) =>
-      prev.map((p) => (p.id === id ? { ...p, ...updates } : p))
-    );
+    const existing = peripherals.find((p) => p.id === id);
+    if (!existing) return;
+    const updated: Peripheral = { ...existing, ...updates };
+    setPeripherals((prev) => prev.map((p) => (p.id === id ? updated : p)));
+    try {
+      await configFirestoreService.savePeripheral(updated);
+      await logConfigHistory('Périphériques', 'Modification périphérique', `Périphérique ${updated.name} mis à jour`);
+      showToast({
+        title: 'Périphérique mis à jour',
+        message: `Les modifications pour ${updated.name} ont été enregistrées.`,
+        type: 'success',
+      });
+    } catch (err) {
+      handleSyncError('Mise à jour périphérique', err);
+      throw err;
+    }
     addAuditLog('Modification imprimante', 'Paramètres', `Périphérique mis à jour ${id}`);
   };
 
   const deletePeripheral = async (id: string) => {
+    const target = peripherals.find((p) => p.id === id);
     setPeripherals((prev) => prev.filter((p) => p.id !== id));
+    try {
+      await configFirestoreService.deletePeripheral(id);
+      await logConfigHistory('Périphériques', 'Suppression périphérique', `Périphérique ${target?.name || id} supprimé`);
+      showToast({
+        title: 'Périphérique supprimé',
+        message: `Le périphérique ${target?.name || id} a été supprimé.`,
+        type: 'info',
+      });
+    } catch (err) {
+      handleSyncError('Suppression périphérique', err);
+      throw err;
+    }
     addAuditLog('Suppression imprimante', 'Paramètres', `Périphérique supprimé ${id}`);
   };
 
   const updatePrinterSettings = async (settingsUpdates: Partial<PrinterSettings>) => {
-    setPrinterSettings((prev) => ({ ...prev, ...settingsUpdates }));
+    const next = { ...printerSettings, ...settingsUpdates };
+    setPrinterSettings(next);
+    saveState('printerSettings', next);
+    try {
+      await configFirestoreService.savePrinterSettings(next);
+      await logConfigHistory('Imprimantes', 'Mise à jour paramètres impression', 'Options d\'automatisation d\'impression enregistrées');
+      showToast({
+        title: 'Impression configurée',
+        message: 'Les paramètres d\'impression thermique ont été enregistrés.',
+        type: 'success',
+      });
+    } catch (err) {
+      handleSyncError('Paramètres d\'impression', err);
+      throw err;
+    }
     addAuditLog('Configuration impression', 'Paramètres', 'Options d\'automatisation d\'impression mises à jour');
   };
 
@@ -3058,13 +3360,25 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   );
 
   const updateOperationRules = async (updates: Partial<OperationRules>) => {
-    setOperationRules((prev) => {
-      const next = { ...prev, ...updates } as unknown as OperationRules;
-      try {
-        localStorage.setItem('restomaster_operations_rules', JSON.stringify(next));
-      } catch {}
-      return next;
-    });
+    const next = { ...operationRules, ...updates } as unknown as OperationRules;
+    setOperationRules(next);
+    saveState('operations_rules', next);
+    try {
+      await configFirestoreService.saveOperationRules(next);
+      await logConfigHistory(
+        'Règles opérationnelles',
+        'Mise à jour règles',
+        `${Object.keys(updates).length} règle(s) opérationnelle(s) mise(s) à jour`
+      );
+      showToast({
+        title: 'Règles enregistrées',
+        message: 'Les règles opérationnelles ont été enregistrées sur le serveur.',
+        type: 'success',
+      });
+    } catch (err) {
+      handleSyncError('Règles opérationnelles', err);
+      throw err;
+    }
     addAuditLog(
       'Mise à jour règles opérationnelles',
       'Paramètres',
@@ -3410,6 +3724,7 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         clearSyncError,
         markNotificationRead,
         markAllNotificationsRead,
+        deleteNotification,
         addAuditLog,
         resetToDemoData,
 
@@ -3438,6 +3753,8 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         applyConfigProfile,
         addOutlet,
         addTerminal,
+        updateTerminal,
+        deleteTerminal,
         addPeripheral,
         updatePeripheral,
         deletePeripheral,

@@ -7,6 +7,7 @@ import { handleCancelOrder, handleVoidItem } from './modules/cancellations.js';
 import { handleOpenCashSession, handleCloseCashSession } from './modules/cash.js';
 import { handleIssueInvoice } from './modules/invoices.js';
 import { handleAppendAuditLog } from './modules/audit.js';
+import { handleGeneratePairingCode, handlePairDevice } from './modules/terminals.js';
 
 const FUNCTION_OPTIONS = {
   region: 'europe-west1',
@@ -43,3 +44,8 @@ export const issueInvoice = onCall(FUNCTION_OPTIONS, handleIssueInvoice);
 
 // 8. Journal d'Audit Immuable
 export const appendAuditLog = onCall(FUNCTION_OPTIONS, handleAppendAuditLog);
+
+// 9. Appairage Sécurisé des Terminaux
+export const generatePairingCode = onCall(FUNCTION_OPTIONS, handleGeneratePairingCode);
+export const pairDevice = onCall(FUNCTION_OPTIONS, handlePairDevice);
+

@@ -201,6 +201,33 @@ export class CloudFunctionsService {
     const res = await fn(params);
     return res.data as { success: boolean; logId: string; chainHash: string };
   }
+
+  // 9. Appairage Sécurisé des Équipements
+  async generatePairingCode(terminalId: string) {
+    const fn = httpsCallable(functions, 'generatePairingCode');
+    const res = await fn({ terminalId });
+    return res.data as { success: boolean; terminalId: string; pairingCode: string; expiresAt: string };
+  }
+
+  async pairDevice(params: { pairingCode: string; deviceName?: string; ipAddress?: string }) {
+    const fn = httpsCallable(functions, 'pairDevice');
+    const res = await fn(params);
+    return res.data as {
+      success: boolean;
+      terminal: {
+        terminalId: string;
+        terminalName: string;
+        type: string;
+        outletId: string;
+        assignedRole?: UserRole;
+        assignedTableId?: string;
+        assignedZone?: string;
+        kdsStation?: string;
+        pairedAt: string;
+        pairingCode: string;
+      };
+    };
+  }
 }
 
 export const cloudFunctionsService = new CloudFunctionsService();

@@ -28,7 +28,8 @@ export const configFirestoreService = {
       const docRef = doc(db, 'system_config', 'features');
       await setDoc(docRef, { items: features, updatedAt: new Date().toISOString() }, { merge: true });
     } catch (err) {
-      console.warn('Erreur saveFeatures Firestore:', err);
+      console.error('Erreur saveFeatures Firestore:', err);
+      throw err;
     }
   },
 
@@ -42,7 +43,9 @@ export const configFirestoreService = {
             callback(snapshot.data().items);
           }
         },
-        () => {}
+        (err) => {
+          console.warn('Abonnement features Firestore interrompu:', err);
+        }
       );
     } catch {
       return () => {};
@@ -55,7 +58,8 @@ export const configFirestoreService = {
       const docRef = doc(db, 'terminals', terminal.id);
       await setDoc(docRef, terminal, { merge: true });
     } catch (err) {
-      console.warn('Erreur saveTerminal Firestore:', err);
+      console.error('Erreur saveTerminal Firestore:', err);
+      throw err;
     }
   },
 
@@ -63,7 +67,8 @@ export const configFirestoreService = {
     try {
       await deleteDoc(doc(db, 'terminals', terminalId));
     } catch (err) {
-      console.warn('Erreur deleteTerminal Firestore:', err);
+      console.error('Erreur deleteTerminal Firestore:', err);
+      throw err;
     }
   },
 
@@ -77,7 +82,9 @@ export const configFirestoreService = {
             callback(snapshot.docs.map((d) => d.data() as Terminal));
           }
         },
-        () => {}
+        (err) => {
+          console.warn('Abonnement terminals Firestore interrompu:', err);
+        }
       );
     } catch {
       return () => {};
@@ -90,7 +97,17 @@ export const configFirestoreService = {
       const docRef = doc(db, 'peripherals', peripheral.id);
       await setDoc(docRef, peripheral, { merge: true });
     } catch (err) {
-      console.warn('Erreur savePeripheral Firestore:', err);
+      console.error('Erreur savePeripheral Firestore:', err);
+      throw err;
+    }
+  },
+
+  async deletePeripheral(peripheralId: string): Promise<void> {
+    try {
+      await deleteDoc(doc(db, 'peripherals', peripheralId));
+    } catch (err) {
+      console.error('Erreur deletePeripheral Firestore:', err);
+      throw err;
     }
   },
 
@@ -104,7 +121,9 @@ export const configFirestoreService = {
             callback(snapshot.docs.map((d) => d.data() as Peripheral));
           }
         },
-        () => {}
+        (err) => {
+          console.warn('Abonnement peripherals Firestore interrompu:', err);
+        }
       );
     } catch {
       return () => {};
@@ -117,7 +136,8 @@ export const configFirestoreService = {
       const docRef = doc(db, 'system_config', 'role_permissions');
       await setDoc(docRef, { matrix, updatedAt: new Date().toISOString() }, { merge: true });
     } catch (err) {
-      console.warn('Erreur saveRolePermissions Firestore:', err);
+      console.error('Erreur saveRolePermissions Firestore:', err);
+      throw err;
     }
   },
 
@@ -131,7 +151,9 @@ export const configFirestoreService = {
             callback(snapshot.data().matrix);
           }
         },
-        () => {}
+        (err) => {
+          console.warn('Abonnement role_permissions Firestore interrompu:', err);
+        }
       );
     } catch {
       return () => {};
@@ -144,7 +166,8 @@ export const configFirestoreService = {
       const docRef = doc(db, 'system_config', 'role_limits');
       await setDoc(docRef, { limits, updatedAt: new Date().toISOString() }, { merge: true });
     } catch (err) {
-      console.warn('Erreur saveRoleLimits Firestore:', err);
+      console.error('Erreur saveRoleLimits Firestore:', err);
+      throw err;
     }
   },
 
@@ -158,7 +181,9 @@ export const configFirestoreService = {
             callback(snapshot.data().limits);
           }
         },
-        () => {}
+        (err) => {
+          console.warn('Abonnement role_limits Firestore interrompu:', err);
+        }
       );
     } catch {
       return () => {};
@@ -171,7 +196,8 @@ export const configFirestoreService = {
       const docRef = doc(db, 'system_config', 'printer_settings');
       await setDoc(docRef, { settings, updatedAt: new Date().toISOString() }, { merge: true });
     } catch (err) {
-      console.warn('Erreur savePrinterSettings Firestore:', err);
+      console.error('Erreur savePrinterSettings Firestore:', err);
+      throw err;
     }
   },
 
@@ -185,7 +211,9 @@ export const configFirestoreService = {
             callback(snapshot.data().settings);
           }
         },
-        () => {}
+        (err) => {
+          console.warn('Abonnement printer_settings Firestore interrompu:', err);
+        }
       );
     } catch {
       return () => {};
@@ -198,7 +226,8 @@ export const configFirestoreService = {
       const docRef = doc(db, 'system_config', 'operation_rules');
       await setDoc(docRef, { rules, updatedAt: new Date().toISOString() }, { merge: true });
     } catch (err) {
-      console.warn('Erreur saveOperationRules Firestore:', err);
+      console.error('Erreur saveOperationRules Firestore:', err);
+      throw err;
     }
   },
 
@@ -212,7 +241,9 @@ export const configFirestoreService = {
             callback(snapshot.data().rules);
           }
         },
-        () => {}
+        (err) => {
+          console.warn('Abonnement operation_rules Firestore interrompu:', err);
+        }
       );
     } catch {
       return () => {};
@@ -225,7 +256,8 @@ export const configFirestoreService = {
       const docRef = doc(db, 'config_history', item.id);
       await setDoc(docRef, item, { merge: true });
     } catch (err) {
-      console.warn('Erreur appendConfigHistory Firestore:', err);
+      console.error('Erreur appendConfigHistory Firestore:', err);
+      throw err;
     }
   },
 
@@ -240,7 +272,9 @@ export const configFirestoreService = {
             callback(snapshot.docs.map((d) => d.data() as ConfigurationHistoryItem));
           }
         },
-        () => {}
+        (err) => {
+          console.warn('Abonnement config_history Firestore interrompu:', err);
+        }
       );
     } catch {
       return () => {};
@@ -254,7 +288,8 @@ export const configFirestoreService = {
       const clean = JSON.parse(JSON.stringify(log));
       await setDoc(docRef, clean, { merge: true });
     } catch (err) {
-      console.warn('Erreur appendAuditLog Firestore:', err);
+      console.error('Erreur appendAuditLog Firestore:', err);
+      throw err;
     }
   },
 
@@ -269,7 +304,9 @@ export const configFirestoreService = {
             callback(snapshot.docs.map((d) => d.data() as AuditLog));
           }
         },
-        () => {}
+        (err) => {
+          console.warn('Abonnement audit_logs Firestore interrompu:', err);
+        }
       );
     } catch {
       return () => {};
@@ -282,7 +319,8 @@ export const configFirestoreService = {
       const docRef = doc(db, 'notifications', notif.id);
       await setDoc(docRef, notif, { merge: true });
     } catch (err) {
-      console.warn('Erreur saveNotification Firestore:', err);
+      console.error('Erreur saveNotification Firestore:', err);
+      throw err;
     }
   },
 
@@ -290,7 +328,8 @@ export const configFirestoreService = {
     try {
       await deleteDoc(doc(db, 'notifications', notifId));
     } catch (err) {
-      console.warn('Erreur deleteNotification Firestore:', err);
+      console.error('Erreur deleteNotification Firestore:', err);
+      throw err;
     }
   },
 
@@ -305,7 +344,9 @@ export const configFirestoreService = {
             callback(snapshot.docs.map((d) => d.data() as NotificationItem));
           }
         },
-        () => {}
+        (err) => {
+          console.warn('Abonnement notifications Firestore interrompu:', err);
+        }
       );
     } catch {
       return () => {};

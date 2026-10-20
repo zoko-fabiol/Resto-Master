@@ -94,19 +94,20 @@ service cloud.firestore {
 
     match /settings/{docId} {
       allow read: if isAuthenticated();
-      allow write: if isDirection();
+      allow write: if isDirection() || isManager();
     }
 
     match /system_config/{configId} {
       allow read: if isAuthenticated();
-      allow write: if isDirection();
+      allow write: if isDirection() || isManager();
     }
 
     match /config_history/{historyId} {
-      allow read: if isDirection();
-      allow create: if isDirection();
+      allow read: if isDirection() || isManager() || isAuditeur();
+      allow create: if isDirection() || isManager();
       allow update, delete: if false;
     }
+
 
     // =========================================================================
     // 3. UTILISATEURS & PROFILS (RBAC STRICT)
