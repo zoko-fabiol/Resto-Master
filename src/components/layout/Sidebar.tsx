@@ -346,16 +346,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <div className="flex items-center gap-1">
               <button
                 onClick={() => setCollapsed(true)}
-                className="hidden lg:flex text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-slate-800 transition-colors"
+                className="hidden lg:flex text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-slate-800 transition-colors cursor-pointer"
                 title="Replier la barre latérale"
+                aria-label="Replier la barre latérale"
               >
-                <PanelLeftClose className="w-4 h-4" />
+                <PanelLeftClose className="w-4 h-4" aria-hidden="true" />
               </button>
               <button
                 onClick={() => setMobileOpen(false)}
-                className="lg:hidden text-slate-400 hover:text-white p-1 rounded-md"
+                className="lg:hidden text-slate-400 hover:text-white p-1 rounded-md cursor-pointer"
+                aria-label="Fermer la barre latérale"
               >
-                <X className="w-5 h-5" />
+                <X className="w-5 h-5" aria-hidden="true" />
               </button>
             </div>
           )}
@@ -386,10 +388,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <div className="hidden lg:flex justify-center p-2 border-b border-slate-800/60">
             <button
               onClick={() => setCollapsed(false)}
-              className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+              className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
               title="Agrandir la barre latérale"
+              aria-label="Agrandir la barre latérale"
             >
-              <PanelLeftOpen className="w-4 h-4" />
+              <PanelLeftOpen className="w-4 h-4" aria-hidden="true" />
             </button>
           </div>
         )}
@@ -432,9 +435,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         setMobileOpen(false);
                       }}
                       title={collapsed ? item.label : undefined}
+                      aria-label={item.label}
+                      aria-current={isActive ? 'page' : undefined}
                       className={`w-full flex items-center ${
                         collapsed ? 'justify-center p-2.5' : 'justify-between px-3 py-2'
-                      } rounded-xl text-xs font-medium transition-all group relative ${
+                      } rounded-xl text-xs font-medium transition-all group relative cursor-pointer ${
                         isActive
                           ? 'bg-amber-500 text-slate-950 font-bold shadow-md shadow-amber-500/20'
                           : 'text-slate-300 hover:text-white hover:bg-slate-800/70'

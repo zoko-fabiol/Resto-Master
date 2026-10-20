@@ -560,11 +560,12 @@ export const Header: React.FC<HeaderProps> = ({
           {openUserGuide && (
             <button
               onClick={openUserGuide}
-              className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 text-xs font-bold transition-all shadow-2xs"
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 text-xs font-bold transition-all shadow-2xs cursor-pointer"
               title="Consulter le Guide d'Utilisation Officiel RestoMaster OS (Genesis Digital Agency)"
+              aria-label="Consulter le guide d'utilisation"
             >
-              <BookOpen className="w-3.5 h-3.5 text-amber-600" />
-              <span className="hidden sm:inline text-[11px]">Guide d'Utilisation</span>
+              <BookOpen className="w-3.5 h-3.5 text-amber-600" aria-hidden="true" />
+              <span className="hidden sm:inline text-xs font-semibold">Guide d'Utilisation</span>
             </button>
           )}
 
@@ -573,11 +574,12 @@ export const Header: React.FC<HeaderProps> = ({
             <button
               type="button"
               onClick={openComplianceModal}
-              className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white hover:bg-slate-100 text-blue-900 border border-slate-200 text-xs font-bold transition-all shadow-2xs"
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-white hover:bg-slate-100 text-blue-900 border border-slate-200 text-xs font-bold transition-all shadow-2xs cursor-pointer"
               title="Consulter le rapport de conformité fiscale Cameroun DGI"
+              aria-label="Consulter le cadre fiscal et conformité DGI"
             >
-              <ShieldCheck className="w-3.5 h-3.5 text-blue-600" />
-              <span className="hidden xl:inline text-[11px]">Cadre Fiscal</span>
+              <ShieldCheck className="w-3.5 h-3.5 text-blue-600" aria-hidden="true" />
+              <span className="hidden xl:inline text-xs font-semibold">Cadre Fiscal</span>
             </button>
           )}
 
@@ -585,25 +587,27 @@ export const Header: React.FC<HeaderProps> = ({
           {openCustomerDisplay && (
             <button
               onClick={openCustomerDisplay}
-              className="flex items-center gap-1 px-2 py-1 rounded-lg bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 transition-colors shadow-2xs"
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 transition-colors shadow-2xs cursor-pointer"
               title="Lancer l'écran TV Retrait Client (Affichage plein écran des commandes en préparation & prêtes)"
+              aria-label="Lancer l'écran TV retrait client"
             >
-              <Tv className="w-3.5 h-3.5 text-slate-600" />
-              <span className="hidden 2xl:inline text-[11px] font-semibold">Écran Retrait</span>
+              <Tv className="w-3.5 h-3.5 text-slate-600" aria-hidden="true" />
+              <span className="hidden 2xl:inline text-xs font-semibold">Écran Retrait</span>
             </button>
           )}
 
           {/* Quick Launch Client Tablet Kiosk */}
           <button
             onClick={() => setCurrentTab('kiosk')}
-            className={`flex items-center gap-1 px-2 py-1 rounded-lg transition-colors shadow-2xs text-[11px] font-bold ${
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl transition-colors shadow-2xs text-xs font-bold cursor-pointer ${
               currentTab === 'kiosk'
                 ? 'bg-amber-500 text-slate-950 font-black'
                 : 'bg-white hover:bg-slate-100 text-slate-700 border border-slate-200'
             }`}
             title="Ouvrir le Mode Borne / Tablette Client Kiosk"
+            aria-label="Ouvrir le mode borne kiosk client"
           >
-            <Tablet className="w-3.5 h-3.5 text-slate-600" />
+            <Tablet className="w-3.5 h-3.5 text-slate-600" aria-hidden="true" />
             <span className="hidden 2xl:inline">Borne Kiosk</span>
           </button>
 
@@ -611,17 +615,18 @@ export const Header: React.FC<HeaderProps> = ({
           {openPairingModal && (
             <button
               onClick={openPairingModal}
-              className="flex items-center gap-1 px-2 py-1 rounded-lg bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 transition-all shadow-2xs text-[11px] font-semibold"
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 transition-all shadow-2xs text-xs font-semibold cursor-pointer"
               title={
                 currentDeviceProfile
                   ? `Poste appairé : ${currentDeviceProfile.terminalName} (${currentDeviceProfile.type})`
                   : 'Appairer ce terminal matériel'
               }
+              aria-label="Gérer l'appairage du terminal"
             >
               {currentDeviceProfile ? (
-                <Monitor className="w-3.5 h-3.5 text-emerald-600" />
+                <Monitor className="w-3.5 h-3.5 text-emerald-600" aria-hidden="true" />
               ) : (
-                <KeyRound className="w-3.5 h-3.5 text-amber-600" />
+                <KeyRound className="w-3.5 h-3.5 text-amber-600" aria-hidden="true" />
               )}
               <span className="hidden 2xl:inline">
                 {currentDeviceProfile ? currentDeviceProfile.terminalName : 'Appairer'}

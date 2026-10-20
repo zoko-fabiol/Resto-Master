@@ -114,8 +114,9 @@ export const BottomNav: React.FC<BottomNavProps> = ({ currentTab, onSelectTab })
               key={item.id}
               type="button"
               onClick={() => onSelectTab(item.id)}
+              aria-label={item.label}
               className={`
-                relative flex-1 flex flex-col items-center justify-center h-full py-1 px-1 transition-all select-none
+                relative flex-1 flex flex-col items-center justify-center h-full py-1 px-1 transition-all select-none cursor-pointer
                 ${isActive ? 'text-amber-400 font-bold' : 'text-slate-400 hover:text-slate-200 font-medium'}
               `}
               aria-current={isActive ? 'page' : undefined}
@@ -128,12 +129,12 @@ export const BottomNav: React.FC<BottomNavProps> = ({ currentTab, onSelectTab })
                   aria-hidden="true"
                 />
                 {item.badge !== null && item.badge !== undefined && (
-                  <span className="absolute -top-1 -right-2.5 px-1.5 py-0.2 text-[11px] font-black bg-rose-600 text-white rounded-full leading-none shadow-xs">
+                  <span className="absolute -top-1 -right-2.5 px-1.5 py-0.5 text-xs font-black bg-rose-600 text-white rounded-full leading-none shadow-xs tabular-nums">
                     {item.badge}
                   </span>
                 )}
               </div>
-              <span className="text-[11px] mt-1 tracking-tight truncate max-w-[64px]">
+              <span className="text-xs mt-1 tracking-tight truncate max-w-[72px]">
                 {item.label}
               </span>
               {isActive && (

@@ -101,28 +101,36 @@ export const SupervisorPinModal: React.FC<SupervisorPinModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="supervisor-pin-title"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-in fade-in duration-200"
+    >
       <div
-        className={`bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden ${
+        className={`bg-slate-900 border border-slate-700/80 rounded-3xl shadow-2xl w-full max-w-sm overflow-hidden ${
           isShaking ? 'animate-bounce' : ''
         }`}
       >
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-slate-800 bg-slate-800/50">
-          <div className="flex items-center space-x-2">
-            <div className="p-2 bg-amber-500/20 text-amber-400 rounded-lg">
-              <ShieldCheck className="w-5 h-5" />
+          <div className="flex items-center space-x-2.5">
+            <div className="p-2 bg-amber-500/20 text-amber-400 rounded-xl">
+              <ShieldCheck className="w-5 h-5" aria-hidden="true" />
             </div>
             <div>
-              <h3 className="font-semibold text-slate-100 text-sm">{title}</h3>
+              <h3 id="supervisor-pin-title" className="font-bold text-slate-100 text-sm">
+                {title}
+              </h3>
               <p className="text-xs text-slate-400">Sécurité & Contrôle</p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-1 text-slate-400 hover:text-white rounded-lg hover:bg-slate-700/50 transition-colors"
+            aria-label="Fermer la saisie du code PIN"
+            className="p-1.5 text-slate-400 hover:text-white rounded-xl hover:bg-slate-700/50 transition-colors cursor-pointer"
           >
-            <X className="w-5 h-5" />
+            <X className="w-5 h-5" aria-hidden="true" />
           </button>
         </div>
 
@@ -131,7 +139,7 @@ export const SupervisorPinModal: React.FC<SupervisorPinModalProps> = ({
           <p className="text-xs text-center text-slate-300 mb-4">{description}</p>
 
           {/* Dots Indicator */}
-          <div className="flex justify-center space-x-3 mb-4">
+          <div className="flex justify-center space-x-3 mb-4" role="status" aria-label={`${pin.length} chiffres saisis sur 4`}>
             {[0, 1, 2, 3].map((index) => {
               const isFilled = index < pin.length;
               return (
@@ -148,8 +156,8 @@ export const SupervisorPinModal: React.FC<SupervisorPinModalProps> = ({
           </div>
 
           {errorMsg && (
-            <div className="flex items-center space-x-1.5 text-xs text-rose-400 bg-rose-500/10 border border-rose-500/30 px-3 py-1.5 rounded-lg mb-4 text-center">
-              <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+            <div role="alert" className="flex items-center space-x-1.5 text-xs text-rose-400 bg-rose-500/10 border border-rose-500/30 px-3 py-1.5 rounded-xl mb-4 text-center">
+              <AlertTriangle className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
               <span>{errorMsg}</span>
             </div>
           )}
@@ -159,35 +167,43 @@ export const SupervisorPinModal: React.FC<SupervisorPinModalProps> = ({
             {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((digit) => (
               <button
                 key={digit}
+                type="button"
                 onClick={() => handleKeyPress(digit)}
-                className="h-12 rounded-xl bg-slate-800/80 hover:bg-slate-700 active:scale-95 text-slate-100 font-semibold text-lg border border-slate-700/50 shadow-sm transition-all"
+                aria-label={`Chiffre ${digit}`}
+                className="h-12 rounded-2xl bg-slate-800/80 hover:bg-slate-700 active:scale-95 text-slate-100 font-bold text-lg border border-slate-700/50 shadow-sm transition-all cursor-pointer"
               >
                 {digit}
               </button>
             ))}
             <button
+              type="button"
               onClick={handleClear}
-              className="h-12 rounded-xl bg-slate-800/40 hover:bg-slate-800 text-slate-400 font-medium text-xs border border-slate-700/30 active:scale-95 transition-all flex items-center justify-center"
+              aria-label="Effacer le code PIN"
+              className="h-12 rounded-2xl bg-slate-800/40 hover:bg-slate-800 text-slate-400 font-bold text-xs border border-slate-700/30 active:scale-95 transition-all flex items-center justify-center cursor-pointer"
             >
               Effacer
             </button>
             <button
+              type="button"
               onClick={() => handleKeyPress('0')}
-              className="h-12 rounded-xl bg-slate-800/80 hover:bg-slate-700 active:scale-95 text-slate-100 font-semibold text-lg border border-slate-700/50 shadow-sm transition-all"
+              aria-label="Chiffre 0"
+              className="h-12 rounded-2xl bg-slate-800/80 hover:bg-slate-700 active:scale-95 text-slate-100 font-bold text-lg border border-slate-700/50 shadow-sm transition-all cursor-pointer"
             >
               0
             </button>
             <button
+              type="button"
               onClick={handleBackspace}
-              className="h-12 rounded-xl bg-slate-800/40 hover:bg-slate-800 text-slate-400 active:scale-95 border border-slate-700/30 transition-all flex items-center justify-center"
+              aria-label="Supprimer le dernier chiffre"
+              className="h-12 rounded-2xl bg-slate-800/40 hover:bg-slate-800 text-slate-400 active:scale-95 border border-slate-700/30 transition-all flex items-center justify-center cursor-pointer"
             >
-              <Delete className="w-5 h-5" />
+              <Delete className="w-5 h-5" aria-hidden="true" />
             </button>
           </div>
 
-          <div className="mt-4 text-[11px] text-slate-500 text-center">
-            Codes Démo Superviseur : <span className="text-amber-400 font-mono">1111</span> (Direction) ou{' '}
-            <span className="text-amber-400 font-mono">2222</span> (Manager)
+          <div className="mt-4 text-xs text-slate-400 text-center">
+            Codes Démo Superviseur : <span className="text-amber-400 font-mono font-bold">1111</span> (Direction) ou{' '}
+            <span className="text-amber-400 font-mono font-bold">2222</span> (Manager)
           </div>
         </div>
       </div>
