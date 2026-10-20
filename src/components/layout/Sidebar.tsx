@@ -229,7 +229,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       ],
     },
     {
-      id: 'finance',
+      id: 'section_finances',
       title: 'Caisse & Finances',
       items: [
         {
@@ -412,7 +412,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <div key={section.id} className="space-y-1">
                 {/* Section title (only when expanded) */}
                 {!collapsed ? (
-                  <div className="px-3 pt-1 pb-1 text-[10px] font-black uppercase tracking-wider text-slate-400">
+                  <div className="px-3 pt-1 pb-1 text-xs font-bold uppercase tracking-wider text-slate-400">
                     {section.title}
                   </div>
                 ) : (

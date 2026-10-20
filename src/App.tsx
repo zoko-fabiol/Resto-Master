@@ -1,49 +1,52 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense, lazy } from 'react';
+import { BrowserRouter, useLocation, useNavigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { RestaurantProvider, useRestaurant } from './context/RestaurantContext';
 import { ToastProvider, useToast } from './context/ToastContext';
 import { Sidebar, ITEM_RULE_MAP } from './components/layout/Sidebar';
 import { Header } from './components/layout/Header';
+import { BottomNav } from './components/layout/BottomNav';
 import { GlobalSearchModal } from './components/layout/GlobalSearchModal';
-
-// Views
-import { DashboardView } from './components/dashboard/DashboardView';
-import { TablesView } from './components/tables/TablesView';
-import { PosView } from './components/pos/PosView';
-import { KitchenKdsView } from './components/kds/KitchenKdsView';
-import { BarKdsView } from './components/kds/BarKdsView';
-import { ReservationsView } from './components/reservations/ReservationsView';
-import { MenuView } from './components/menu/MenuView';
-import { StockView } from './components/stock/StockView';
-import { PurchasesView } from './components/purchases/PurchasesView';
-import { CashRegisterView } from './components/cash/CashRegisterView';
-import { FinanceView } from './components/finance/FinanceView';
-import { ClientsView } from './components/clients/ClientsView';
-import { StaffView } from './components/staff/StaffView';
-import { DocumentsView } from './components/documents/DocumentsView';
-import { ReportsView } from './components/reports/ReportsView';
-import { AuditView } from './components/audit/AuditView';
-import { AdminCenterView } from './components/settings/AdminCenterView';
-import { MainCouranteView } from './components/maincourante/MainCouranteView';
-import { CameroonComplianceModal } from './components/compliance/CameroonComplianceModal';
-import { FiscalCenterView } from './components/fiscal/FiscalCenterView';
-import { EventsView } from './components/events/EventsView';
-import { DeliveryView } from './components/delivery/DeliveryView';
-import { HygieneView } from './components/hygiene/HygieneView';
-import { TableKioskView } from './components/kiosk/TableKioskView';
-import { CustomerOrderDisplayView } from './components/kds/CustomerOrderDisplayView';
-import { DevicePairingScreen } from './components/auth/DevicePairingScreen';
-import { PinLockScreen } from './components/auth/PinLockScreen';
-import { UserGuideModal } from './components/common/UserGuideModal';
-import { UserRole, UserProfile } from './types/restaurant';
-import { ShieldAlert } from 'lucide-react';
+import { ModuleSkeleton } from './components/common/ModuleSkeleton';
 import { ConfirmProvider } from './components/ui/ConfirmDialog';
 import { ModuleErrorBoundary } from './components/common/ModuleErrorBoundary';
 
-// Modals
-import { PaymentModal } from './components/pos/PaymentModal';
+// Lazy-loaded Views (Code-splitting pour optimisation des performances)
+const DashboardView = lazy(() => import('./components/dashboard/DashboardView').then(m => ({ default: m.DashboardView })));
+const TablesView = lazy(() => import('./components/tables/TablesView').then(m => ({ default: m.TablesView })));
+const PosView = lazy(() => import('./components/pos/PosView').then(m => ({ default: m.PosView })));
+const KitchenKdsView = lazy(() => import('./components/kds/KitchenKdsView').then(m => ({ default: m.KitchenKdsView })));
+const BarKdsView = lazy(() => import('./components/kds/BarKdsView').then(m => ({ default: m.BarKdsView })));
+const ReservationsView = lazy(() => import('./components/reservations/ReservationsView').then(m => ({ default: m.ReservationsView })));
+const MenuView = lazy(() => import('./components/menu/MenuView').then(m => ({ default: m.MenuView })));
+const StockView = lazy(() => import('./components/stock/StockView').then(m => ({ default: m.StockView })));
+const PurchasesView = lazy(() => import('./components/purchases/PurchasesView').then(m => ({ default: m.PurchasesView })));
+const CashRegisterView = lazy(() => import('./components/cash/CashRegisterView').then(m => ({ default: m.CashRegisterView })));
+const FinanceView = lazy(() => import('./components/finance/FinanceView').then(m => ({ default: m.FinanceView })));
+const ClientsView = lazy(() => import('./components/clients/ClientsView').then(m => ({ default: m.ClientsView })));
+const StaffView = lazy(() => import('./components/staff/StaffView').then(m => ({ default: m.StaffView })));
+const DocumentsView = lazy(() => import('./components/documents/DocumentsView').then(m => ({ default: m.DocumentsView })));
+const ReportsView = lazy(() => import('./components/reports/ReportsView').then(m => ({ default: m.ReportsView })));
+const AuditView = lazy(() => import('./components/audit/AuditView').then(m => ({ default: m.AuditView })));
+const AdminCenterView = lazy(() => import('./components/settings/AdminCenterView').then(m => ({ default: m.AdminCenterView })));
+const MainCouranteView = lazy(() => import('./components/maincourante/MainCouranteView').then(m => ({ default: m.MainCouranteView })));
+const FiscalCenterView = lazy(() => import('./components/fiscal/FiscalCenterView').then(m => ({ default: m.FiscalCenterView })));
+const EventsView = lazy(() => import('./components/events/EventsView').then(m => ({ default: m.EventsView })));
+const DeliveryView = lazy(() => import('./components/delivery/DeliveryView').then(m => ({ default: m.DeliveryView })));
+const HygieneView = lazy(() => import('./components/hygiene/HygieneView').then(m => ({ default: m.HygieneView })));
+const TableKioskView = lazy(() => import('./components/kiosk/TableKioskView').then(m => ({ default: m.TableKioskView })));
+const CustomerOrderDisplayView = lazy(() => import('./components/kds/CustomerOrderDisplayView').then(m => ({ default: m.CustomerOrderDisplayView })));
 
-const ROLE_DEFAULT_TAB: Record<UserRole, string> = {
+// Non-lazy modals / critical screens
+import { CameroonComplianceModal } from './components/compliance/CameroonComplianceModal';
+import { DevicePairingScreen } from './components/auth/DevicePairingScreen';
+import { PinLockScreen } from './components/auth/PinLockScreen';
+import { UserGuideModal } from './components/common/UserGuideModal';
+import { PaymentModal } from './components/pos/PaymentModal';
+import { UserRole, UserProfile } from './types/restaurant';
+import { ShieldAlert } from 'lucide-react';
+
+export const ROLE_DEFAULT_TAB: Record<UserRole, string> = {
   direction: 'dashboard',
   manager: 'dashboard',
   serveur: 'tables',
@@ -75,6 +78,8 @@ const TAB_FEATURE_MAP: Record<string, string> = {
 };
 
 const AppContent: React.FC = () => {
+  const location = useLocation();
+  const navigate = useNavigate();
   const { canAccess, currentUser, isSessionLocked, switchRole, setCurrentUser, lockSession, logout } = useAuth();
   const {
     seatReservation,
@@ -84,7 +89,10 @@ const AppContent: React.FC = () => {
     unpairCurrentDevice,
   } = useRestaurant();
 
-  const [currentTab, setCurrentTab] = useState<string>('dashboard');
+  // Route URL synchronisée (ex: /pos -> pos, / -> '')
+  const rawPath = location.pathname.replace(/^\/+/, '').split('/')[0] || '';
+  const currentTab = rawPath || 'dashboard';
+
   const [kioskTableId, setKioskTableId] = useState<string | undefined>(undefined);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
@@ -93,20 +101,25 @@ const AppContent: React.FC = () => {
   const [isDisplayTvOpen, setIsDisplayTvOpen] = useState(false);
   const [isUserGuideOpen, setIsUserGuideOpen] = useState(false);
 
-  // Auto-route to role's default landing screen on login or role switch (Section 2 & 3 du Guide Genesis)
+  // Redirection selon le rôle à la connexion ou changement de rôle
   const prevRoleRef = React.useRef<UserRole | null>(null);
   useEffect(() => {
     if (currentUser.role === 'tablette' || currentUser.accountType === 'tablette') {
       return;
     }
-    if (prevRoleRef.current !== currentUser.role) {
+    if (!rawPath) {
+      const roleDefault = ROLE_DEFAULT_TAB[currentUser.role] || 'dashboard';
+      if (canAccess(roleDefault)) {
+        navigate(`/${roleDefault}`, { replace: true });
+      }
+    } else if (prevRoleRef.current !== currentUser.role) {
       prevRoleRef.current = currentUser.role;
       const roleDefault = ROLE_DEFAULT_TAB[currentUser.role] || 'dashboard';
       if (canAccess(roleDefault)) {
-        setCurrentTab(roleDefault);
+        navigate(`/${roleDefault}`);
       }
     }
-  }, [currentUser.role, currentUser.accountType, canAccess]);
+  }, [rawPath, currentUser.role, currentUser.accountType, canAccess, navigate]);
 
   // Sidebar collapsible state with localStorage persistence
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
@@ -151,14 +164,14 @@ const AppContent: React.FC = () => {
 
     if ((isTabletRole || isTableDevice) && !isTabletKioskUnlocked) {
       if (currentTab !== 'kiosk') {
-        setCurrentTab('kiosk');
+        navigate('/kiosk', { replace: true });
       }
       const targetTableId = currentDeviceProfile?.assignedTableId || currentUser.assignedTableId;
       if (targetTableId && kioskTableId !== targetTableId) {
         setKioskTableId(targetTableId);
       }
     }
-  }, [currentUser, currentDeviceProfile, currentTab, kioskTableId, isTabletKioskUnlocked]);
+  }, [currentUser, currentDeviceProfile, currentTab, kioskTableId, isTabletKioskUnlocked, navigate]);
 
   // Switch tab if permission restricts currentTab or feature is disabled or module rule is disabled
   useEffect(() => {
@@ -172,18 +185,20 @@ const AppContent: React.FC = () => {
     const isRuleDisabled = requiredRule && !isRuleEnabled(requiredRule, true);
 
     if (!canAccess(currentTab) || isFeatureDisabled || isRuleDisabled) {
-      if (canAccess('pos') && isFeatureEnabled('pos_core') && isRuleEnabled('mod_pos', true)) setCurrentTab('pos');
-      else if (canAccess('kitchen_kds') && isFeatureEnabled('kds_kitchen') && isRuleEnabled('mod_cuisine', true)) setCurrentTab('kitchen_kds');
-      else if (canAccess('bar_kds') && isFeatureEnabled('kds_bar') && isRuleEnabled('mod_bar', true)) setCurrentTab('bar_kds');
-      else if (canAccess('stock') && isFeatureEnabled('stock_lots_fefo') && isRuleEnabled('mod_stock', true)) setCurrentTab('stock');
-      else if (canAccess('tables') && isFeatureEnabled('tables_management') && isRuleEnabled('mod_tables', true)) setCurrentTab('tables');
-      else setCurrentTab('dashboard');
+      let fallback = 'dashboard';
+      if (canAccess('pos') && isFeatureEnabled('pos_core') && isRuleEnabled('mod_pos', true)) fallback = 'pos';
+      else if (canAccess('kitchen_kds') && isFeatureEnabled('kds_kitchen') && isRuleEnabled('mod_cuisine', true)) fallback = 'kitchen_kds';
+      else if (canAccess('bar_kds') && isFeatureEnabled('kds_bar') && isRuleEnabled('mod_bar', true)) fallback = 'bar_kds';
+      else if (canAccess('stock') && isFeatureEnabled('stock_lots_fefo') && isRuleEnabled('mod_stock', true)) fallback = 'stock';
+      else if (canAccess('tables') && isFeatureEnabled('tables_management') && isRuleEnabled('mod_tables', true)) fallback = 'tables';
+
+      navigate(`/${fallback}`, { replace: true });
     }
-  }, [currentUser.role, currentUser.accountType, currentTab, canAccess, isFeatureEnabled, isRuleEnabled]);
+  }, [currentUser.role, currentUser.accountType, currentTab, canAccess, isFeatureEnabled, isRuleEnabled, navigate]);
 
   const handleOpenOrderOnTable = (tableId: string) => {
     setPosInitialTableId(tableId);
-    setCurrentTab('pos');
+    navigate('/pos');
   };
 
   const handleOpenPayment = (orderId: string) => {
@@ -192,54 +207,58 @@ const AppContent: React.FC = () => {
 
   const handleSeatGuestFromReservation = async (reservationId: string, tableId: string) => {
     await seatReservation(reservationId, tableId);
-    setCurrentTab('tables');
+    navigate('/tables');
   };
-
-  // Mode Écran TV Retrait Client (QSR / Fast-Food)
-  if (currentDeviceProfile?.type === 'ecran_retrait' || isDisplayTvOpen) {
-    return (
-      <CustomerOrderDisplayView
-        onExit={async () => {
-          setIsDisplayTvOpen(false);
-          if (currentDeviceProfile?.type === 'ecran_retrait') {
-            await unpairCurrentDevice();
-          }
-        }}
-      />
-    );
-  }
-
-  // Mode Tablette Kiosk Plein Écran Dédié : Suppression totale de la Sidebar et du Header d'administration (Exigence Audio & Screenshot)
-  if (currentTab === 'kiosk' && !isTabletKioskUnlocked) {
-    return (
-      <div className="fixed inset-0 z-50 bg-slate-900 text-slate-100 overflow-hidden w-screen h-screen select-none">
-        <TableKioskView
-          initialTableId={kioskTableId}
-          onExit={async (shouldUnpair?: boolean, supervisor?: UserProfile) => {
-            setIsTabletKioskUnlocked(true);
-            if (shouldUnpair && currentDeviceProfile?.type === 'tablette_table') {
-              await unpairCurrentDevice();
-            }
-            if (supervisor) {
-              setCurrentUser(supervisor);
-            } else if (currentUser.role === 'tablette') {
-              lockSession();
-            }
-            setCurrentTab('tables');
-          }}
-        />
-        {/* Tactile PIN Lock Screen Overlay si verrouillage activé */}
-        {isSessionLocked && <PinLockScreen />}
-      </div>
-    );
-  }
 
   const handleSelectTab = (tab: string) => {
     if (tab === 'kiosk') {
       setIsTabletKioskUnlocked(false);
     }
-    setCurrentTab(tab);
+    navigate(`/${tab}`);
   };
+
+  // Mode Écran TV Retrait Client (QSR / Fast-Food)
+  if (currentDeviceProfile?.type === 'ecran_retrait' || isDisplayTvOpen) {
+    return (
+      <Suspense fallback={<ModuleSkeleton moduleName="Écran Retrait" />}>
+        <CustomerOrderDisplayView
+          onExit={async () => {
+            setIsDisplayTvOpen(false);
+            if (currentDeviceProfile?.type === 'ecran_retrait') {
+              await unpairCurrentDevice();
+            }
+          }}
+        />
+      </Suspense>
+    );
+  }
+
+  // Mode Tablette Kiosk Plein Écran Dédié
+  if (currentTab === 'kiosk' && !isTabletKioskUnlocked) {
+    return (
+      <div className="fixed inset-0 z-50 bg-slate-900 text-slate-100 overflow-hidden w-screen h-screen select-none">
+        <Suspense fallback={<ModuleSkeleton moduleName="Kiosk Client" />}>
+          <TableKioskView
+            initialTableId={kioskTableId}
+            onExit={async (shouldUnpair?: boolean, supervisor?: UserProfile) => {
+              setIsTabletKioskUnlocked(true);
+              if (shouldUnpair && currentDeviceProfile?.type === 'tablette_table') {
+                await unpairCurrentDevice();
+              }
+              if (supervisor) {
+                setCurrentUser(supervisor);
+              } else if (currentUser.role === 'tablette') {
+                lockSession();
+              }
+              navigate('/tables');
+            }}
+          />
+        </Suspense>
+        {/* Tactile PIN Lock Screen Overlay si verrouillage activé */}
+        {isSessionLocked && <PinLockScreen />}
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-100 text-slate-900 flex font-sans antialiased selection:bg-amber-500 selection:text-white max-w-full overflow-x-hidden">
@@ -271,8 +290,8 @@ const AppContent: React.FC = () => {
           openUserGuide={() => setIsUserGuideOpen(true)}
         />
 
-        {/* Dynamic View Body */}
-        <main className="flex-1 p-3 sm:p-5 lg:p-7 max-w-7xl w-full mx-auto min-w-0">
+        {/* Dynamic View Body avec padding inférieur sur mobile pour BottomNav */}
+        <main className="flex-1 p-3 sm:p-5 lg:p-7 max-w-7xl w-full mx-auto min-w-0 pb-20 lg:pb-7">
           {!currentUser.active || currentUser.role === 'aucun' ? (
             <div className="flex flex-col items-center justify-center min-h-[50vh] text-center p-8 bg-white rounded-2xl border border-slate-200 shadow-sm max-w-lg mx-auto my-12">
               <div className="w-16 h-16 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center mb-4">
@@ -291,63 +310,68 @@ const AppContent: React.FC = () => {
             </div>
           ) : (
             <ModuleErrorBoundary key={currentTab} moduleName={currentTab}>
-              {currentTab === 'dashboard' && <DashboardView navigateTo={handleSelectTab} />}
-              {currentTab === 'tables' && (
-                <TablesView
-                  onOpenOrder={handleOpenOrderOnTable}
-                  onPayOrder={handleOpenPayment}
-                  onOpenKiosk={(tId) => {
-                    setIsTabletKioskUnlocked(false);
-                    setKioskTableId(tId);
-                    setCurrentTab('kiosk');
-                  }}
-                />
-              )}
-              {currentTab === 'pos' && (
-                <PosView
-                  initialTableId={posInitialTableId}
-                  onOpenPayment={handleOpenPayment}
-                  mode="restaurant"
-                />
-              )}
-              {currentTab === 'bar_pos' && (
-                <PosView
-                  initialTableId={posInitialTableId}
-                  onOpenPayment={handleOpenPayment}
-                  mode="bar"
-                />
-              )}
-              {currentTab === 'kitchen_kds' && <KitchenKdsView />}
-              {currentTab === 'bar_kds' && <BarKdsView />}
-              {currentTab === 'reservations' && (
-                <ReservationsView onSeatGuest={handleSeatGuestFromReservation} />
-              )}
-              {currentTab === 'events' && <EventsView />}
-              {currentTab === 'delivery' && <DeliveryView />}
-              {currentTab === 'menu' && <MenuView />}
-              {currentTab === 'stock' && <StockView />}
-              {currentTab === 'purchases' && <PurchasesView />}
-              {currentTab === 'hygiene' && <HygieneView />}
-              {currentTab === 'caisse' && <CashRegisterView onOpenPayment={handleOpenPayment} />}
-              {currentTab === 'main_courante' && <MainCouranteView />}
-              {currentTab === 'fiscal' && <FiscalCenterView />}
-              {currentTab === 'finance' && <FinanceView />}
-              {currentTab === 'clients' && <ClientsView />}
-              {currentTab === 'staff' && <StaffView />}
-              {currentTab === 'documents' && <DocumentsView />}
-              {currentTab === 'reports' && <ReportsView />}
-              {currentTab === 'audit' && <AuditView />}
-              {currentTab === 'settings' && <AdminCenterView />}
+              <Suspense fallback={<ModuleSkeleton moduleName={currentTab} />}>
+                {currentTab === 'dashboard' && <DashboardView navigateTo={handleSelectTab} />}
+                {currentTab === 'tables' && (
+                  <TablesView
+                    onOpenOrder={handleOpenOrderOnTable}
+                    onPayOrder={handleOpenPayment}
+                    onOpenKiosk={(tId) => {
+                      setIsTabletKioskUnlocked(false);
+                      setKioskTableId(tId);
+                      navigate('/kiosk');
+                    }}
+                  />
+                )}
+                {currentTab === 'pos' && (
+                  <PosView
+                    initialTableId={posInitialTableId}
+                    onOpenPayment={handleOpenPayment}
+                    mode="restaurant"
+                  />
+                )}
+                {currentTab === 'bar_pos' && (
+                  <PosView
+                    initialTableId={posInitialTableId}
+                    onOpenPayment={handleOpenPayment}
+                    mode="bar"
+                  />
+                )}
+                {currentTab === 'kitchen_kds' && <KitchenKdsView />}
+                {currentTab === 'bar_kds' && <BarKdsView />}
+                {currentTab === 'reservations' && (
+                  <ReservationsView onSeatGuest={handleSeatGuestFromReservation} />
+                )}
+                {currentTab === 'events' && <EventsView />}
+                {currentTab === 'delivery' && <DeliveryView />}
+                {currentTab === 'menu' && <MenuView />}
+                {currentTab === 'stock' && <StockView />}
+                {currentTab === 'purchases' && <PurchasesView />}
+                {currentTab === 'hygiene' && <HygieneView />}
+                {currentTab === 'caisse' && <CashRegisterView onOpenPayment={handleOpenPayment} />}
+                {currentTab === 'main_courante' && <MainCouranteView />}
+                {currentTab === 'fiscal' && <FiscalCenterView />}
+                {currentTab === 'finance' && <FinanceView />}
+                {currentTab === 'clients' && <ClientsView />}
+                {currentTab === 'staff' && <StaffView />}
+                {currentTab === 'documents' && <DocumentsView />}
+                {currentTab === 'reports' && <ReportsView />}
+                {currentTab === 'audit' && <AuditView />}
+                {currentTab === 'settings' && <AdminCenterView />}
+              </Suspense>
             </ModuleErrorBoundary>
           )}
         </main>
       </div>
 
+      {/* Barre de Navigation Inférieure Mobile (selon le rôle) */}
+      <BottomNav currentTab={currentTab} onSelectTab={handleSelectTab} />
+
       {/* Global Search Modal */}
       <GlobalSearchModal
         isOpen={isSearchOpen}
         onClose={() => setIsSearchOpen(false)}
-        navigateTo={setCurrentTab}
+        navigateTo={handleSelectTab}
       />
 
       {/* Payment Processing Modal */}
@@ -387,14 +411,16 @@ const AppContent: React.FC = () => {
 
 export default function App() {
   return (
-    <ToastProvider>
-      <ConfirmProvider>
-        <AuthProvider>
-          <RestaurantProvider>
-            <AppContent />
-          </RestaurantProvider>
-        </AuthProvider>
-      </ConfirmProvider>
-    </ToastProvider>
+    <BrowserRouter>
+      <ToastProvider>
+        <ConfirmProvider>
+          <AuthProvider>
+            <RestaurantProvider>
+              <AppContent />
+            </RestaurantProvider>
+          </AuthProvider>
+        </ConfirmProvider>
+      </ToastProvider>
+    </BrowserRouter>
   );
 }
