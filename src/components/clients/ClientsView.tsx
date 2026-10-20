@@ -119,8 +119,9 @@ export const ClientsView: React.FC = () => {
 
                 {/* Surveillance Anniversaire (Section 13) */}
                 {isRuleEnabled('clients_birthdays', true) && (
-                  <div className="text-[10px] font-bold text-pink-700 bg-pink-50 px-2 py-0.5 rounded-md border border-pink-200 mt-1.5 inline-flex items-center gap-1">
-                    <span>🎂 Anniversaire client surveillé</span>
+                  <div className="text-[10px] font-bold text-pink-700 bg-pink-50 px-2 py-0.5 rounded-md border border-pink-200 mt-1.5 inline-flex items-center gap-1.5">
+                    <Cake className="w-3 h-3 text-pink-600 shrink-0" />
+                    <span>Anniversaire client surveillé</span>
                   </div>
                 )}
 

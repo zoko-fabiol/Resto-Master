@@ -31,6 +31,7 @@ import {
   Wifi,
   WifiOff,
   RefreshCw,
+  X,
 } from 'lucide-react';
 import { ChangeMyPinModal } from '../auth/ChangeMyPinModal';
 
@@ -170,10 +171,10 @@ export const Header: React.FC<HeaderProps> = ({
               <button
                 type="button"
                 onClick={clearSyncError}
-                className="hover:text-rose-900 ml-1 text-xs font-bold leading-none cursor-pointer"
+                className="hover:text-rose-900 ml-1 p-0.5 rounded cursor-pointer"
                 title="Ignorer l'alerte"
               >
-                ✕
+                <X className="w-3 h-3" />
               </button>
             </div>
           )}

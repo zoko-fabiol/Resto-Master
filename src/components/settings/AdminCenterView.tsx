@@ -788,8 +788,18 @@ export const AdminCenterView: React.FC = () => {
           </div>
           <div>
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-xs font-black uppercase tracking-wider text-amber-400">
-                {isSuperAdmin ? '👑 Super-Administrateur (Direction)' : '🔒 Mode Consultation'}
+              <span className="text-xs font-black uppercase tracking-wider text-amber-400 flex items-center gap-1.5">
+                {isSuperAdmin ? (
+                  <>
+                    <Crown className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                    <span>Super-Administrateur (Direction)</span>
+                  </>
+                ) : (
+                  <>
+                    <Lock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                    <span>Mode Consultation</span>
+                  </>
+                )}
               </span>
               <span className="text-[10px] bg-slate-800 px-2 py-0.5 rounded-full text-slate-300 font-bold border border-slate-700">
                 Gouvernance Modulaire
@@ -816,8 +826,8 @@ export const AdminCenterView: React.FC = () => {
             }`}
             title="Active uniquement les 12 modules essentiels pour votre restaurant de départ"
           >
-            <Sparkles className="w-3.5 h-3.5" />
-            <span>🎯 Profil Resto #1 (12 Modules)</span>
+            <Sparkles className="w-3.5 h-3.5 shrink-0" />
+            <span>Profil Essentiel (12 Modules)</span>
           </button>
 
           <select
@@ -845,14 +855,14 @@ export const AdminCenterView: React.FC = () => {
                 : 'bg-slate-900 text-slate-600 border-slate-800 cursor-not-allowed'
             }`}
           >
-            <option value="" disabled>⚡ Changer de profil métier...</option>
-            <option value="depart_essentiel">🎯 Profil Essentiel Restaurant (Resto #1)</option>
-            <option value="restaurant_classique">🍽️ Restaurant Classique & Grillades</option>
-            <option value="bar_lounge">🍸 Bar Lounge & Cave à Vins</option>
-            <option value="fast_food">⚡ Fast-Food & Vente à Emporter</option>
-            <option value="evenementiel_traiteur">🎉 Traiteur & Événementiel</option>
-            <option value="hotel_restaurant">🏨 Hôtel-Restaurant & Room Service</option>
-            <option value="restaurant_livraison">🛵 Dark Kitchen & Livraisons</option>
+            <option value="" disabled>Changer de profil métier...</option>
+            <option value="depart_essentiel">Profil Essentiel Restaurant (Resto #1)</option>
+            <option value="restaurant_classique">Restaurant Classique & Grillades</option>
+            <option value="bar_lounge">Bar Lounge & Cave à Vins</option>
+            <option value="fast_food">Fast-Food & Vente à Emporter</option>
+            <option value="evenementiel_traiteur">Traiteur & Événementiel</option>
+            <option value="hotel_restaurant">Hôtel-Restaurant & Room Service</option>
+            <option value="restaurant_livraison">Dark Kitchen & Livraisons</option>
           </select>
         </div>
       </div>
@@ -936,61 +946,76 @@ export const AdminCenterView: React.FC = () => {
             </div>
 
             {/* Category Navigation Pills */}
-            <div className="flex items-center gap-1.5 overflow-x-auto custom-scrollbar pt-1 pb-1">
+            <div className="flex items-center gap-2 overflow-x-auto no-scrollbar scroll-smooth pt-1 pb-1">
               {[
-                { key: 'all', label: 'Toutes les Applications', count: appLibrary.length },
+                { key: 'all', label: 'Toutes les Applications', count: appLibrary.length, icon: LayoutGrid },
                 {
                   key: 'system',
                   label: 'Système & Établissements',
                   count: appLibrary.filter((a) => a.category === 'system').length,
+                  icon: Building2,
                 },
                 {
                   key: 'operations',
                   label: 'Vente, Salle & Cuisine',
                   count: appLibrary.filter((a) => a.category === 'operations').length,
+                  icon: Utensils,
                 },
                 {
                   key: 'stocks',
                   label: 'Stocks & Achats',
                   count: appLibrary.filter((a) => a.category === 'stocks').length,
+                  icon: Package,
                 },
                 {
                   key: 'services',
                   label: 'Clients & Services',
                   count: appLibrary.filter((a) => a.category === 'services').length,
+                  icon: Users,
                 },
                 {
                   key: 'finance',
                   label: 'Finance & Caisses',
                   count: appLibrary.filter((a) => a.category === 'finance').length,
+                  icon: Coins,
                 },
                 {
                   key: 'hardware_security',
                   label: 'Matériel & Sécurité',
                   count: appLibrary.filter((a) => a.category === 'hardware_security').length,
+                  icon: ShieldCheck,
                 },
                 {
                   key: 'group',
                   label: 'Multi-Sites',
                   count: appLibrary.filter((a) => a.category === 'group').length,
+                  icon: Layers,
                 },
               ].map((cat) => {
                 const isSelected = selectedCategory === cat.key;
+                const CatIcon = cat.icon;
                 return (
                   <button
                     key={cat.key}
                     type="button"
                     onClick={() => setSelectedCategory(cat.key as AppCategory)}
-                    className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all shrink-0 ${
+                    className={`group flex items-center gap-2 px-3.5 py-2 rounded-2xl text-xs font-bold whitespace-nowrap transition-all shrink-0 cursor-pointer ${
                       isSelected
-                        ? 'bg-slate-900 text-white shadow-xs'
-                        : 'bg-slate-100/80 text-slate-600 hover:text-slate-900 hover:bg-slate-200/70'
+                        ? 'bg-slate-900 text-white shadow-md shadow-slate-900/15 ring-1 ring-slate-800'
+                        : 'bg-slate-100/90 hover:bg-slate-200/90 text-slate-600 hover:text-slate-900 border border-slate-200/80 hover:border-slate-300'
                     }`}
                   >
+                    <CatIcon
+                      className={`w-3.5 h-3.5 shrink-0 transition-colors ${
+                        isSelected ? 'text-amber-400' : 'text-slate-400 group-hover:text-slate-700'
+                      }`}
+                    />
                     <span>{cat.label}</span>
                     <span
-                      className={`text-[10px] px-1.5 py-0.5 rounded-full font-black ${
-                        isSelected ? 'bg-amber-400 text-slate-950' : 'bg-slate-200/80 text-slate-700'
+                      className={`text-[10px] tabular-nums px-2 py-0.5 rounded-full font-black transition-colors ${
+                        isSelected
+                          ? 'bg-amber-400 text-slate-950 shadow-xs'
+                          : 'bg-slate-200 text-slate-700'
                       }`}
                     >
                       {cat.count}

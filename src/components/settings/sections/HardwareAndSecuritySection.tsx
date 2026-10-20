@@ -787,7 +787,7 @@ export const HardwareAndSecuritySection: React.FC<Props> = ({ subTab }) => {
         {[
           {
             id: 'depart_essentiel' as ConfigurationProfileType,
-            title: '🎯 Profil Essentiel Restaurant (Resto #1)',
+            title: 'Profil Essentiel Restaurant (Resto #1)',
             desc: 'Configuration ciblée 12 modules : Tableau de bord, POS, Cuisine KDS, Carte & Recettes, Stocks, Achats, Caisse, Personnel, GED, Audit, Rapports et Paramètres.',
             badge: 'Recommandé Resto #1',
             highlight: true,

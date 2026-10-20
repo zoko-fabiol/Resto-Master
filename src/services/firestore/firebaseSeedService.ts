@@ -69,7 +69,7 @@ export const firebaseSeedService = {
       // Check if Firestore already has the organization
       const orgDoc = await getDoc(doc(db, 'organizations', INITIAL_ORGANIZATION.id));
       if (!orgDoc.exists()) {
-        console.log('🚀 Démarrage de la migration/initialisation des données vers Firestore...');
+        console.log('[FirebaseSeedService] Initialisation des données vers Firestore...');
 
         // Batch 1: Organisation, Paramètres, Outlets, Zones, Caisses, Config
         const batch1 = writeBatch(db);
@@ -164,7 +164,7 @@ export const firebaseSeedService = {
         deliveries.forEach((d) => batch5.set(doc(db, 'deliveries', d.id), d, { merge: true }));
 
         await batch5.commit();
-        console.log('✅ Migration / Initialisation Firestore terminée avec succès !');
+        console.log('[FirebaseSeedService] Initialisation Firestore terminée avec succès.');
       }
 
       // Mark migration as done locally

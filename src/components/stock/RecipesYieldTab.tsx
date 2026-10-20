@@ -15,6 +15,7 @@ import {
   ChevronUp,
   Plus,
   Percent,
+  X,
 } from 'lucide-react';
 
 export interface LimitingIngredient {
@@ -728,7 +729,7 @@ export const RecipesYieldTab: React.FC<RecipesYieldTabProps> = ({
                 onClick={() => setNewFormulaModalOpen(false)}
                 className="text-slate-400 hover:text-slate-700 p-1"
               >
-                ✕
+                <X className="w-4 h-4" />
               </button>
             </div>
 
@@ -744,7 +745,7 @@ export const RecipesYieldTab: React.FC<RecipesYieldTabProps> = ({
                 >
                   {productsWithoutRecipe.map((p) => (
                     <option key={p.id} value={p.id}>
-                      {p.destination === 'bar' ? '🍸' : '🍽️'} {p.name} ({p.categoryName})
+                      [{p.destination === 'bar' ? 'Bar' : 'Cuisine'}] {p.name} ({p.categoryName})
                     </option>
                   ))}
                 </select>

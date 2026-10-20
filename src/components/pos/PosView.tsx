@@ -26,6 +26,10 @@ import {
   Hash,
   Wine,
   GlassWater,
+  Salad,
+  ChefHat,
+  Cake,
+  Zap,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
@@ -1524,25 +1528,27 @@ export const PosView: React.FC<PosViewProps> = ({ initialTableId, onOpenPayment,
                 <div className="grid grid-cols-4 gap-1.5">
                   {(
                     [
-                      { id: 'entree', label: '🥗 Entrée' },
-                      { id: 'plat', label: '🍲 Plat' },
-                      { id: 'dessert', label: '🍰 Dessert' },
-                      { id: 'direct', label: '⚡ Direct' },
+                      { id: 'entree', label: 'Entrée', icon: Salad },
+                      { id: 'plat', label: 'Plat', icon: ChefHat },
+                      { id: 'dessert', label: 'Dessert', icon: Cake },
+                      { id: 'direct', label: 'Direct', icon: Zap },
                     ] as const
                   ).map((timing) => {
                     const isSelected = (activeModifierItem.courseTiming || 'direct') === timing.id;
+                    const TimingIcon = timing.icon;
                     return (
                       <button
                         key={timing.id}
                         type="button"
                         onClick={() => setItemCourseTiming(activeModifierItem.id, timing.id)}
-                        className={`text-xs font-bold py-1.5 px-2 rounded-xl border text-center transition-all ${
+                        className={`text-xs font-bold py-1.5 px-2 rounded-xl border flex items-center justify-center gap-1.5 transition-all ${
                           isSelected
                             ? 'bg-amber-500 text-slate-950 border-amber-500 shadow-xs'
                             : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
                         }`}
                       >
-                        {timing.label}
+                        <TimingIcon className="w-3.5 h-3.5 shrink-0" />
+                        <span>{timing.label}</span>
                       </button>
                     );
                   })}

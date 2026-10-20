@@ -30,9 +30,9 @@ export const ordersFirestoreService = {
 
       const docRef = doc(db, 'orders', order.id);
       await setDoc(docRef, cleanOrder, { merge: true });
-      console.log('✅ Commande synchronisée dans Firestore avec succès:', cleanOrder.orderNumber, cleanOrder.id);
+      console.log('[OrdersFirestoreService] Commande synchronisée dans Firestore avec succès:', cleanOrder.orderNumber, cleanOrder.id);
     } catch (err: any) {
-      console.error('🔥 Erreur lors de l\'enregistrement de la commande dans Firestore:', err);
+      console.error('[OrdersFirestoreService] Erreur lors de l\'enregistrement de la commande dans Firestore:', err);
       try {
         const cleanOrder = JSON.parse(JSON.stringify(order));
         offlineSyncService.enqueue('orders', 'CREATE', order.id, cleanOrder, `order_create_${order.id}`);
