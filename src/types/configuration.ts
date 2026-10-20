@@ -418,4 +418,23 @@ export const DEFAULT_OPERATION_RULES: OperationRules = {
   bill_corporate: true,
   bill_events: true,
   bill_client_credit: true,
+
+  // Moyens d'Encaissement & Paiement (Section 20)
+  pay_especes: true,
+  pay_cb: true,
+  pay_mtn_momo: true,
+  pay_orange_money: true,
+  pay_virement: true,
+  pay_cheque: true,
+  pay_credit_client: true,
+  pay_partiel: true,
+  pay_multiple: true,
+
+  // Notifications & Alertes Système (Section 26)
+  notif_stock_critique: true,
+  notif_peremption_lot: true,
+  notif_ecart_caisse: true,
+  notif_rappel_fiscal: true,
+  notif_retard_cuisine: true,
+  notif_rupture_bar: true,
 };

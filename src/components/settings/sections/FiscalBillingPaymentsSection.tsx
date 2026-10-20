@@ -36,30 +36,31 @@ interface Props {
 export const FiscalBillingPaymentsSection: React.FC<Props> = ({ subTab }) => {
   const { settings, updateSettings, addAuditLog, operationRules, updateOperationRules } = useRestaurant();
   const [savedSuccess, setSavedSuccess] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // Fiscal Form State
   const [niu, setNiu] = useState(settings.niu || 'M012012345678A');
   const [rccm, setRccm] = useState(settings.rccm || 'RC/YAO/2024/B/1894');
   const [taxCenter, setTaxCenter] = useState(settings.taxCenter || 'CIME Yaoundé 1');
-  const [taxRate, setTaxRate] = useState(settings.taxRate || 19.25);
-  const [vatBaseRate, setVatBaseRate] = useState(17.5);
-  const [cacRate, setCacRate] = useState(10);
-  const [withholdingRate, setWithholdingRate] = useState(2.2);
+  const [taxRate, setTaxRate] = useState(settings.taxRate ?? 19.25);
+  const [vatBaseRate, setVatBaseRate] = useState(settings.baseVatRate ?? 17.5);
+  const [cacRate, setCacRate] = useState(settings.cacRate ?? 10);
+  const [withholdingRate, setWithholdingRate] = useState(settings.withholdingRate ?? 2.2);
 
   // Mobile Money Form State
-  const [mtnActive, setMtnActive] = useState(true);
+  const [mtnActive, setMtnActive] = useState(settings.mtnActive ?? true);
   const [mtnMerchantCode, setMtnMerchantCode] = useState(settings.mtnMoMoMerchantCode || '456789');
   const [mtnPhone, setMtnPhone] = useState(settings.mtnMoMoPhone || '677112233');
-  const [mtnMode, setMtnMode] = useState<'test' | 'production'>('production');
-  const [mtnManualVerification, setMtnManualVerification] = useState(true);
-  const [mtnAutoConfirmApi, setMtnAutoConfirmApi] = useState(false);
+  const [mtnMode, setMtnMode] = useState<'test' | 'production'>(settings.mtnMode || 'production');
+  const [mtnManualVerification, setMtnManualVerification] = useState(settings.mtnManualVerification ?? true);
+  const [mtnAutoConfirmApi, setMtnAutoConfirmApi] = useState(settings.mtnAutoConfirmApi ?? false);
 
-  const [orangeActive, setOrangeActive] = useState(true);
+  const [orangeActive, setOrangeActive] = useState(settings.orangeActive ?? true);
   const [orangeMerchantCode, setOrangeMerchantCode] = useState(settings.orangeMoneyMerchantCode || '784123');
   const [orangePhone, setOrangePhone] = useState(settings.orangeMoneyPhone || '699887766');
-  const [orangeMode, setOrangeMode] = useState<'test' | 'production'>('production');
-  const [orangeManualVerification, setOrangeManualVerification] = useState(true);
-  const [orangeAutoConfirmApi, setOrangeAutoConfirmApi] = useState(false);
+  const [orangeMode, setOrangeMode] = useState<'test' | 'production'>(settings.orangeMode || 'production');
+  const [orangeManualVerification, setOrangeManualVerification] = useState(settings.orangeManualVerification ?? true);
+  const [orangeAutoConfirmApi, setOrangeAutoConfirmApi] = useState(settings.orangeAutoConfirmApi ?? false);
 
   // Billing & Payment methods toggles
   const [billingOptions, setBillingOptions] = useState<Record<string, boolean>>({
@@ -81,11 +82,80 @@ export const FiscalBillingPaymentsSection: React.FC<Props> = ({ subTab }) => {
     bill_client_credit: operationRules?.bill_client_credit ?? true,
   });
 
+  const [paymentMethods, setPaymentMethods] = useState<Record<string, boolean>>({
+    pay_especes: operationRules?.pay_especes ?? settings.paymentMethods?.pay_especes ?? true,
+    pay_cb: operationRules?.pay_cb ?? settings.paymentMethods?.pay_cb ?? true,
+    pay_mtn_momo: operationRules?.pay_mtn_momo ?? settings.paymentMethods?.pay_mtn_momo ?? true,
+    pay_orange_money: operationRules?.pay_orange_money ?? settings.paymentMethods?.pay_orange_money ?? true,
+    pay_virement: operationRules?.pay_virement ?? settings.paymentMethods?.pay_virement ?? true,
+    pay_cheque: operationRules?.pay_cheque ?? settings.paymentMethods?.pay_cheque ?? true,
+    pay_credit_client: operationRules?.pay_credit_client ?? settings.paymentMethods?.pay_credit_client ?? true,
+    pay_partiel: operationRules?.pay_partiel ?? settings.paymentMethods?.pay_partiel ?? true,
+    pay_multiple: operationRules?.pay_multiple ?? settings.paymentMethods?.pay_multiple ?? true,
+    ...(settings.paymentMethods || {}),
+  });
+
+  const [accountingAccounts, setAccountingAccounts] = useState({
+    cuisineSales: settings.accountingAccounts?.cuisineSales || '701100',
+    barSales: settings.accountingAccounts?.barSales || '702100',
+    vatCollected: settings.accountingAccounts?.vatCollected || '443100',
+    cacCollected: settings.accountingAccounts?.cacCollected || '443200',
+    withholdingAir: settings.accountingAccounts?.withholdingAir || '447200',
+    cashAccount: settings.accountingAccounts?.cashAccount || '571100',
+    mobileMoneyAccount: settings.accountingAccounts?.mobileMoneyAccount || '585100',
+    clientsAccount: settings.accountingAccounts?.clientsAccount || '411100',
+  });
+
   React.useEffect(() => {
     if (operationRules) {
       setBillingOptions((prev) => ({ ...prev, ...operationRules }));
+      setPaymentMethods((prev) => ({
+        ...prev,
+        pay_especes: operationRules.pay_especes ?? prev.pay_especes,
+        pay_cb: operationRules.pay_cb ?? prev.pay_cb,
+        pay_mtn_momo: operationRules.pay_mtn_momo ?? prev.pay_mtn_momo,
+        pay_orange_money: operationRules.pay_orange_money ?? prev.pay_orange_money,
+        pay_virement: operationRules.pay_virement ?? prev.pay_virement,
+        pay_cheque: operationRules.pay_cheque ?? prev.pay_cheque,
+        pay_credit_client: operationRules.pay_credit_client ?? prev.pay_credit_client,
+        pay_partiel: operationRules.pay_partiel ?? prev.pay_partiel,
+        pay_multiple: operationRules.pay_multiple ?? prev.pay_multiple,
+      }));
     }
   }, [operationRules]);
+
+  React.useEffect(() => {
+    if (settings) {
+      if (settings.niu) setNiu(settings.niu);
+      if (settings.rccm) setRccm(settings.rccm);
+      if (settings.taxCenter) setTaxCenter(settings.taxCenter);
+      if (settings.taxRate !== undefined) setTaxRate(settings.taxRate);
+      if (settings.baseVatRate !== undefined) setVatBaseRate(settings.baseVatRate);
+      if (settings.cacRate !== undefined) setCacRate(settings.cacRate);
+      if (settings.withholdingRate !== undefined) setWithholdingRate(settings.withholdingRate);
+
+      if (settings.mtnActive !== undefined) setMtnActive(settings.mtnActive);
+      if (settings.mtnMoMoMerchantCode) setMtnMerchantCode(settings.mtnMoMoMerchantCode);
+      if (settings.mtnMoMoPhone) setMtnPhone(settings.mtnMoMoPhone);
+      if (settings.mtnMode) setMtnMode(settings.mtnMode);
+      if (settings.mtnManualVerification !== undefined) setMtnManualVerification(settings.mtnManualVerification);
+      if (settings.mtnAutoConfirmApi !== undefined) setMtnAutoConfirmApi(settings.mtnAutoConfirmApi);
+
+      if (settings.orangeActive !== undefined) setOrangeActive(settings.orangeActive);
+      if (settings.orangeMoneyMerchantCode) setOrangeMerchantCode(settings.orangeMoneyMerchantCode);
+      if (settings.orangeMoneyPhone) setOrangePhone(settings.orangeMoneyPhone);
+      if (settings.orangeMode) setOrangeMode(settings.orangeMode);
+      if (settings.orangeManualVerification !== undefined) setOrangeManualVerification(settings.orangeManualVerification);
+      if (settings.orangeAutoConfirmApi !== undefined) setOrangeAutoConfirmApi(settings.orangeAutoConfirmApi);
+
+      if (settings.paymentMethods) {
+        setPaymentMethods((prev) => ({ ...prev, ...settings.paymentMethods }));
+      }
+      if (settings.accountingAccounts) {
+        setAccountingAccounts((prev) => ({ ...prev, ...settings.accountingAccounts }));
+      }
+    }
+  }, [settings]);
 
   const handleSaveBilling = async () => {
     await updateOperationRules(billingOptions);
@@ -94,44 +164,69 @@ export const FiscalBillingPaymentsSection: React.FC<Props> = ({ subTab }) => {
     setTimeout(() => setSavedSuccess(false), 2500);
   };
 
-  const [paymentMethods, setPaymentMethods] = useState<Record<string, boolean>>({
-    pay_especes: true,
-    pay_cb: true,
-    pay_mtn_momo: true,
-    pay_orange_money: true,
-    pay_virement: true,
-    pay_cheque: true,
-    pay_credit_client: true,
-    pay_partiel: true,
-    pay_multiple: true,
-  });
-
-  const [accountingAccounts, setAccountingAccounts] = useState({
-    cuisineSales: '701100',
-    barSales: '702100',
-    vatCollected: '443100',
-    cacCollected: '443200',
-    withholdingAir: '447200',
-    cashAccount: '571100',
-    mobileMoneyAccount: '585100',
-    clientsAccount: '411100',
-  });
-
-  const handleSave = (e?: React.FormEvent) => {
+  const handleSave = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    updateSettings({
-      niu,
-      rccm,
-      taxCenter,
-      taxRate,
-      mtnMoMoMerchantCode: mtnMerchantCode,
-      mtnMoMoPhone: mtnPhone,
-      orangeMoneyMerchantCode: orangeMerchantCode,
-      orangeMoneyPhone: orangePhone,
-    });
-    setSavedSuccess(true);
-    addAuditLog('Mise à jour finance', 'Paramètres', `Modification des paramètres ${subTab.toUpperCase()}`);
-    setTimeout(() => setSavedSuccess(false), 2500);
+    setErrorMessage(null);
+
+    if (subTab === 'fiscalite') {
+      if (!niu.trim()) {
+        setErrorMessage('Le NIU (Numéro d\'Identifiant Unique) est obligatoire pour la conformité fiscale.');
+        return;
+      }
+      if (!rccm.trim()) {
+        setErrorMessage('Le numéro RCCM est obligatoire pour la facturation officielle.');
+        return;
+      }
+      if (vatBaseRate < 0 || vatBaseRate > 100) {
+        setErrorMessage('Le taux de TVA standard doit être compris entre 0% et 100%.');
+        return;
+      }
+      if (cacRate < 0 || cacRate > 100) {
+        setErrorMessage('Le taux des CAC doit être compris entre 0% et 100%.');
+        return;
+      }
+      if (withholdingRate < 0 || withholdingRate > 100) {
+        setErrorMessage('Le taux de retenue AIR doit être compris entre 0% et 100%.');
+        return;
+      }
+    }
+
+    try {
+      await updateSettings({
+        niu: niu.trim().toUpperCase(),
+        rccm: rccm.trim(),
+        taxCenter: taxCenter.trim(),
+        taxRate,
+        baseVatRate: vatBaseRate,
+        cacRate,
+        withholdingRate,
+        mtnActive,
+        mtnMoMoMerchantCode: mtnMerchantCode.trim(),
+        mtnMoMoPhone: mtnPhone.trim(),
+        mtnMode,
+        mtnManualVerification,
+        mtnAutoConfirmApi,
+        orangeActive,
+        orangeMoneyMerchantCode: orangeMerchantCode.trim(),
+        orangeMoneyPhone: orangePhone.trim(),
+        orangeMode,
+        orangeManualVerification,
+        orangeAutoConfirmApi,
+        paymentMethods,
+        accountingAccounts,
+      });
+
+      if (subTab === 'paiements') {
+        await updateOperationRules(paymentMethods);
+      }
+
+      setSavedSuccess(true);
+      addAuditLog('Mise à jour finance', 'Paramètres', `Modification des paramètres ${subTab.toUpperCase()}`);
+      setTimeout(() => setSavedSuccess(false), 2500);
+    } catch (err) {
+      console.error('Erreur lors de la sauvegarde des paramètres:', err);
+      setErrorMessage('Une erreur est survenue lors de l\'enregistrement des paramètres.');
+    }
   };
 
   // 1. FACTURATION (Section 18)
@@ -319,6 +414,13 @@ export const FiscalBillingPaymentsSection: React.FC<Props> = ({ subTab }) => {
             </span>
           )}
         </div>
+
+        {errorMessage && (
+          <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-900 text-xs flex items-center gap-2.5">
+            <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+            <span className="font-semibold">{errorMessage}</span>
+          </div>
+        )}
 
         {/* Warning banner: no hardcoded rates */}
         <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-center gap-2.5">
@@ -528,6 +630,13 @@ export const FiscalBillingPaymentsSection: React.FC<Props> = ({ subTab }) => {
           )}
         </div>
 
+        {errorMessage && (
+          <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-900 text-xs flex items-center gap-2.5">
+            <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+            <span className="font-semibold">{errorMessage}</span>
+          </div>
+        )}
+
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
           {paymentMethodsList.map((m) => (
             <ModernRuleToggle
@@ -583,6 +692,13 @@ export const FiscalBillingPaymentsSection: React.FC<Props> = ({ subTab }) => {
             </span>
           )}
         </div>
+
+        {errorMessage && (
+          <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-900 text-xs flex items-center gap-2.5">
+            <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+            <span className="font-semibold">{errorMessage}</span>
+          </div>
+        )}
 
         {/* Security Rule Warning */}
         <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-900 text-xs flex items-center gap-2.5">
@@ -861,6 +977,13 @@ export const FiscalBillingPaymentsSection: React.FC<Props> = ({ subTab }) => {
           </span>
         )}
       </div>
+
+      {errorMessage && (
+        <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-900 text-xs flex items-center gap-2.5">
+          <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+          <span className="font-semibold">{errorMessage}</span>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
         <div>

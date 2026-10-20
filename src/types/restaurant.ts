@@ -129,6 +129,33 @@ export interface RestaurantSettings {
   defaultReceiptWidth: '58mm' | '80mm';
   stockDeductionTiming?: 'envoi_cuisine' | 'encaissement'; // Déstockage à l'envoi ou au paiement
   priceDisplayMode?: 'TTC' | 'HT'; // Affichage prix TTC ou HT
+
+  // Paramètres Fiscaux Avancés & Retenues (AIR)
+  withholdingRate?: number; // e.g. 2.2% ou 5.5%
+  timeZone?: string; // e.g. 'Africa/Douala'
+
+  // Paramètres Opérationnels Mobile Money
+  mtnActive?: boolean;
+  mtnMode?: 'test' | 'production';
+  mtnManualVerification?: boolean;
+  mtnAutoConfirmApi?: boolean;
+  orangeActive?: boolean;
+  orangeMode?: 'test' | 'production';
+  orangeManualVerification?: boolean;
+  orangeAutoConfirmApi?: boolean;
+
+  // Méthodes de Paiement & Comptes Comptables SYSCOHADA
+  paymentMethods?: Record<string, boolean>;
+  accountingAccounts?: {
+    cuisineSales: string;
+    barSales: string;
+    vatCollected: string;
+    cacCollected: string;
+    withholdingAir: string;
+    cashAccount: string;
+    mobileMoneyAccount: string;
+    clientsAccount: string;
+  };
 }
 
 export interface Organization {

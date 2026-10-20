@@ -24,8 +24,20 @@ export const GeneralAndOutletsSection: React.FC<Props> = ({ subTab }) => {
   const [phone, setPhone] = useState(settings.phone);
   const [email, setEmail] = useState(settings.email);
   const [currency, setCurrency] = useState(settings.currency || 'FCFA');
-  const [timeZone, setTimeZone] = useState('Africa/Douala (GMT+1)');
+  const [timeZone, setTimeZone] = useState(settings.timeZone || 'Africa/Douala (GMT+1)');
   const [savedSuccess, setSavedSuccess] = useState(false);
+
+  React.useEffect(() => {
+    if (settings) {
+      if (settings.name) setName(settings.name);
+      if (settings.slogan) setSlogan(settings.slogan);
+      if (settings.address) setAddress(settings.address);
+      if (settings.phone) setPhone(settings.phone);
+      if (settings.email) setEmail(settings.email);
+      if (settings.currency) setCurrency(settings.currency);
+      if (settings.timeZone) setTimeZone(settings.timeZone);
+    }
+  }, [settings]);
 
   // New Outlet Form State
   const [showNewOutletModal, setShowNewOutletModal] = useState(false);
@@ -34,15 +46,16 @@ export const GeneralAndOutletsSection: React.FC<Props> = ({ subTab }) => {
   const [newOutletAddress, setNewOutletAddress] = useState('');
   const [newOutletPhone, setNewOutletPhone] = useState('+237 ');
 
-  const handleSaveGeneral = (e: React.FormEvent) => {
+  const handleSaveGeneral = async (e: React.FormEvent) => {
     e.preventDefault();
-    updateSettings({
+    await updateSettings({
       name,
       slogan,
       address,
       phone,
       email,
       currency,
+      timeZone,
     });
     setSavedSuccess(true);
     setTimeout(() => setSavedSuccess(false), 3000);
@@ -154,12 +167,20 @@ export const GeneralAndOutletsSection: React.FC<Props> = ({ subTab }) => {
 
           <div>
             <label className="font-bold text-slate-700 block mb-1">Fuseau horaire système :</label>
-            <input
-              type="text"
+            <select
               value={timeZone}
-              disabled
-              className="w-full p-2.5 rounded-xl bg-slate-100 border border-slate-200 text-slate-600 font-mono"
-            />
+              onChange={(e) => setTimeZone(e.target.value)}
+              className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 font-medium focus:bg-white focus:outline-none"
+            >
+              <option value="Africa/Douala (GMT+1)">Afrique Centrale — Douala, Yaoundé (GMT+1)</option>
+              <option value="Africa/Libreville (GMT+1)">Afrique Centrale — Libreville (GMT+1)</option>
+              <option value="Africa/Brazzaville (GMT+1)">Afrique Centrale — Brazzaville (GMT+1)</option>
+              <option value="Africa/Kinshasa (GMT+1)">Afrique Centrale — Kinshasa (GMT+1)</option>
+              <option value="Africa/Lagos (GMT+1)">Afrique de l'Ouest — Lagos (GMT+1)</option>
+              <option value="Africa/Abidjan (GMT+0)">Afrique de l'Ouest — Abidjan (GMT+0)</option>
+              <option value="Africa/Dakar (GMT+0)">Afrique de l'Ouest — Dakar (GMT+0)</option>
+              <option value="UTC">Temps Universel Coordonné (UTC)</option>
+            </select>
           </div>
         </div>
 

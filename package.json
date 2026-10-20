@@ -12,6 +12,7 @@
     "test:phase1": "tsx scripts/verify-phase1.ts",
     "test:phase2": "tsx scripts/verify-phase2-fiscal.ts",
     "test:config-phase1": "tsx scripts/verify-phase1-persistence.ts",
+    "test:config-phase2": "tsx scripts/verify-phase2-settings.ts",
     "audit:config": "tsx scripts/audit-config.ts"
   },
   "dependencies": {
