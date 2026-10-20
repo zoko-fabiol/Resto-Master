@@ -654,9 +654,21 @@ export const VectorFloorPlan: React.FC<VectorFloorPlanProps> = ({
         <Compass className="w-8 h-8" />
         <div>
           <div className="font-bold tracking-widest">REPERE VECTORIEL 1200 x 800</div>
-          <div className="text-[10px] uppercase opacity-75">{activeZone?.name || 'SALLE PRINCIPALE'}</div>
+          <div className="text-xs uppercase opacity-75 font-semibold">{activeZone?.name || 'SALLE PRINCIPALE'}</div>
         </div>
       </div>
+
+      {/* Keyboard Shortcuts Pill in Edit Mode (Section 2.3) */}
+      {isEditMode && (
+        <div className="absolute bottom-4 left-4 z-20 hidden md:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-900/80 backdrop-blur-xs text-slate-300 text-xs border border-slate-700/60 shadow-lg pointer-events-none select-none">
+          <span className="font-semibold text-amber-400">Raccourcis :</span>
+          <span>Flèches = Déplacer (Maj = ×10)</span>
+          <span className="opacity-40">|</span>
+          <span>Ctrl+D = Dupliquer</span>
+          <span className="opacity-40">|</span>
+          <span>Suppr = Supprimer</span>
+        </div>
+      )}
 
       {/* Welcoming Empty State (G13) */}
       {tables.length === 0 && (

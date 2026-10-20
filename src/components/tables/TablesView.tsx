@@ -111,7 +111,13 @@ export const TablesView: React.FC<TablesViewProps> = ({ onOpenOrder, onPayOrder,
   const isCleaningAllowed = isRuleEnabled('tables_cleaning', true);
 
   // View Mode: 'plan' (2D Vectoriel), 'grille' (Tactile Grid), 'commandes' (Active multi-orders)
-  const [viewMode, setViewMode] = useState<'plan' | 'grille' | 'commandes'>('plan');
+  // Sur smartphone (< 640px), bascule automatiquement en vue Grille pour une accessibilité tactile optimale
+  const [viewMode, setViewMode] = useState<'plan' | 'grille' | 'commandes'>(() => {
+    if (typeof window !== 'undefined' && window.innerWidth < 640) {
+      return 'grille';
+    }
+    return 'plan';
+  });
   const [selectedZoneId, setSelectedZoneId] = useState<string | 'all'>(() => {
     return zones[0]?.id || 'all';
   });
@@ -214,11 +220,97 @@ export const TablesView: React.FC<TablesViewProps> = ({ onOpenOrder, onPayOrder,
     dispatchFloorPlan({ type: 'REDO' });
   }, []);
 
-  // Keyboard shortcut listener for Ctrl+Z / Ctrl+Y
+  // Déplacement au clavier (flèches, Maj pour 10 unités) (Section 2.3)
+  const handleNudgeSelected = useCallback(
+    (dx: number, dy: number) => {
+      if (selectedTableId) {
+        const table = draftTables.find((t) => t.id === selectedTableId);
+        if (!table) return;
+        const newX = Math.max(40, Math.min(1160, (table.x ?? 200) + dx));
+        const newY = Math.max(40, Math.min(760, (table.y ?? 200) + dy));
+        dispatchFloorPlan({
+          type: 'UPDATE_SINGLE_TABLE',
+          payload: { id: selectedTableId, updates: { x: newX, y: newY } },
+        });
+      } else if (selectedDecorId) {
+        const decor = draftDecor.find((d) => d.id === selectedDecorId);
+        if (!decor) return;
+        const newX = Math.max(30, Math.min(1170, decor.x + dx));
+        const newY = Math.max(30, Math.min(770, decor.y + dy));
+        dispatchFloorPlan({
+          type: 'SAVE_DECOR_ELEMENT',
+          payload: { ...decor, x: newX, y: newY },
+        });
+      }
+    },
+    [selectedTableId, selectedDecorId, draftTables, draftDecor]
+  );
+
+  // Duplication rapide d'une table sélectionnée (Ctrl+D)
+  const handleDuplicateSelected = useCallback(() => {
+    if (!selectedTableId) return;
+    const original = draftTables.find((t) => t.id === selectedTableId);
+    if (!original) return;
+
+    const copyTable: RestaurantTable = {
+      ...original,
+      id: generateSecureId('tbl'),
+      number: `${original.number}-bis`,
+      x: Math.min(1120, (original.x ?? 200) + 30),
+      y: Math.min(720, (original.y ?? 200) + 30),
+      status: 'libre',
+      coordVersion: 2,
+    };
+
+    dispatchFloorPlan({ type: 'ADD_TABLE', payload: copyTable });
+    setSelectedTableId(copyTable.id);
+    showToast({
+      type: 'success',
+      title: 'Table dupliquée',
+      message: `La table ${copyTable.number} a été créée à côté de l'originale.`,
+    });
+  }, [selectedTableId, draftTables, showToast]);
+
+  // Suppression rapide d'un élément sélectionné (Suppr / Backspace)
+  const handleDeleteSelected = useCallback(() => {
+    if (selectedTableId) {
+      const isPersisted = tables.some((t) => t.id === selectedTableId);
+      dispatchFloorPlan({
+        type: 'REMOVE_TABLE',
+        payload: { id: selectedTableId, isPersisted },
+      });
+      setSelectedTableId(null);
+      showToast({
+        type: 'info',
+        title: 'Table retirée',
+        message: 'La table sélectionnée a été retirée du plan.',
+      });
+    } else if (selectedDecorId) {
+      const isPersisted = decorElements.some((d) => d.id === selectedDecorId);
+      dispatchFloorPlan({
+        type: 'REMOVE_DECOR',
+        payload: { id: selectedDecorId, isPersisted },
+      });
+      setSelectedDecorId(null);
+      showToast({
+        type: 'info',
+        title: 'Décor retiré',
+        message: 'L\'élément architectural sélectionné a été retiré.',
+      });
+    }
+  }, [selectedTableId, selectedDecorId, tables, decorElements, showToast]);
+
+  // Écouteur de raccourcis clavier en mode édition (Ctrl+Z, Ctrl+Y, Ctrl+D, Suppr, Flèches)
   useEffect(() => {
     if (!isEditMode) return;
 
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Ignorer si l'utilisateur est en train de taper dans un champ de formulaire
+      const targetTag = (e.target as HTMLElement)?.tagName?.toLowerCase();
+      if (targetTag === 'input' || targetTag === 'textarea' || targetTag === 'select') {
+        return;
+      }
+
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
         e.preventDefault();
         if (e.shiftKey) {
@@ -229,12 +321,39 @@ export const TablesView: React.FC<TablesViewProps> = ({ onOpenOrder, onPayOrder,
       } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') {
         e.preventDefault();
         handleRedo();
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'd') {
+        if (selectedTableId) {
+          e.preventDefault();
+          handleDuplicateSelected();
+        }
+      } else if (e.key === 'Delete' || e.key === 'Backspace') {
+        if (selectedTableId || selectedDecorId) {
+          e.preventDefault();
+          handleDeleteSelected();
+        }
+      } else if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+        if (selectedTableId || selectedDecorId) {
+          e.preventDefault();
+          const step = e.shiftKey ? 10 : 1;
+          const dx = e.key === 'ArrowLeft' ? -step : e.key === 'ArrowRight' ? step : 0;
+          const dy = e.key === 'ArrowUp' ? -step : e.key === 'ArrowDown' ? step : 0;
+          handleNudgeSelected(dx, dy);
+        }
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isEditMode, handleUndo, handleRedo]);
+  }, [
+    isEditMode,
+    selectedTableId,
+    selectedDecorId,
+    handleUndo,
+    handleRedo,
+    handleNudgeSelected,
+    handleDuplicateSelected,
+    handleDeleteSelected,
+  ]);
 
   // Renouvellement périodique du verrou d'édition (heartbeat toutes les 45s)
   useEffect(() => {
