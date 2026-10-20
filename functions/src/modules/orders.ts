@@ -201,10 +201,24 @@ export async function handleCreateOrder(request: CallableRequest<CreateOrderRequ
     updatedAt: FieldValue.serverTimestamp(),
   };
 
-  // 4. Écriture atomique Firestore (Création commande + Statut Table + Déduction Stock)
   await db.runTransaction(async (transaction) => {
-    // Écrire la commande
-    transaction.set(db.collection('orders').doc(orderId), newOrder);
+    // Lire la configuration du timing de déstockage (envoi cuisine vs encaissement)
+    let shouldDeductNow = true;
+    try {
+      const settingsSnap = await transaction.get(db.collection('settings').doc(restaurantId));
+      if (settingsSnap.exists) {
+        const sData = settingsSnap.data()!;
+        if (sData.stockDeductionTiming === 'encaissement') {
+          shouldDeductNow = false;
+        }
+      }
+    } catch {}
+
+    // Écrire la commande avec drapeau de déstockage
+    transaction.set(db.collection('orders').doc(orderId), {
+      ...newOrder,
+      stockDeducted: shouldDeductNow,
+    });
 
     // Si sur place avec table : mettre à jour le statut de la table
     if (data.tableId) {
@@ -218,21 +232,40 @@ export async function handleCreateOrder(request: CallableRequest<CreateOrderRequ
       });
     }
 
-    // Déduction des stocks selon les fiches techniques des ingrédients
-    for (const item of resolvedItems) {
-      if (item.ingredients && Array.isArray(item.ingredients)) {
-        for (const ing of item.ingredients) {
-          if (ing.stockItemId && ing.quantityRequired) {
-            const consumedQty = ing.quantityRequired * item.quantity;
-            const stockRef = db.collection('stock_items').doc(ing.stockItemId);
-            const stockSnap = await transaction.get(stockRef);
-            if (stockSnap.exists) {
-              const currentStock = Number(stockSnap.data()!.currentQuantity) || 0;
-              const newQty = Math.max(0, Math.round((currentStock - consumedQty) * 100) / 100);
-              transaction.update(stockRef, {
-                currentQuantity: newQty,
-                lastUpdated: FieldValue.serverTimestamp(),
-              });
+    // Déduction des stocks selon les fiches techniques des ingrédients si timing = envoi_cuisine
+    if (shouldDeductNow) {
+      for (const item of resolvedItems) {
+        if (item.ingredients && Array.isArray(item.ingredients)) {
+          for (const ing of item.ingredients) {
+            if (ing.stockItemId && ing.quantityRequired) {
+              const consumedQty = Number(ing.quantityRequired) * item.quantity;
+              const stockRef = db.collection('stock_items').doc(ing.stockItemId);
+              const stockSnap = await transaction.get(stockRef);
+              if (stockSnap.exists) {
+                const currentStock = Number(stockSnap.data()!.currentQuantity) || 0;
+                const newQty = Math.max(0, Math.round((currentStock - consumedQty) * 100) / 100);
+                transaction.update(stockRef, {
+                  currentQuantity: newQty,
+                  lastUpdated: FieldValue.serverTimestamp(),
+                });
+
+                // Mouvement de stock traçable et immuable
+                const mvtId = crypto.randomUUID();
+                transaction.set(db.collection('stock_movements').doc(mvtId), {
+                  id: mvtId,
+                  stockItemId: ing.stockItemId,
+                  restaurantId,
+                  type: 'consommation_recette',
+                  quantity: consumedQty,
+                  previousQuantity: currentStock,
+                  newQuantity: newQty,
+                  reason: `Sortie recette Bon ${orderNumber} (${item.productName})`,
+                  user: caller.name,
+                  userUid: caller.uid,
+                  referenceDocId: orderId,
+                  timestamp: FieldValue.serverTimestamp(),
+                });
+              }
             }
           }
         }
@@ -295,21 +328,39 @@ export async function handleAddItemsToOrder(request: CallableRequest<AddItemsToO
 
     transaction.update(orderRef, updates);
 
-    // Déduction des stocks selon les fiches techniques des ingrédients pour les nouveaux articles
-    for (const item of resolvedItems) {
-      if (item.ingredients && Array.isArray(item.ingredients)) {
-        for (const ing of item.ingredients) {
-          if (ing.stockItemId && ing.quantityRequired) {
-            const consumedQty = ing.quantityRequired * item.quantity;
-            const stockRef = db.collection('stock_items').doc(ing.stockItemId);
-            const stockSnap = await transaction.get(stockRef);
-            if (stockSnap.exists) {
-              const currentStock = Number(stockSnap.data()!.currentQuantity) || 0;
-              const newQty = Math.max(0, Math.round((currentStock - consumedQty) * 100) / 100);
-              transaction.update(stockRef, {
-                currentQuantity: newQty,
-                lastUpdated: FieldValue.serverTimestamp(),
-              });
+    // Déduction des stocks selon les fiches techniques si la commande est en déstockage immédiat
+    if (orderData.stockDeducted !== false) {
+      for (const item of resolvedItems) {
+        if (item.ingredients && Array.isArray(item.ingredients)) {
+          for (const ing of item.ingredients) {
+            if (ing.stockItemId && ing.quantityRequired) {
+              const consumedQty = Number(ing.quantityRequired) * item.quantity;
+              const stockRef = db.collection('stock_items').doc(ing.stockItemId);
+              const stockSnap = await transaction.get(stockRef);
+              if (stockSnap.exists) {
+                const currentStock = Number(stockSnap.data()!.currentQuantity) || 0;
+                const newQty = Math.max(0, Math.round((currentStock - consumedQty) * 100) / 100);
+                transaction.update(stockRef, {
+                  currentQuantity: newQty,
+                  lastUpdated: FieldValue.serverTimestamp(),
+                });
+
+                const mvtId = crypto.randomUUID();
+                transaction.set(db.collection('stock_movements').doc(mvtId), {
+                  id: mvtId,
+                  stockItemId: ing.stockItemId,
+                  restaurantId: orderData.restaurantId,
+                  type: 'consommation_recette',
+                  quantity: consumedQty,
+                  previousQuantity: currentStock,
+                  newQuantity: newQty,
+                  reason: `Sortie recette Ajout Bon ${orderData.orderNumber} (${item.productName})`,
+                  user: caller.name,
+                  userUid: caller.uid,
+                  referenceDocId: orderId,
+                  timestamp: FieldValue.serverTimestamp(),
+                });
+              }
             }
           }
         }

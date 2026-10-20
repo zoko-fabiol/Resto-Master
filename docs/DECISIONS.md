@@ -187,3 +187,32 @@ Ce document consigne les décisions d'architecture prises pour la livraison d'un
     - Affichage d'un état d'accueil chaleureux avec boutons d'action rapide si une salle ne comporte encore aucune table.
 - **Conséquences** : Ergonomie tactile professionnelle de niveau industriel, intégrité des données sans écritures superflues, plan lisible sur tout écran et conformité totale aux exigences d'exploitation restaurant.
 
+---
+
+### ADR-012 : Transactions Financières, Déduction de Stock Pilotée et Idempotence Serveur (Phase H)
+- **Date** : 2026-10-20
+- **Statut** : Accepté & Implémenté
+- **Contexte** : Les opérations d'encaissement et de déduction des stocks doivent garantir une intégrité absolue (zéro double encaissement en cas de retry réseau, calcul fiscal serveur strict, libération automatique des tables associées, imputation comptable en session de caisse, et déstockage des ingrédients selon le paramètre `stockDeductionTiming`). De plus, les règles de sécurité Firestore doivent interdire formellement aux clients de falsifier les montants financiers (`total`, `subtotal`, `tax`, `orderNumber`) ou de manipuler unilatéralement les mouvements de caisse ou factures.
+- **Décision** :
+  - **H1 & H2 (Transaction d'Encaissement Atomique & Idempotence)** :
+    - Implémentation de la Cloud Function `recordPayment` (région `europe-west1`) encapsulant l'ensemble des écritures dans une transaction Firestore atomique (`runTransaction`).
+    - Cache d'idempotence via collection privée `_idempotency_keys/{key}`. Tout appel réseau rejoué avec la même clé renvoie immédiatement le résultat mis en cache sans réappliquer les débits/crédits ni recréer de documents.
+    - Mise à jour du document de commande (`orders/{id}`): statut `payee` si le solde atteint 0, actualisation de `paidAmount` et `remainingAmount`.
+    - Libération automatique de la table associée (`status: 'libre'`, `currentOrderId: null`).
+    - Enregistrement d'un mouvement de caisse immuable (`cash_movements`) si une session de caisse active est fournie ou détectée.
+    - Émission de la facture (`invoices/{id}`).
+    - Intégration côté client dans `offlineSyncService` pour mise en file d'attente hors-ligne résiliente.
+  - **H4 (Déduction des Stocks Selon Recettes & Paramètre de Timing)** :
+    - Prise en charge du paramètre de restaurant `stockDeductionTiming` (`envoi_cuisine` ou `encaissement`).
+    - Lors de l'envoi en cuisine (`orders.ts: createOrder` ou `addItemsToOrder`), si le paramètre est `envoi_cuisine` (ou non défini par défaut), les ingrédients des recettes sont déduits du stock et des mouvements de stock `stock_movements` (type `sortie`, raison `vente`) sont créés. Le drapeau `stockDeducted: true` est apposé sur la commande.
+    - Lors de l'encaissement complet (`payments.ts: recordPayment`), si `stockDeductionTiming === 'encaissement'` et que `stockDeducted !== true`, le déstockage des recettes est déclenché de manière transactionnelle avec création des mouvements de stock et bascule du drapeau `stockDeducted: true`.
+    - Évite tout double déstockage.
+  - **H5 (Règles Firestore Durcies pour l'Intégrité Financière)** :
+    - Règles de sécurité Firestore (`firestore.rules`) interdisant aux clients de modifier `orderNumber`, `total`, `subtotal`, `tax`, ou de réduire `paidAmount`.
+    - Collections d'intégrité immuables (`cash_movements`, `invoices`, `_idempotency_keys`, `_counters`) protégées contre toute suppression ou altération client.
+  - **H3 & H6 (Validation Automatisée & Région Serveur)** :
+    - Suite de tests automatisée `scripts/verify-phase-h-finance.ts` (`npm run test:phase-h`) couvrant l'idempotence, le rejet des sur-paiements, le rejet des écritures client directes, et la déduction de stock.
+    - Déploiement vérifié sur `europe-west1` pour toutes les Cloud Functions.
+- **Conséquences** : Intégrité financière et de stock de classe entreprise, conformité fiscale, traçabilité immuable des flux d'espèces et de cartes, résilience aux déconnexions réseau.
+
+

@@ -159,6 +159,48 @@ export async function handleRecordPayment(request: CallableRequest<RecordPayment
       }
     }
 
+    // Déduction des stocks à l'encaissement si timing paramétré sur 'encaissement' (H4)
+    if (isFullyPaid && orderData.stockDeducted === false) {
+      const orderItems = (orderData.items as Array<any>) || [];
+      for (const item of orderItems) {
+        const ingredients = item.ingredients || item.recipeIngredients || [];
+        if (Array.isArray(ingredients)) {
+          for (const ing of ingredients) {
+            if (ing.stockItemId && ing.quantityRequired) {
+              const consumedQty = Number(ing.quantityRequired) * (Number(item.quantity) || 1);
+              const stockRef = db.collection('stock_items').doc(ing.stockItemId);
+              const stockSnap = await transaction.get(stockRef);
+              if (stockSnap.exists) {
+                const currentStock = Number(stockSnap.data()!.currentQuantity) || 0;
+                const newQty = Math.max(0, Math.round((currentStock - consumedQty) * 100) / 100);
+                transaction.update(stockRef, {
+                  currentQuantity: newQty,
+                  lastUpdated: FieldValue.serverTimestamp(),
+                });
+
+                const mvtId = crypto.randomUUID();
+                transaction.set(db.collection('stock_movements').doc(mvtId), {
+                  id: mvtId,
+                  stockItemId: ing.stockItemId,
+                  restaurantId: orderData.restaurantId,
+                  type: 'consommation_recette',
+                  quantity: consumedQty,
+                  previousQuantity: currentStock,
+                  newQuantity: newQty,
+                  reason: `Déstockage à l'encaissement Bon ${orderData.orderNumber} (${item.productName || item.name || 'Article'})`,
+                  user: caller.name,
+                  userUid: caller.uid,
+                  referenceDocId: orderId,
+                  timestamp: FieldValue.serverTimestamp(),
+                });
+              }
+            }
+          }
+        }
+      }
+      transaction.update(orderRef, { stockDeducted: true });
+    }
+
     // Journalisation d'audit serveur
     const auditId = crypto.randomUUID();
     transaction.set(db.collection('audit_logs').doc(auditId), {

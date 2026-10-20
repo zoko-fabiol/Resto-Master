@@ -197,7 +197,14 @@ service cloud.firestore {
 
     match /cash_sessions/{sessionId} {
       allow read: if isAuthenticated() && hasDocRestaurantAccess();
-      allow create, update: if isAuthenticated() && hasIncomingRestaurantAccess();
+      allow create: if isAuthenticated() && hasIncomingRestaurantAccess();
+      allow update: if isAuthenticated() && hasIncomingRestaurantAccess() && (
+        isDirection() || isManager() || (
+          (!('initialFloat' in request.resource.data) || request.resource.data.initialFloat == resource.data.initialFloat) &&
+          (!('openedAt' in request.resource.data) || request.resource.data.openedAt == resource.data.openedAt) &&
+          (!('openedBy' in request.resource.data) || request.resource.data.openedBy == resource.data.openedBy)
+        )
+      );
       allow delete: if false; // Les sessions de caisse sont inaltérables
     }
 
@@ -218,11 +225,21 @@ service cloud.firestore {
     }
 
     // =========================================================================
-    // 6. COMMANDES & POS
+    // 6. COMMANDES & POS (PROTECTION STRICTE DES MONTANTS FINANCIERS)
     // =========================================================================
     match /orders/{orderId} {
       allow read: if isAuthenticated() && hasDocRestaurantAccess();
-      allow create, update: if isAuthenticated() && hasIncomingRestaurantAccess();
+      allow create: if isAuthenticated() && hasIncomingRestaurantAccess();
+      // Interdiction formelle de modifier arbitrairement les montants financiers et numéros légaux
+      allow update: if isAuthenticated() && hasIncomingRestaurantAccess() && (
+        isDirection() || isManager() || (
+          (!('orderNumber' in request.resource.data) || request.resource.data.orderNumber == resource.data.orderNumber) &&
+          (!('total' in request.resource.data) || request.resource.data.total == resource.data.total) &&
+          (!('subtotal' in request.resource.data) || request.resource.data.subtotal == resource.data.subtotal) &&
+          (!('tax' in request.resource.data) || request.resource.data.tax == resource.data.tax) &&
+          (!('paidAmount' in request.resource.data) || request.resource.data.paidAmount >= resource.data.paidAmount)
+        )
+      );
       allow delete: if false; // Jamais de delete direct : annulation traçable avec avoir
     }
 
@@ -231,8 +248,16 @@ service cloud.firestore {
     // =========================================================================
     match /invoices/{invoiceId} {
       allow read: if isAuthenticated() && (isDirection() || isManager() || isComptable() || hasDocRestaurantAccess());
-      allow create: if isAuthenticated() && hasIncomingRestaurantAccess();
+      allow create: if isAuthenticated() && (isDirection() || isManager() || isComptable() || hasIncomingRestaurantAccess());
       allow update, delete: if false; // Facture inaltérable après émission
+    }
+
+    match /_idempotency_keys/{keyId} {
+      allow read, write: if false; // Clés d'idempotence gérées exclusivement côté serveur Cloud Functions
+    }
+
+    match /_counters/{counterId} {
+      allow read, write: if false; // Compteurs séquentiels gérés exclusivement côté serveur
     }
 
     match /fiscal_journal/{itemId} {

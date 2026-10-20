@@ -18,6 +18,7 @@
     "test:config-phase2": "tsx scripts/verify-phase2-settings.ts",
     "test:config-phase3": "tsx scripts/verify-phase3-connected.ts",
     "test:config-phase4": "tsx scripts/verify-phase4-permissions.ts",
+    "test:phase-h": "tsx scripts/verify-phase-h-finance.ts",
     "audit:config": "tsx scripts/audit-config.ts"
   },
   "dependencies": {
