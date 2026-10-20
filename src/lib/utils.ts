@@ -334,6 +334,7 @@ export const ORDER_STATUS_MAP: Record<OrderStatus, { label: string; badgeClass: 
   pret: { label: 'Prêt à servir', badgeClass: 'bg-teal-100 text-teal-800 border-teal-200 animate-pulse' },
   servi: { label: 'Servi', badgeClass: 'bg-purple-100 text-purple-800 border-purple-200' },
   attente_paiement: { label: 'Attente paiement', badgeClass: 'bg-orange-100 text-orange-800 border-orange-200' },
+  partiellement_payee: { label: 'Partiellement payée', badgeClass: 'bg-amber-100 text-amber-800 border-amber-200' },
   payee: { label: 'Payée', badgeClass: 'bg-emerald-100 text-emerald-800 border-emerald-200' },
   annulee: { label: 'Annulée', badgeClass: 'bg-red-100 text-red-800 border-red-200' },
 };

@@ -128,6 +128,12 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, onClose }) 
   const [companyBillingNiu, setCompanyBillingNiu] = useState('');
   const [paymentNote, setPaymentNote] = useState('');
   const [isDone, setIsDone] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const idempotencyKeyRef = React.useRef<string>(
+    typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID()
+      : `idem-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+  );
   const [a5ModalOpen, setA5ModalOpen] = useState(false);
   const [thermalModalOpen, setThermalModalOpen] = useState(false);
   const [qrDataUrl, setQrDataUrl] = useState<string>('');
@@ -218,6 +224,8 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, onClose }) 
   };
 
   const handleConfirmPayment = async () => {
+    if (isSubmitting) return;
+
     if (amountTendered <= 0) {
       showToast({
         type: 'warning',
@@ -254,48 +262,73 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, onClose }) 
       ? `${splitPrefix}Facturé à : ${companyBillingName} (NIU: ${companyBillingNiu}) ${paymentNote}`
       : `${splitPrefix}${paymentNote}`;
 
-    await recordOrderPayment(targetOrder.id, finalAmount, paymentMethod, finalNote);
+    setIsSubmitting(true);
+    try {
+      await recordOrderPayment(
+        targetOrder.id,
+        finalAmount,
+        paymentMethod,
+        finalNote,
+        idempotencyKeyRef.current
+      );
 
-    // Hardware Printing Automation (ESC/POS & Drawer Kick)
-    const cashPrinter = peripherals.find(
-      (p) => p.active && (p.role === 'caisse' || p.isDefault || p.type === 'imprimante_ticket')
-    );
+      // Hardware Printing Automation (ESC/POS & Drawer Kick)
+      const cashPrinter = peripherals.find(
+        (p) => p.active && (p.role === 'caisse' || p.isDefault || p.type === 'imprimante_ticket')
+      );
 
-    // 1. Auto Open Cash Drawer if Cash Payment
-    if (printerSettings?.autoOpenCashDrawerOnCash && paymentMethod === 'especes') {
-      printerService.openCashDrawer(cashPrinter).catch((err) => {
-        console.error('[PaymentModal] Échec ouverture tiroir-caisse:', err);
-        showToast('Avertissement : Le tiroir-caisse n\'a pas pu s\'ouvrir automatiquement.', 'warning');
-      });
-    }
-
-    // 2. Auto Print Receipt if enabled in configuration
-    if (printerSettings?.autoPrintReceiptOnPayment) {
-      printerService
-        .printCustomerReceipt(targetOrder, settings, cashPrinter, {
-          cashGiven,
-          changeDue,
-          folio: selectedFolio === 'all' ? undefined : selectedFolio,
-        })
-        .catch((err) => {
-          console.error('[PaymentModal] Échec impression ticket client:', err);
-          showToast('Avertissement : L\'impression du ticket de caisse a rencontré un problème.', 'warning');
+      // 1. Auto Open Cash Drawer if Cash Payment
+      if (printerSettings?.autoOpenCashDrawerOnCash && paymentMethod === 'especes') {
+        printerService.openCashDrawer(cashPrinter).catch((err) => {
+          console.error('[PaymentModal] Échec ouverture tiroir-caisse:', err);
+          showToast({
+            type: 'warning',
+            title: 'Tiroir-caisse',
+            message: 'Avertissement : Le tiroir-caisse n\'a pas pu s\'ouvrir automatiquement.',
+          });
         });
+      }
+
+      // 2. Auto Print Receipt if enabled in configuration
+      if (printerSettings?.autoPrintReceiptOnPayment) {
+        printerService
+          .printCustomerReceipt(targetOrder, settings, cashPrinter, {
+            cashGiven,
+            changeDue,
+            folio: selectedFolio === 'all' ? undefined : selectedFolio,
+          })
+          .catch((err) => {
+            console.error('[PaymentModal] Échec impression ticket client:', err);
+            showToast({
+              type: 'warning',
+              title: 'Impression ticket',
+              message: 'Avertissement : L\'impression du ticket de caisse a rencontré un problème.',
+            });
+          });
+      }
+
+      confetti({
+        particleCount: 70,
+        spread: 70,
+        origin: { y: 0.7 },
+      });
+
+      showToast({
+        type: 'success',
+        title: 'Paiement certifié',
+        message: `${formatCurrency(finalAmount, settings.currency)} encaissés avec succès.`,
+      });
+
+      setIsDone(true);
+    } catch (err: any) {
+      showToast({
+        type: 'error',
+        title: 'Échec de l\'encaissement',
+        message: err.message || 'Le paiement n\'a pas pu être validé par le serveur.',
+      });
+    } finally {
+      setIsSubmitting(false);
     }
-
-    confetti({
-      particleCount: 70,
-      spread: 70,
-      origin: { y: 0.7 },
-    });
-
-    showToast({
-      type: 'success',
-      title: 'Paiement certifié',
-      message: `${formatCurrency(finalAmount, settings.currency)} encaissés avec succès.`,
-    });
-
-    setIsDone(true);
   };
 
   const handlePrintReceipt = () => {
@@ -885,10 +918,24 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, onClose }) 
                 <button
                   type="button"
                   onClick={handleConfirmPayment}
-                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs transition-all active:scale-98"
+                  disabled={isSubmitting || amountTendered <= 0}
+                  className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-white text-xs font-bold shadow-xs transition-all ${
+                    isSubmitting || amountTendered <= 0
+                      ? 'bg-emerald-400 cursor-not-allowed opacity-75'
+                      : 'bg-emerald-600 hover:bg-emerald-700 active:scale-98 cursor-pointer'
+                  }`}
                 >
-                  <span>Confirmer Encaissement</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
+                  {isSubmitting ? (
+                    <>
+                      <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      <span>Validation en cours...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>Confirmer Encaissement</span>
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </>
+                  )}
                 </button>
               </>
             ) : (

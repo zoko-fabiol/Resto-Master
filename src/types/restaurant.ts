@@ -339,6 +339,7 @@ export type OrderStatus =
   | 'pret'
   | 'servi'
   | 'attente_paiement'
+  | 'partiellement_payee'
   | 'payee'
   | 'annulee';
 
@@ -375,6 +376,7 @@ export interface Order {
   status: OrderStatus;
   paymentStatus: 'non_paye' | 'partiel' | 'paye';
   paidAmount: number;
+  totalPaid?: number;
   paymentMethod?: PaymentMethod;
   tip?: number;
   notes?: string;

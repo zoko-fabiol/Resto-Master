@@ -118,12 +118,14 @@ export const CashRegisterView: React.FC<CashRegisterViewProps> = ({ onOpenPaymen
     return orders.filter((o) => o.status !== 'payee' && o.status !== 'annulee');
   }, [orders]);
 
-  // Orders specifically marked 'attente_paiement' or table requested bill
+  // Orders specifically marked 'attente_paiement', partially paid or table requested bill
   const pendingPaymentOrders = useMemo(() => {
     return activeOrders.filter((o) => {
       const table = tables.find((t) => t.id === o.tableId);
       return (
         o.status === 'attente_paiement' ||
+        o.status === 'partiellement_payee' ||
+        o.paymentStatus === 'partiel' ||
         table?.status === 'attente_paiement' ||
         table?.tabletBillRequested
       );
@@ -556,6 +558,8 @@ export const CashRegisterView: React.FC<CashRegisterViewProps> = ({ onOpenPaymen
                 const table = tables.find((t) => t.id === order.tableId);
                 const isAwaitingPayment =
                   order.status === 'attente_paiement' ||
+                  order.status === 'partiellement_payee' ||
+                  order.paymentStatus === 'partiel' ||
                   table?.status === 'attente_paiement' ||
                   table?.tabletBillRequested;
 

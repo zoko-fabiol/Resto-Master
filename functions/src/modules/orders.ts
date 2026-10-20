@@ -158,7 +158,10 @@ export async function handleCreateOrder(request: CallableRequest<CreateOrderRequ
     discount: discountAmount,
     discountPercent,
     total: grandTotal,
-    status: 'en_cours',
+    status: 'nouveau',
+    paymentStatus: 'non_paye',
+    totalPaid: 0,
+    paidAmount: 0,
     serverName: caller.name,
     serverUid: caller.uid,
     serverRole: caller.role,
@@ -263,6 +266,27 @@ export async function handleAddItemsToOrder(request: CallableRequest<AddItemsToO
     }
 
     transaction.update(orderRef, updates);
+
+    // Déduction des stocks selon les fiches techniques des ingrédients pour les nouveaux articles
+    for (const item of resolvedItems) {
+      if (item.ingredients && Array.isArray(item.ingredients)) {
+        for (const ing of item.ingredients) {
+          if (ing.stockItemId && ing.quantityRequired) {
+            const consumedQty = ing.quantityRequired * item.quantity;
+            const stockRef = db.collection('stock_items').doc(ing.stockItemId);
+            const stockSnap = await transaction.get(stockRef);
+            if (stockSnap.exists) {
+              const currentStock = Number(stockSnap.data()!.currentQuantity) || 0;
+              const newQty = Math.max(0, Math.round((currentStock - consumedQty) * 100) / 100);
+              transaction.update(stockRef, {
+                currentQuantity: newQty,
+                lastUpdated: FieldValue.serverTimestamp(),
+              });
+            }
+          }
+        }
+      }
+    }
 
     return {
       success: true,

@@ -16,11 +16,6 @@ export async function handleRecordPayment(request: CallableRequest<RecordPayment
   }
 
   const idempotencyRef = db.collection('_idempotency_keys').doc(idempotencyKey);
-  const existingIdempotency = await idempotencyRef.get();
-  if (existingIdempotency.exists) {
-    // Paiement déjà exécuté précédemment (ex: double-clic de l'utilisateur)
-    return existingIdempotency.data()!.response;
-  }
 
   // 2. Validation du montant (strictement entier et positif, FCFA)
   const paymentAmount = Math.round(Number(amount));
@@ -32,6 +27,13 @@ export async function handleRecordPayment(request: CallableRequest<RecordPayment
   const paymentId = crypto.randomUUID();
 
   const result = await db.runTransaction(async (transaction) => {
+    // 1. Validation de l'idempotence dans la transaction pour sérialisation stricte
+    const existingIdempotency = await transaction.get(idempotencyRef);
+    if (existingIdempotency.exists) {
+      // Paiement déjà exécuté précédemment (ex: double-clic de l'utilisateur ou répétition réseau)
+      return existingIdempotency.data()!.response;
+    }
+
     // 3. Relecture de la commande
     const orderSnap = await transaction.get(orderRef);
     if (!orderSnap.exists) {
@@ -100,7 +102,9 @@ export async function handleRecordPayment(request: CallableRequest<RecordPayment
     transaction.update(orderRef, {
       payments: updatedPayments,
       totalPaid: newTotalPaid,
+      paidAmount: newTotalPaid,
       status: isFullyPaid ? 'payee' : 'partiellement_payee',
+      paymentStatus: isFullyPaid ? 'paye' : 'partiel',
       paidAt: isFullyPaid ? FieldValue.serverTimestamp() : null,
       updatedAt: FieldValue.serverTimestamp(),
     });

@@ -138,6 +138,25 @@ import { offlineSyncService } from '../services/firestore/offlineSyncService';
 import { cloudinaryService } from '../services/media/cloudinaryService';
 import { customersFirestoreService } from '../services/firestore/customersFirestoreService';
 
+function isNetworkOrOfflineError(err: any): boolean {
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    return true;
+  }
+  if (!err) return false;
+  const code = (err.code || '').toString().toLowerCase();
+  const message = (err.message || '').toString().toLowerCase();
+  return (
+    code.includes('unavailable') ||
+    code.includes('deadline-exceeded') ||
+    code.includes('network') ||
+    message.includes('network') ||
+    message.includes('failed to fetch') ||
+    message.includes('load failed') ||
+    message.includes('offline') ||
+    message.includes('timeout')
+  );
+}
+
 interface RestaurantContextType {
   settings: RestaurantSettings;
   updateSettings: (newSettings: Partial<RestaurantSettings>) => void;
@@ -188,7 +207,8 @@ interface RestaurantContextType {
     orderId: string,
     amount: number,
     method: PaymentMethod,
-    note?: string
+    note?: string,
+    idempotencyKey?: string
   ) => Promise<void>;
   addItemsToOrder: (orderId: string, newItems: OrderItem[], guestCount?: number) => Promise<Order>;
   updateTableGuestsCount: (tableId: string, count: number) => Promise<void>;
@@ -902,8 +922,15 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         );
         return serverOrder;
       }
-    } catch (cfErr) {
-      console.warn('[RestaurantContext] Repli local pour createOrder:', cfErr);
+    } catch (cfErr: any) {
+      if (isNetworkOrOfflineError(cfErr)) {
+        console.warn('[RestaurantContext] Mode hors-ligne détecté pour createOrder, repli local:', cfErr);
+      } else {
+        console.error('[RestaurantContext] Refus strict du serveur pour createOrder:', cfErr);
+        const errorMsg = cfErr?.message || 'Création de commande refusée par le serveur.';
+        addNotification('Échec Création Commande', errorMsg, 'alert', 'POS', 'haute');
+        throw new Error(errorMsg);
+      }
     }
 
     // 2. Repli local (offline ou mode démo)
@@ -992,7 +1019,9 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     const targetOrder = orders.find((o) => o.id === orderId);
     if (!targetOrder) throw new Error('Commande introuvable');
 
-    // Tentative Cloud Functions
+    const now = new Date().toISOString();
+
+    // 1. Tentative Cloud Functions
     try {
       const itemsInput = newItems.map((i) => ({
         productId: i.productId,
@@ -1000,12 +1029,56 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         notes: i.notes,
         destination: i.destination,
       }));
-      await cloudFunctionsService.addItemsToOrder(orderId, itemsInput, guestCount);
-    } catch (cfErr) {
-      console.warn('[RestaurantContext] Repli local pour addItemsToOrder:', cfErr);
+      const cfRes = await cloudFunctionsService.addItemsToOrder(orderId, itemsInput, guestCount);
+
+      if (cfRes?.success) {
+        // Le serveur a mis à jour la commande et déduit les stocks dans la transaction Firestore
+        const updatedItems = [...targetOrder.items, ...newItems];
+        const updatedOrder: Order = {
+          ...targetOrder,
+          items: updatedItems,
+          total: cfRes.total ?? targetOrder.total,
+          guestCount: guestCount || targetOrder.guestCount,
+          updatedAt: now,
+        };
+
+        setOrders((prev) => prev.map((o) => (o.id === orderId ? updatedOrder : o)));
+
+        if (targetOrder.tableId) {
+          setTables((prev) =>
+            prev.map((t) =>
+              t.id === targetOrder.tableId
+                ? {
+                    ...t,
+                    status: 'en_service',
+                    currentOrderId: targetOrder.id,
+                    guestsCount: guestCount || t.guestsCount,
+                  }
+                : t
+            )
+          );
+        }
+
+        addAuditLog(
+          'Ajout articles commande certifié',
+          'POS',
+          `${newItems.length} article(s) ajouté(s) à la commande ${targetOrder.orderNumber} par Cloud Functions`,
+          targetOrder.id
+        );
+
+        return updatedOrder;
+      }
+    } catch (cfErr: any) {
+      if (isNetworkOrOfflineError(cfErr)) {
+        console.warn('[RestaurantContext] Mode hors-ligne détecté pour addItemsToOrder, repli local:', cfErr);
+      } else {
+        console.error('[RestaurantContext] Refus strict du serveur pour addItemsToOrder:', cfErr);
+        const errorMsg = cfErr?.message || 'Ajout d\'articles refusé par le serveur.';
+        addNotification('Échec Ajout Articles', errorMsg, 'alert', 'POS', 'haute');
+        throw new Error(errorMsg);
+      }
     }
 
-    const now = new Date().toISOString();
     const updatedItems = [...targetOrder.items, ...newItems];
 
     // Calcul du nouveau sous-total
@@ -1230,36 +1303,99 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     orderId: string,
     amount: number,
     method: PaymentMethod,
-    note?: string
+    note?: string,
+    idempotencyKeyParam?: string
   ) => {
     const now = new Date().toISOString();
     const targetOrder = orders.find((o) => o.id === orderId);
     if (!targetOrder) return;
 
-    const idempotencyKey =
-      typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
-        ? crypto.randomUUID()
-        : generateSecureId('idemp');
+    const roundedAmount = Math.round(Number(amount));
+    if (isNaN(roundedAmount) || roundedAmount <= 0) {
+      throw new Error('Le montant du paiement doit être supérieur à zéro.');
+    }
 
-    // 1. Tentative d'enregistrement de paiement certifié Cloud Functions (idempotent, audit, points fidelité)
+    const idempotencyKey =
+      idempotencyKeyParam ||
+      (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+        ? crypto.randomUUID()
+        : generateSecureId('idemp'));
+
+    // 1. Tentative d'enregistrement de paiement certifié Cloud Functions (idempotent, audit, points fidélité)
     try {
-      await cloudFunctionsService.recordPayment({
+      const cfRes = await cloudFunctionsService.recordPayment({
         orderId,
-        amount,
+        amount: roundedAmount,
         method: method as any,
         cashSessionId: cashSession?.id,
         idempotencyKey,
         notes: note,
       });
-    } catch (cfErr) {
-      console.warn('[RestaurantContext] Repli local pour recordPayment:', cfErr);
+
+      if (cfRes?.success) {
+        // Le serveur a validé et commis atomiquement la transaction Firestore
+        // Mise à jour optimiste locale en attendant onSnapshot :
+        const newPaidAmount = cfRes.totalPaid ?? (targetOrder.paidAmount || 0) + roundedAmount;
+        const isFullyPaid = cfRes.isFullyPaid;
+        setOrders((prev) =>
+          prev.map((o) =>
+            o.id === orderId
+              ? {
+                  ...o,
+                  paidAmount: newPaidAmount,
+                  totalPaid: newPaidAmount,
+                  paymentStatus: isFullyPaid ? 'paye' : 'partiel',
+                  status: isFullyPaid ? 'payee' : 'partiellement_payee',
+                  paidAt: isFullyPaid ? now : o.paidAt,
+                  updatedAt: now,
+                }
+              : o
+          )
+        );
+
+        if (isFullyPaid && targetOrder.tableId) {
+          setTables((prev) =>
+            prev.map((t) =>
+              t.id === targetOrder.tableId
+                ? { ...t, status: 'a_nettoyer', currentOrderId: undefined }
+                : t
+            )
+          );
+        }
+
+        // On arrête ici : aucune double écriture cliente (pas de doublon de mouvement de caisse ni d'ordre)
+        return;
+      }
+    } catch (cfErr: any) {
+      if (isNetworkOrOfflineError(cfErr)) {
+        console.warn('[RestaurantContext] Mode hors-ligne détecté, mise en file d\'attente de recordPayment:', cfErr);
+        offlineSyncService.enqueueCloudFunction(
+          'recordPayment',
+          {
+            orderId,
+            amount: roundedAmount,
+            method,
+            cashSessionId: cashSession?.id,
+            idempotencyKey,
+            notes: note,
+          },
+          idempotencyKey
+        );
+      } else {
+        // Refus strict du serveur : aucune écriture locale ne doit contourner la décision serveur
+        console.error('[RestaurantContext] Refus strict du serveur pour le paiement:', cfErr);
+        const errorMsg = cfErr?.message || 'Paiement refusé par le serveur.';
+        addNotification('Échec Encaissement', errorMsg, 'alert', 'Caisse', 'haute');
+        throw new Error(errorMsg);
+      }
     }
 
+    // 2. Repli local UNIQUEMENT en cas de déconnexion réseau avérée
     const payment: Payment = {
       id: generateSecureId('pay'),
       orderId,
       orderNumber: targetOrder.orderNumber,
-      amount,
+      amount: roundedAmount,
       method,
       cashierId: currentUser.id,
       cashierName: currentUser.name,
@@ -1267,14 +1403,15 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       note,
     };
 
-    const newPaidAmount = (targetOrder.paidAmount || 0) + amount;
-    const isFullyPaid = newPaidAmount >= targetOrder.total - 1; // 1 currency unit delta tolerance
+    const newPaidAmount = (targetOrder.paidAmount || 0) + roundedAmount;
+    const isFullyPaid = newPaidAmount >= targetOrder.total;
 
     const updatedOrder: Order = {
       ...targetOrder,
       paidAmount: newPaidAmount,
+      totalPaid: newPaidAmount,
       paymentStatus: isFullyPaid ? 'paye' : 'partiel',
-      status: isFullyPaid ? 'payee' : 'attente_paiement',
+      status: isFullyPaid ? 'payee' : 'partiellement_payee',
       paidAt: isFullyPaid ? now : targetOrder.paidAt,
       updatedAt: now,
       payments: [...(targetOrder.payments || []), payment],
@@ -1282,7 +1419,7 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
     setOrders((prev) => prev.map((o) => (o.id === orderId ? updatedOrder : o)));
 
-    // If order was table-assigned and is fully paid, free or mark table for cleaning
+    // Libérer la table si soldée
     if (isFullyPaid && targetOrder.tableId) {
       setTables((prev) =>
         prev.map((t) =>
@@ -1296,14 +1433,14 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       });
     }
 
-    // If payment method is cash, register in cash session
+    // Mouvement d'espèces en session locale
     if (method === 'especes') {
       const movement: CashMovement = {
         id: generateSecureId('cm'),
         sessionId: cashSession.id,
         type: 'encaissement_vente',
-        amount,
-        reason: `Règlement espèces ${targetOrder.orderNumber}`,
+        amount: roundedAmount,
+        reason: `Règlement espèces ${targetOrder.orderNumber} (Hors-ligne)`,
         user: currentUser.name,
         timestamp: now,
         referenceDocId: orderId,
@@ -1315,8 +1452,8 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       setCashSession((prev) => {
         const updated = {
           ...prev,
-          totalCashIn: prev.totalCashIn + amount,
-          expectedTotal: prev.expectedTotal + amount,
+          totalCashIn: prev.totalCashIn + roundedAmount,
+          expectedTotal: prev.expectedTotal + roundedAmount,
         };
         cashFirestoreService.saveCashSession(updated).catch((err) => {
           handleSyncError('Session de caisse', err);
@@ -1325,16 +1462,16 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       });
     }
 
-    // Award loyalty points to customer if identified
+    // Fidélité client locale
     if (targetOrder.customerId) {
-      const pointsEarned = Math.floor(amount / 1000); // 1 point per 1000 currency units
+      const pointsEarned = Math.floor(roundedAmount / 1000);
       setCustomers((prev) =>
         prev.map((c) => {
           if (c.id === targetOrder.customerId) {
             const updated = {
               ...c,
               loyaltyPoints: c.loyaltyPoints + pointsEarned,
-              totalSpent: c.totalSpent + amount,
+              totalSpent: c.totalSpent + roundedAmount,
               totalVisits: c.totalVisits + 1,
             };
             customersFirestoreService.saveCustomer(updated).catch((err) => {
@@ -1353,9 +1490,9 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     }
 
     addAuditLog(
-      'Encaissement paiement',
+      'Encaissement paiement hors-ligne',
       'Caisse',
-      `Paiement de ${amount} ${settings.currency} (${method}) pour commande ${targetOrder.orderNumber}`,
+      `Paiement hors-ligne de ${roundedAmount} ${settings.currency} (${method}) pour commande ${targetOrder.orderNumber}`,
       orderId
     );
 
@@ -2272,16 +2409,37 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     const targetOrder = orders.find((o) => o.id === orderId);
     if (!targetOrder) return;
 
-    // Tentative d'annulation sécurisée côté serveur (token superviseur + note de crédit automatique)
+    // 1. Tentative d'annulation sécurisée côté serveur (token superviseur + note de crédit automatique)
     try {
-      await cloudFunctionsService.cancelOrder({
+      const cfRes = await cloudFunctionsService.cancelOrder({
         orderId,
         reason,
         supervisorToken: 'SUPERVISOR_SESSION_AUTHORIZED',
         actionAfterCancel: 'restock',
       });
-    } catch (cfErr) {
-      console.warn('[RestaurantContext] Repli local pour cancelOrder:', cfErr);
+
+      if (cfRes?.success) {
+        // Le serveur a déjà contre-passé la caisse, déduit la fidélité, restocké les articles,
+        // émis la note de crédit, mis à jour la commande à 'annulee', libéré la table et journalisé l'audit.
+        setOrders((prev) =>
+          prev.map((o) => (o.id === orderId ? { ...o, status: 'annulee', updatedAt: new Date().toISOString() } : o))
+        );
+        if (targetOrder.tableId) {
+          setTables((prev) =>
+            prev.map((t) => (t.id === targetOrder.tableId ? { ...t, status: 'libre', currentOrderId: undefined } : t))
+          );
+        }
+        return;
+      }
+    } catch (cfErr: any) {
+      if (isNetworkOrOfflineError(cfErr)) {
+        console.warn('[RestaurantContext] Mode hors-ligne pour cancelOrder, repli local:', cfErr);
+      } else {
+        console.error('[RestaurantContext] Refus strict du serveur pour cancelOrder:', cfErr);
+        const errorMsg = cfErr?.message || 'Annulation refusée par le serveur.';
+        addNotification('Échec Annulation Commande', errorMsg, 'alert', 'POS', 'haute');
+        throw new Error(errorMsg);
+      }
     }
 
     const now = new Date();

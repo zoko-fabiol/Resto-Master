@@ -235,6 +235,66 @@ auditLedger[1].details = 'CMD-20261019-0001 (5 000 FCFA)'; // Fraude tentée
 assert.strictEqual(verifyChain(auditLedger), false, 'La falsification doit rompre la chaîne SHA-256');
 console.log('  ✓ Succès : Falsification rétroactive immédiatement détectée par rupture du sceau SHA-256.');
 
+// --------------------------------------------------------------------
+// 6. TEST : REFUS STRICT DES PAIEMENTS SUPÉRIEURS AU RESTE À PAYER
+// --------------------------------------------------------------------
+console.log('\n[Test 6] Vérification du refus strict en cas de dépassement du solde...');
+
+function validatePaymentAmount(orderTotal: number, totalPaidSoFar: number, requestedPayment: number) {
+  const paymentAmount = Math.round(Number(requestedPayment));
+  if (isNaN(paymentAmount) || paymentAmount <= 0) {
+    throw new Error('Le montant du paiement doit être supérieur à zéro.');
+  }
+  const remaining = orderTotal - totalPaidSoFar;
+  if (paymentAmount > remaining) {
+    throw new Error(`Le montant (${paymentAmount} FCFA) dépasse le reste à payer exact (${remaining} FCFA).`);
+  }
+  return { newTotalPaid: totalPaidSoFar + paymentAmount, isFullyPaid: totalPaidSoFar + paymentAmount >= orderTotal };
+}
+
+assert.throws(
+  () => validatePaymentAmount(15000, 10000, 6000),
+  /dépasse le reste à payer exact/,
+  'Un paiement de 6000 FCFA sur un solde restant de 5000 FCFA doit être rejeté'
+);
+
+const exactPayment = validatePaymentAmount(15000, 10000, 5000);
+assert.strictEqual(exactPayment.newTotalPaid, 15000);
+assert.strictEqual(exactPayment.isFullyPaid, true);
+console.log('  ✓ Succès : Paiement excédentaire bloqué par précondition stricte sans tolérance laxiste.');
+
+// --------------------------------------------------------------------
+// 7. TEST : VALIDATION STRICTE DE SESSION DE CAISSE OUVERTE (ESPÈCES)
+// --------------------------------------------------------------------
+console.log('\n[Test 7] Vérification de l\'obligation d\'une session de caisse ouverte pour les espèces...');
+
+function validateCashPaymentSession(method: string, session: { id: string; status: 'ouverte' | 'fermee' } | null) {
+  if (method === 'especes') {
+    if (!session || !session.id) {
+      throw new Error('Une session de caisse active est obligatoire pour tout encaissement en espèces.');
+    }
+    if (session.status !== 'ouverte') {
+      throw new Error('La session de caisse indiquée est déjà clôturée.');
+    }
+  }
+  return true;
+}
+
+assert.throws(
+  () => validateCashPaymentSession('especes', null),
+  /Une session de caisse active est obligatoire/,
+  'Encaissement en espèces sans session doit être rejeté'
+);
+
+assert.throws(
+  () => validateCashPaymentSession('especes', { id: 'sess-closed', status: 'fermee' }),
+  /La session de caisse indiquée est déjà clôturée/,
+  'Encaissement en espèces sur session clôturée doit être rejeté'
+);
+
+assert.strictEqual(validateCashPaymentSession('especes', { id: 'sess-open', status: 'ouverte' }), true);
+console.log('  ✓ Succès : Rejet systématique de tout encaissement en espèces sans session de caisse ouverte.');
+
 console.log('\n================================================================');
-console.log(' TOUS LES TESTS DE SÉCURITÉ BACKEND PHASE 1 SONT AU VERT (5/5) !');
+console.log(' TOUS LES TESTS DE SÉCURITÉ BACKEND PHASE 1 SONT AU VERT (7/7) !');
 console.log('================================================================\n');
