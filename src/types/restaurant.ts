@@ -55,6 +55,7 @@ export interface UserProfile {
   phone?: string;
   active: boolean;
   mustChangePassword?: boolean;
+  hasPin?: boolean;
   pinCode?: string;
   badgeNumber?: string;
   permissions?: string[];

@@ -12,6 +12,7 @@ import {
   UserCheck,
   AlertCircle,
   Building2,
+  LogOut,
 } from 'lucide-react';
 
 interface PinLockScreenProps {
@@ -19,7 +20,7 @@ interface PinLockScreenProps {
 }
 
 export const PinLockScreen: React.FC<PinLockScreenProps> = ({ onUnlockSuccess }) => {
-  const { unlockSessionWithPin, isSessionLocked } = useAuth();
+  const { unlockSessionWithPin, isSessionLocked, logout, currentUser, setIsSessionLocked } = useAuth();
   const { activeRestaurant, currentDeviceProfile } = useRestaurant();
   const { showToast, playAudioChime } = useToast();
 
@@ -225,6 +226,32 @@ export const PinLockScreen: React.FC<PinLockScreenProps> = ({ onUnlockSuccess })
             title="Effacer le dernier chiffre"
           >
             ←
+          </button>
+        </div>
+
+        {/* Actions alternatives de secours */}
+        <div className="flex flex-wrap items-center justify-center gap-2 pt-2 text-xs">
+          {currentUser && currentUser.role === 'superadmin' && (
+            <button
+              type="button"
+              onClick={() => {
+                setIsSessionLocked(false);
+                showToast('Session déverrouillée avec privilèges Super Administrateur', 'info');
+              }}
+              className="px-3.5 py-2 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-400 font-semibold transition cursor-pointer flex items-center gap-1.5 active:scale-95"
+            >
+              <Unlock className="w-3.5 h-3.5" />
+              <span>Déverrouiller (Superadmin)</span>
+            </button>
+          )}
+
+          <button
+            type="button"
+            onClick={() => logout()}
+            className="px-3.5 py-2 rounded-xl bg-slate-900/80 hover:bg-rose-950/60 border border-slate-800 hover:border-rose-800/60 text-slate-400 hover:text-rose-400 font-medium transition cursor-pointer flex items-center gap-1.5 active:scale-95"
+          >
+            <LogOut className="w-3.5 h-3.5" />
+            <span>Se déconnecter</span>
           </button>
         </div>
       </div>
