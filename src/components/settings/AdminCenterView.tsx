@@ -45,6 +45,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
+import { useConfirm } from '../ui/ConfirmDialog';
 import { ConfigurationProfileType } from '../../types/configuration';
 
 import { GeneralAndOutletsSection } from './sections/GeneralAndOutletsSection';
@@ -145,6 +146,7 @@ export const AdminCenterView: React.FC = () => {
 
   const { currentUser } = useAuth();
   const { showToast } = useToast();
+  const confirm = useConfirm();
   const isSuperAdmin = currentUser?.role === 'direction';
 
   const handleQuickApplyProfile = async (profileId: ConfigurationProfileType, title: string) => {
@@ -156,7 +158,12 @@ export const AdminCenterView: React.FC = () => {
       });
       return;
     }
-    if (confirm(`Appliquer le profil "${title}" ? Cette configuration mettra à jour l'activation des modules et du menu latéral.`)) {
+    const ok = await confirm({
+      title: 'Application du profil d\'exploitation',
+      message: `Appliquer le profil "${title}" ? Cette configuration mettra à jour l'activation des modules et du menu latéral.`,
+      confirmText: 'Appliquer',
+    });
+    if (ok) {
       await applyConfigProfile(profileId);
       showToast({
         title: 'Profil Déployé',

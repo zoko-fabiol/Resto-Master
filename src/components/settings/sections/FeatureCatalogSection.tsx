@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { useRestaurant } from '../../../context/RestaurantContext';
 import { useAuth } from '../../../context/AuthContext';
 import { useToast } from '../../../context/ToastContext';
+import { useConfirm } from '../../ui/ConfirmDialog';
 import { FeatureItem, FeatureStatus } from '../../../types/configuration';
 import {
   Search,
@@ -93,6 +94,7 @@ export const FeatureCatalogSection: React.FC = () => {
   const { features, updateFeatureStatus, updateFeatureConfig } = useRestaurant();
   const { currentUser } = useAuth();
   const { showToast } = useToast();
+  const confirm = useConfirm();
 
   const isSuperAdmin = currentUser?.role === 'direction';
 
@@ -210,7 +212,7 @@ export const FeatureCatalogSection: React.FC = () => {
     }
   };
 
-  const handleBulkActivate = () => {
+  const handleBulkActivate = async () => {
     if (!isSuperAdmin) {
       showToast({
         type: 'error',
@@ -219,14 +221,19 @@ export const FeatureCatalogSection: React.FC = () => {
       });
       return;
     }
-    if (confirm('Activer toutes les fonctionnalités compatibles ?')) {
+    const ok = await confirm({
+      title: 'Activation globale des fonctionnalités',
+      message: 'Voulez-vous activer toutes les fonctionnalités compatibles du catalogue ?',
+      confirmText: 'Activer tout',
+    });
+    if (ok) {
       features.forEach((f) => {
         if (f.status !== 'ACTIVÉ') updateFeatureStatus(f.id, 'ACTIVÉ');
       });
     }
   };
 
-  const handleBulkSuspend = () => {
+  const handleBulkSuspend = async () => {
     if (!isSuperAdmin) {
       showToast({
         type: 'error',
@@ -235,7 +242,13 @@ export const FeatureCatalogSection: React.FC = () => {
       });
       return;
     }
-    if (confirm('Suspendre temporairement les fonctionnalités secondaires ?')) {
+    const ok = await confirm({
+      title: 'Suspension des fonctionnalités secondaires',
+      message: 'Voulez-vous suspendre temporairement toutes les fonctionnalités secondaires non critiques ?',
+      confirmText: 'Suspendre',
+      variant: 'danger',
+    });
+    if (ok) {
       features.forEach((f) => {
         if (!f.isCritical && f.status === 'ACTIVÉ') updateFeatureStatus(f.id, 'SUSPENDU');
       });

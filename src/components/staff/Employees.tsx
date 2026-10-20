@@ -21,6 +21,7 @@ import { useBatchMode } from '../../hooks/useBatchMode';
 import { logAction } from '../../services/logService';
 import { SearchInput } from '../ui/SearchInput';
 import { matchesSearch } from '../../utils/searchHelpers';
+import { useConfirm } from '../ui/ConfirmDialog';
 import { useSortableData } from '../../hooks/useSortableData';
 
 
@@ -28,6 +29,7 @@ import { useSortableData } from '../../hooks/useSortableData';
 
 export const Employees: React.FC = () => {
   const { hasAccess } = useAuth();
+  const confirm = useConfirm();
   const [isBatchMode, toggleBatchMode] = useBatchMode();
   const rhData = useRhAppData();
   
@@ -181,7 +183,14 @@ export const Employees: React.FC = () => {
       showToast('Opération non autorisée en lecture seule.', 'error');
       return;
     }
-    if (confirm('Voulez-vous vraiment supprimer cet employé ?')) {
+    const ok = await confirm({
+      title: 'Supprimer cet employé ?',
+      message: 'Voulez-vous vraiment supprimer définitivement cet employé du personnel ?',
+      confirmLabel: 'Supprimer',
+      cancelLabel: 'Annuler',
+      variant: 'danger',
+    });
+    if (ok) {
       const targetEmp = employees.find(e => e.id === id);
       const updatedEmployees = employees.filter(emp => emp.id !== id);
       const value: RhAppDataPayload = {
@@ -201,7 +210,14 @@ export const Employees: React.FC = () => {
       showToast('Opération non autorisée en lecture seule.', 'error');
       return;
     }
-    if (confirm(`Voulez-vous licencier ${emp.nom} ${emp.prenom} ? Il/Elle sera transféré(e) dans la section Licenciés et retiré(e) des effectifs actifs.`)) {
+    const ok = await confirm({
+      title: 'Licencier l\'employé ?',
+      message: `Voulez-vous licencier ${emp.nom} ${emp.prenom} ? Il/Elle sera transféré(e) dans la section Licenciés et retiré(e) des effectifs actifs.`,
+      confirmLabel: 'Confirmer le départ',
+      cancelLabel: 'Annuler',
+      variant: 'danger',
+    });
+    if (ok) {
       const updatedEmployees = employees.map(e => 
         e.id === emp.id 
           ? { ...e, statut: 'renvoye' as const, dateRenvoi: new Date().toISOString().split('T')[0] } 
@@ -224,7 +240,14 @@ export const Employees: React.FC = () => {
       showToast('Opération non autorisée en lecture seule.', 'error');
       return;
     }
-    if (confirm(`Voulez-vous réintégrer ${emp.nom} ${emp.prenom} dans les effectifs actifs ?`)) {
+    const ok = await confirm({
+      title: 'Réintégrer l\'employé ?',
+      message: `Voulez-vous réintégrer ${emp.nom} ${emp.prenom} dans les effectifs actifs ?`,
+      confirmLabel: 'Réintégrer',
+      cancelLabel: 'Annuler',
+      variant: 'normal',
+    });
+    if (ok) {
       const updatedEmployees = employees.map(e => 
         e.id === emp.id 
           ? { ...e, statut: 'actif' as const, dateRenvoi: null } 

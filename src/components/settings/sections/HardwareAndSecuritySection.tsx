@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useRestaurant } from '../../../context/RestaurantContext';
 import { useToast } from '../../../context/ToastContext';
 import { useAuth } from '../../../context/AuthContext';
+import { useConfirm } from '../../ui/ConfirmDialog';
 import { UserRole } from '../../../types/restaurant';
 import {
   PermissionModule,
@@ -78,6 +79,7 @@ export const HardwareAndSecuritySection: React.FC<Props> = ({ subTab }) => {
   } = useRestaurant();
   const { showToast } = useToast();
   const { currentUser } = useAuth();
+  const confirm = useConfirm();
   const isSuperAdmin = currentUser?.role === 'direction';
 
   const [savedSuccess, setSavedSuccess] = useState(false);
@@ -701,7 +703,12 @@ export const HardwareAndSecuritySection: React.FC<Props> = ({ subTab }) => {
       });
       return;
     }
-    if (confirm(`Voulez-vous appliquer le profil "${title}" ? Cette action ajustera l’activation des modules et des règles métier.`)) {
+    const ok = await confirm({
+      title: 'Application du profil d\'exploitation',
+      message: `Voulez-vous appliquer le profil "${title}" ? Cette action ajustera l'activation des modules et des règles métier.`,
+      confirmText: 'Appliquer',
+    });
+    if (ok) {
       await applyConfigProfile(id);
       showToast({
         title: 'Profil Déployé',
@@ -720,7 +727,13 @@ export const HardwareAndSecuritySection: React.FC<Props> = ({ subTab }) => {
       });
       return;
     }
-    if (confirm('Réinitialiser toutes les données aux valeurs de démonstration ?')) {
+    const ok = await confirm({
+      title: 'Réinitialisation générale',
+      message: 'Voulez-vous réinitialiser toutes les données aux valeurs de démonstration ? Toutes les modifications locales seront perdues.',
+      confirmText: 'Réinitialiser',
+      variant: 'danger',
+    });
+    if (ok) {
       resetToDemoData();
       showToast({
         title: 'Système Réinitialisé',

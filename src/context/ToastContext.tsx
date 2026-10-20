@@ -195,6 +195,8 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           return (
             <div
               key={toast.id}
+              role="status"
+              aria-live={toast.type === 'error' ? 'assertive' : 'polite'}
               className={`pointer-events-auto flex items-start gap-3 p-3.5 rounded-2xl border shadow-xl backdrop-blur-md transition-all animate-in slide-in-from-bottom-3 duration-200 ${typeConfig.bg} ${typeConfig.border}`}
             >
               {typeConfig.icon}
@@ -209,8 +211,10 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                 )}
               </div>
               <button
+                type="button"
                 onClick={() => removeToast(toast.id)}
-                className="text-slate-400 hover:text-white p-1 rounded-lg transition-colors shrink-0"
+                aria-label="Fermer la notification"
+                className="text-slate-400 hover:text-white p-1 rounded-lg transition-colors shrink-0 cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useRestaurant } from '../../../context/RestaurantContext';
 import { useToast } from '../../../context/ToastContext';
+import { useConfirm } from '../../ui/ConfirmDialog';
 import { Peripheral } from '../../../types/configuration';
 import { printerService } from '../../../services/printing/printerService';
 import {
@@ -43,6 +44,7 @@ export const PrintingHardwareSection: React.FC = () => {
     updateFeatureStatus,
   } = useRestaurant();
   const { showToast, playAudioChime } = useToast();
+  const confirm = useConfirm();
 
   const isPrintersModuleActive = isFeatureEnabled('printers_hardware');
 
@@ -180,7 +182,13 @@ export const PrintingHardwareSection: React.FC = () => {
   };
 
   const handleDeletePeripheral = async (id: string, name: string) => {
-    if (confirm(`Confirmez-vous la suppression de l'imprimante [${name}] ?`)) {
+    const ok = await confirm({
+      title: 'Suppression d\'imprimante',
+      message: `Confirmez-vous la suppression de l'imprimante [${name}] ? Elle ne recevra plus d'ordres d'impression.`,
+      confirmText: 'Supprimer',
+      variant: 'danger',
+    });
+    if (ok) {
       await deletePeripheral(id);
       showToast({
         type: 'info',

@@ -3,6 +3,7 @@ import { useRestaurant } from '../../context/RestaurantContext';
 import { useAuth } from '../../context/AuthContext';
 import { UserAccount, UserRole, AccountType, TabPermission } from '../../types/restaurant';
 import { ROLE_LABELS } from '../../lib/utils';
+import { useConfirm } from '../ui/ConfirmDialog';
 import {
   Tablet,
   Shield,
@@ -77,6 +78,7 @@ export const UserAccountsSection: React.FC = () => {
   } = useRestaurant();
 
   const { unlockSessionWithPin, updateCurrentUserPin, currentUser } = useAuth();
+  const confirm = useConfirm();
 
   // Filtrage & Recherche
   const [filterType, setFilterType] = useState<'all' | 'staff' | 'tablette'>('all');
@@ -729,8 +731,15 @@ export const UserAccountsSection: React.FC = () => {
 
                         {acc.id !== 'acc-1' && acc.id !== 'acc-dir' && (
                           <button
-                            onClick={() => {
-                              if (confirm(`Confirmer la suppression du compte ${acc.name} ?`)) {
+                            onClick={async () => {
+                              const ok = await confirm({
+                                title: 'Supprimer ce compte utilisateur ?',
+                                message: `Confirmez-vous la suppression du compte de ${acc.name} ? Cette action est irréversible.`,
+                                confirmLabel: 'Supprimer',
+                                cancelLabel: 'Annuler',
+                                variant: 'danger',
+                              });
+                              if (ok) {
                                 deleteUserAccount(acc.id);
                               }
                             }}

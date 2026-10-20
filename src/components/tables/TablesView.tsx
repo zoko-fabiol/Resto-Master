@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { useRestaurant } from '../../context/RestaurantContext';
 import { useToast } from '../../context/ToastContext';
+import { useConfirm, usePrompt } from '../ui/ConfirmDialog';
 import { RestaurantTable, TableStatus, TableShape, Zone, ZoneType, OrderItem } from '../../types/restaurant';
 import { TABLE_STATUS_MAP, formatCurrency, getMinutesElapsed } from '../../lib/utils';
 import { TableKioskView } from '../kiosk/TableKioskView';
@@ -75,6 +76,8 @@ export const TablesView: React.FC<TablesViewProps> = ({ onOpenOrder, onPayOrder,
   } = useRestaurant();
 
   const { showToast } = useToast();
+  const confirm = useConfirm();
+  const prompt = usePrompt();
   const [activeKioskTableId, setActiveKioskTableId] = useState<string | null>(null);
 
   const lockedTabletsCount = useMemo(() => {
@@ -410,11 +413,17 @@ export const TablesView: React.FC<TablesViewProps> = ({ onOpenOrder, onPayOrder,
             ) : (
               <button
                 onClick={async () => {
-                  const reason =
-                    window.prompt('Motif du verrouillage global des tablettes :', 'Fin de service / Clôture') ||
-                    'Verrouillage global Direction';
-                  await lockAllTableTablets(reason);
-                  showToast('Toutes les tablettes ont été verrouillées à distance', 'warning');
+                  const reason = await prompt({
+                    title: 'Verrouillage global des tablettes',
+                    message: 'Indiquez le motif du verrouillage à distance de toutes les tablettes de salle :',
+                    defaultValue: 'Fin de service / Clôture',
+                    placeholder: 'Ex: Fin de service...',
+                    confirmLabel: 'Verrouiller tout',
+                  });
+                  if (reason !== null) {
+                    await lockAllTableTablets(reason || 'Verrouillage global Direction');
+                    showToast('Toutes les tablettes ont été verrouillées à distance', 'warning');
+                  }
                 }}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-slate-700 hover:text-slate-900 transition-all"
                 title="Verrouiller à distance toutes les tablettes des tables"
@@ -1252,20 +1261,25 @@ export const TablesView: React.FC<TablesViewProps> = ({ onOpenOrder, onPayOrder,
                   ) : (
                     <button
                       onClick={async () => {
-                        const reason =
-                          window.prompt(
-                            `Motif de verrouillage de la Table ${selectedTable.number} :`,
-                            "Table en cours d'encaissement"
-                          ) || 'Verrouillée à distance par la Direction';
-                        await lockTableTablet(selectedTable.id, reason);
-                        setSelectedTable({
-                          ...selectedTable,
-                          tabletLocked: true,
-                          tabletLockedReason: reason,
-                          tabletLockedBy: 'Direction',
-                          tabletLockedAt: new Date().toISOString(),
+                        const reason = await prompt({
+                          title: `Verrouiller la Tablette ${selectedTable.number}`,
+                          message: `Indiquez le motif de verrouillage à distance de la Table ${selectedTable.number} :`,
+                          defaultValue: "Table en cours d'encaissement",
+                          placeholder: 'Motif du verrouillage...',
+                          confirmLabel: 'Verrouiller',
                         });
-                        showToast(`Tablette de la Table ${selectedTable.number} verrouillée à distance`, 'warning');
+                        if (reason !== null) {
+                          const finalReason = reason || 'Verrouillée à distance par la Direction';
+                          await lockTableTablet(selectedTable.id, finalReason);
+                          setSelectedTable({
+                            ...selectedTable,
+                            tabletLocked: true,
+                            tabletLockedReason: finalReason,
+                            tabletLockedBy: 'Direction',
+                            tabletLockedAt: new Date().toISOString(),
+                          });
+                          showToast(`Tablette de la Table ${selectedTable.number} verrouillée à distance`, 'warning');
+                        }
                       }}
                       className="flex-1 py-2 px-3 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold transition-all shadow-xs flex items-center justify-center gap-1.5"
                     >
@@ -1487,8 +1501,15 @@ export const TablesView: React.FC<TablesViewProps> = ({ onOpenOrder, onPayOrder,
                 <div className="flex items-center gap-2 pt-4">
                   <button
                     type="button"
-                    onClick={() => {
-                      if (window.confirm(`Supprimer la table ${editingTableDetails.number} ?`)) {
+                    onClick={async () => {
+                      const ok = await confirm({
+                        title: `Supprimer la table ${editingTableDetails.number} ?`,
+                        message: `Êtes-vous sûr de vouloir supprimer définitivement la table ${editingTableDetails.number} du plan de salle ?`,
+                        confirmLabel: 'Supprimer',
+                        cancelLabel: 'Annuler',
+                        variant: 'danger',
+                      });
+                      if (ok) {
                         deleteTable(editingTableDetails.id);
                         setEditingTableDetails(null);
                       }

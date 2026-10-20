@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useAuth, DEMO_ACCOUNTS, isDemoModeActive } from '../../context/AuthContext';
 import { useRestaurant } from '../../context/RestaurantContext';
+import { useConfirm } from '../ui/ConfirmDialog';
 import { formatCurrency, ROLE_LABELS } from '../../lib/utils';
 import {
   Menu,
@@ -81,6 +82,7 @@ export const Header: React.FC<HeaderProps> = ({
   openUserGuide,
 }) => {
   const { currentUser, selectDemoUser, lockSession, isDemoMode } = useAuth();
+  const confirm = useConfirm();
   const {
     notifications,
     unreadNotifsCount,
@@ -326,13 +328,19 @@ export const Header: React.FC<HeaderProps> = ({
                         <div className="text-[11px] text-slate-500">Testez les permissions par métier</div>
                       </div>
                       <button
-                        onClick={() => {
-                          if (window.confirm('Voulez-vous réinitialiser toutes les données de démonstration ?')) {
+                        onClick={async () => {
+                          const ok = await confirm({
+                            title: 'Réinitialisation des données démo',
+                            message: 'Voulez-vous réinitialiser toutes les données de démonstration ? Toutes les modifications locales seront remplacées par le jeu d\'essai initial.',
+                            confirmText: 'Réinitialiser',
+                            variant: 'danger',
+                          });
+                          if (ok) {
                             resetToDemoData();
                             setRoleMenuOpen(false);
                           }
                         }}
-                        className="text-[11px] text-amber-600 hover:text-amber-800 flex items-center gap-1 font-medium"
+                        className="text-[11px] text-amber-600 hover:text-amber-800 flex items-center gap-1 font-medium cursor-pointer"
                         title="Réinitialiser les données"
                       >
                         <RotateCcw className="w-3 h-3" /> Reset

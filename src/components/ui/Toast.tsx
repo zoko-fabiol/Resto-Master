@@ -31,10 +31,6 @@ export const showToast = (
   };
 
   listeners.forEach((fn) => fn(detail));
-
-  if (typeof window !== 'undefined') {
-    window.dispatchEvent(new CustomEvent('app-global-toast', { detail }));
-  }
 };
 
 export const ToastContainer: React.FC = () => {
@@ -43,7 +39,7 @@ export const ToastContainer: React.FC = () => {
   useEffect(() => {
     const handleAdd = (detail: ToastEventDetail) => {
       const fullToast: Required<ToastEventDetail> = {
-        id: detail.id || `toast-${Date.now()}`,
+        id: detail.id || `toast-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
         message: detail.message,
         type: detail.type,
         duration: detail.duration || 3500,
@@ -58,16 +54,8 @@ export const ToastContainer: React.FC = () => {
 
     listeners.add(handleAdd);
 
-    const onCustomEvent = (e: Event) => {
-      const custom = e as CustomEvent<ToastEventDetail>;
-      if (custom.detail) handleAdd(custom.detail);
-    };
-
-    window.addEventListener('app-global-toast', onCustomEvent);
-
     return () => {
       listeners.delete(handleAdd);
-      window.removeEventListener('app-global-toast', onCustomEvent);
     };
   }, []);
 
@@ -78,6 +66,8 @@ export const ToastContainer: React.FC = () => {
       {toasts.map((t) => (
         <div
           key={t.id}
+          role="status"
+          aria-live={t.type === 'error' ? 'assertive' : 'polite'}
           className={`pointer-events-auto flex items-center gap-3 px-4 py-3 rounded-2xl shadow-xl text-xs sm:text-sm font-semibold border backdrop-blur-md transition-all animate-fade-scale ${
             t.type === 'success'
               ? 'bg-emerald-950/90 text-emerald-100 border-emerald-600/40 shadow-emerald-950/20'
@@ -98,7 +88,8 @@ export const ToastContainer: React.FC = () => {
           <button
             type="button"
             onClick={() => setToasts((prev) => prev.filter((item) => item.id !== t.id))}
-            className="text-slate-400 hover:text-white p-1 rounded-lg"
+            aria-label="Fermer la notification"
+            className="text-slate-400 hover:text-white p-1 rounded-lg transition-colors cursor-pointer"
           >
             <X className="w-4 h-4" />
           </button>

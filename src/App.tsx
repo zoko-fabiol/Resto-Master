@@ -37,6 +37,8 @@ import { PinLockScreen } from './components/auth/PinLockScreen';
 import { UserGuideModal } from './components/common/UserGuideModal';
 import { UserRole, UserProfile } from './types/restaurant';
 import { ShieldAlert } from 'lucide-react';
+import { ConfirmProvider } from './components/ui/ConfirmDialog';
+import { ModuleErrorBoundary } from './components/common/ModuleErrorBoundary';
 
 // Modals
 import { PaymentModal } from './components/pos/PaymentModal';
@@ -288,7 +290,7 @@ const AppContent: React.FC = () => {
               </button>
             </div>
           ) : (
-            <>
+            <ModuleErrorBoundary key={currentTab} moduleName={currentTab}>
               {currentTab === 'dashboard' && <DashboardView navigateTo={handleSelectTab} />}
               {currentTab === 'tables' && (
                 <TablesView
@@ -336,7 +338,7 @@ const AppContent: React.FC = () => {
               {currentTab === 'reports' && <ReportsView />}
               {currentTab === 'audit' && <AuditView />}
               {currentTab === 'settings' && <AdminCenterView />}
-            </>
+            </ModuleErrorBoundary>
           )}
         </main>
       </div>
@@ -386,11 +388,13 @@ const AppContent: React.FC = () => {
 export default function App() {
   return (
     <ToastProvider>
-      <AuthProvider>
-        <RestaurantProvider>
-          <AppContent />
-        </RestaurantProvider>
-      </AuthProvider>
+      <ConfirmProvider>
+        <AuthProvider>
+          <RestaurantProvider>
+            <AppContent />
+          </RestaurantProvider>
+        </AuthProvider>
+      </ConfirmProvider>
     </ToastProvider>
   );
 }

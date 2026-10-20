@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { useRestaurant } from '../../context/RestaurantContext';
 import { useToast } from '../../context/ToastContext';
+import { useConfirm } from '../ui/ConfirmDialog';
 import { RestaurantSettings } from '../../types/restaurant';
 import {
   Settings,
@@ -21,6 +22,7 @@ import {
 export const SettingsView: React.FC = () => {
   const { settings, updateSettings, resetToDemoData } = useRestaurant();
   const { showToast } = useToast();
+  const confirm = useConfirm();
 
   // General Identity
   const [name, setName] = useState(settings.name);
@@ -477,8 +479,15 @@ export const SettingsView: React.FC = () => {
           </div>
           <button
             type="button"
-            onClick={() => {
-              if (window.confirm('Êtes-vous sûr de vouloir réinitialiser toutes les données de test ?')) {
+            onClick={async () => {
+              const ok = await confirm({
+                title: 'Réinitialiser les données de démonstration ?',
+                message: 'Êtes-vous sûr de vouloir réinitialiser toutes les données de test ? Cette action restaurera le jeu de données calibré aux normes camerounaises.',
+                confirmLabel: 'Réinitialiser',
+                cancelLabel: 'Annuler',
+                variant: 'danger',
+              });
+              if (ok) {
                 resetToDemoData();
                 showToast({
                   type: 'success',
