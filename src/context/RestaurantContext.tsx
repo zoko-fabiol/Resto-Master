@@ -338,7 +338,9 @@ interface RestaurantContextType {
   updateRolePermission: (role: UserRole, module: PermissionModule, action: PermissionAction, allowed: boolean) => Promise<void>;
   updateRoleLimits: (role: UserRole, limits: Partial<RoleLimits>) => Promise<void>;
   applyConfigProfile: (profile: ConfigurationProfileType) => Promise<void>;
-  addOutlet: (outlet: Omit<Outlet, 'id'>) => Promise<void>;
+  addOutlet: (outlet: Omit<Outlet, 'id'> | Outlet) => Promise<Outlet>;
+  updateOutlet: (id: string, updates: Partial<Outlet>) => Promise<void>;
+  deleteOutlet: (id: string) => Promise<void>;
   addTerminal: (terminal: Omit<Terminal, 'id'>) => Promise<void>;
   updateTerminal: (id: string, updates: Partial<Terminal>) => Promise<void>;
   deleteTerminal: (id: string) => Promise<void>;
@@ -640,6 +642,18 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     const unsubCancellationLogs = fiscalFirestoreService.subscribeToCancellationLogs(setCancellationLogs);
 
     // Configuration & Système
+    const unsubOutlets = restaurantFirestoreService.subscribeToOutlets(undefined, (list) => {
+      setOutlets(list);
+      if (list.length > 0 && !selectedOutletId) {
+        setSelectedOutletId(list[0].id);
+      }
+    });
+    const unsubOrg = restaurantFirestoreService.subscribeToOrganization(organization.id, (remoteOrg) => {
+      if (remoteOrg) setOrganization(remoteOrg);
+    });
+    const unsubSettings = restaurantFirestoreService.subscribeToSettings(selectedOutletId, (remoteSettings) => {
+      if (remoteSettings) setSettings(remoteSettings);
+    });
     const unsubFeatures = configFirestoreService.subscribeToFeatures(setFeatures);
     const unsubTerminals = configFirestoreService.subscribeToTerminals(setTerminals);
     const unsubPeripherals = configFirestoreService.subscribeToPeripherals(setPeripherals);
@@ -681,6 +695,9 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       unsubWithholdings();
       unsubFiscalObligations();
       unsubCancellationLogs();
+      unsubOutlets();
+      unsubOrg();
+      unsubSettings();
       unsubFeatures();
       unsubTerminals();
       unsubPeripherals();
@@ -3027,16 +3044,67 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     );
   };
 
-  const addOutlet = async (outlet: Omit<Outlet, 'id'>) => {
+  const addOutlet = async (outlet: Omit<Outlet, 'id'> | Outlet): Promise<Outlet> => {
     const newOutlet: Outlet = {
       ...outlet,
-      id: generateSecureId('out'),
+      id: (outlet as any).id || generateSecureId('out'),
+      createdAt: (outlet as any).createdAt || new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
     };
-    setOutlets((prev) => [...prev, newOutlet]);
+    setOutlets((prev) => [...prev.filter((o) => o.id !== newOutlet.id), newOutlet]);
+    if (!selectedOutletId) {
+      setSelectedOutletId(newOutlet.id);
+    }
+    try {
+      await restaurantFirestoreService.saveOutlet(newOutlet);
+    } catch (err) {
+      console.warn('[RestaurantContext] Sauvegarde outlet Firestore échouée:', err);
+    }
     addAuditLog(
       'Création établissement',
       'Paramètres',
       `Nouvel établissement ajouté : ${newOutlet.name} (${newOutlet.city})`
+    );
+    return newOutlet;
+  };
+
+  const updateOutlet = async (id: string, updates: Partial<Outlet>): Promise<void> => {
+    const existing = outlets.find((o) => o.id === id);
+    if (!existing) return;
+    const updated: Outlet = {
+      ...existing,
+      ...updates,
+      updatedAt: new Date().toISOString(),
+    };
+    setOutlets((prev) => prev.map((o) => (o.id === id ? updated : o)));
+    try {
+      await restaurantFirestoreService.saveOutlet(updated);
+    } catch (err) {
+      console.warn('[RestaurantContext] Mise à jour outlet Firestore échouée:', err);
+    }
+    addAuditLog(
+      'Mise à jour établissement',
+      'Paramètres',
+      `Établissement "${updated.name}" mis à jour`
+    );
+  };
+
+  const deleteOutlet = async (id: string): Promise<void> => {
+    const target = outlets.find((o) => o.id === id);
+    setOutlets((prev) => prev.filter((o) => o.id !== id));
+    if (selectedOutletId === id) {
+      const remaining = outlets.filter((o) => o.id !== id);
+      setSelectedOutletId(remaining[0]?.id || '');
+    }
+    try {
+      await restaurantFirestoreService.deleteOutlet(id);
+    } catch (err) {
+      console.warn('[RestaurantContext] Suppression outlet Firestore échouée:', err);
+    }
+    addAuditLog(
+      'Suppression établissement',
+      'Paramètres',
+      `Établissement supprimé : ${target?.name || id}`
     );
   };
 
@@ -3701,6 +3769,8 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         updateRoleLimits,
         applyConfigProfile,
         addOutlet,
+        updateOutlet,
+        deleteOutlet,
         addTerminal,
         updateTerminal,
         deleteTerminal,

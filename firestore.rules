@@ -96,17 +96,25 @@ service cloud.firestore {
     // =========================================================================
     match /restaurants/{restaurantId} {
       allow read: if isAuthenticated();
-      allow write: if isDirection();
+      allow create, update: if isDirection();
+      allow delete: if isSuperadmin();
     }
 
     match /settings/{docId} {
       allow read: if isAuthenticated();
-      allow write: if isDirection() || isManager();
+      allow write: if isSuperadmin() || (
+        isDirection() && (
+          resource == null ||
+          !('configurationVerrouillee' in resource.data) ||
+          !resource.data.configurationVerrouillee ||
+          (!('configurationVerrouillee' in request.resource.data) || request.resource.data.configurationVerrouillee == resource.data.configurationVerrouillee)
+        )
+      );
     }
 
     match /system_config/{configId} {
       allow read: if isAuthenticated();
-      allow write: if isDirection() || isManager();
+      allow write: if isDirection();
     }
 
     match /config_history/{historyId} {

@@ -95,5 +95,33 @@ Ce document consigne les décisions d'architecture prises pour la livraison d'un
   - **D6 (Appairage de terminaux)** : Affichage transparent de l'expiration du jeton d'appairage éphémère (15 minutes) et blocage clair des codes expirés avec invitation à régénérer.
   - **D7 (Mobile Money)** : Les boutons Orange Money et MTN MoMo sont conditionnellement désactivés avec le libellé "(À configurer)" si aucun compte marchand (code, téléphone ou QR officiel) n'est configuré dans les paramètres de l'établissement. La méthode par défaut bascule automatiquement sur les espèces FCFA.
   - **D8 (Numérotation séquentielle)** : Formalisation de la séquence continue certifiée serveur `CMD-YYYYMMDD-XXXX` via Cloud Functions atomiques transactionnelles, et étiquetage transparent des commandes locales hors-ligne avec le préfixe provisoire `PROV-YYYYMMDD-XXXX`.
-- **Conséquences** : Honnêteté technique absolue de la plateforme. Zéro simulation, zéro faux succès matériel ou fiscal, traçabilité intègre.
 
+---
+
+### ADR-009 : Assistant de Premier Lancement, Audit Prêt à Livrer et Verrouillage de Livraison (Phase E)
+- **Date** : 2026-10-20
+- **Statut** : Accepté & Implémenté
+- **Contexte** : Après l'éradication des jeux de données de démonstration (Phase C) et des simulations trompeuses (Phase D), la mise en service d'un restaurant neuf nécessitait un parcours fluide, guidé et rigoureusement audité pour le superadmin. Il fallait s'assurer qu'aucun restaurant ne soit livré sans identité fiscale complète (CGI 2026, 19,25%), sans caisse configurée, sans zones ni tables, et que la configuration structurelle soit protégée contre toute altération accidentelle par les utilisateurs opérationnels. De plus, les abonnements Firestore ignoraient les collections initialement vides en raison de gardes `if (!snapshot.empty)`.
+- **Décision** :
+  - **E1, E2, E3 (Services Firestore fiabilisés)** :
+    - Élimination systématique des gardes `if (!snapshot.empty)` dans tous les services Firestore (`configFirestoreService`, `cashFirestoreService`, `restaurantFirestoreService`, `tablesFirestoreService`, `productsFirestoreService`) : une collection vide transmet immédiatement l'état `[]` à l'application sans rester bloquée sur un état de chargement ou un cache obsolète.
+    - Émission et retransmission propre de toutes les erreurs de persistance Firestore (fin des blocs `catch` silencieux).
+    - Ajout des abonnements temps réel `subscribeToOutlets`, `subscribeToOrganization` et `subscribeToSettings`.
+  - **E4 & E5 (Assistant Plein Écran `OnboardingWizard`)** :
+    - Création d'un assistant d'accueil guidé en 9 étapes pour le Superadmin :
+      1. Identité légale (Raison sociale, NIU, RCCM, ville, boîte postale, adresse, contact, pied de ticket).
+      2. Paramètres financiers & fiscaux (Devise FCFA entière, TVA 17,5% + CAC 1,75% = 19,25%, mention légale d'arrêté en toutes lettres, déduction automatique des stocks).
+      3. Établissement initial (Création de la succursale principale avec profil métier).
+      4. Zones & Tables (Création interactive de la première zone et génération par lot de tables configurées).
+      5. Caisses & Moyens de paiement (Caisse principale N°1, fond de caisse initial, validation espèces, CB, Orange Money et MTN MoMo).
+      6. Périphériques & Matériel (Imprimante thermique de caisse 80mm, terminal POS principal).
+      7. Catalogue & Fiche technique (Plat témoin et téléchargement immédiat du gabarit UTF-8 `modele_catalogue_restomaster_os.csv`).
+      8. Comptes utilisateurs initiaux (Codes PIN direction, caisse et serveur).
+      9. Contrôle « Prêt à livrer » & Certification (Checklist dynamique en 9 points interactifs vert/rouge renvoyant directement aux étapes concernées).
+  - **E6, E7, E8 (Verrouillage & Séparation Superadmin / Direction)** :
+    - Implémentation du drapeau `configurationVerrouillee` et `certifiedReadyForHandover` dans les paramètres de restaurant.
+    - Seul le rôle `superadmin` peut verrouiller ou déverrouiller la configuration structurelle ou supprimer un établissement.
+    - La Direction accède à l'espace "Paramètres Restaurant" pour la gestion opérationnelle courante (horaires, coordonnées, carte) mais ne peut pas altérer la structure verrouillée.
+    - Protection renforcée dans `firestore.rules` pour `/restaurants/{restaurantId}` (suppression réservée à `isSuperadmin()`) et `/settings/{docId}` (interdiction de déverrouillage pour les rôles non-superadmin).
+    - Génération et impression d'une Fiche Officielle de Mise en Service et Remise Client (A4 avec signatures intégrateur / client).
+- **Conséquences** : Parcours de déploiement clé-en-main, intégrité garantie dès le premier lancement, audit automatique infaillible et traçabilité de remise certifiée conforme.

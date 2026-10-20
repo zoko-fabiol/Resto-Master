@@ -159,6 +159,13 @@ export interface RestaurantSettings {
     mobileMoneyAccount: string;
     clientsAccount: string;
   };
+
+  // Verrouillage de Livraison & Certification de Mise en Service (Phase E)
+  configurationVerrouillee?: boolean;
+  certifiedReadyForHandover?: boolean;
+  certifiedAt?: string;
+  certifiedBy?: string;
+  handoverSlipPrinted?: boolean;
 }
 
 export interface Organization {

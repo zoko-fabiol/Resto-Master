@@ -32,6 +32,7 @@ import {
   WifiOff,
   RefreshCw,
   X,
+  Sparkles,
 } from 'lucide-react';
 import { ChangeMyPinModal } from '../auth/ChangeMyPinModal';
 
@@ -44,6 +45,7 @@ interface HeaderProps {
   openPairingModal?: () => void;
   openCustomerDisplay?: () => void;
   openUserGuide?: () => void;
+  openOnboarding?: () => void;
 }
 
 const TAB_TITLES: Record<string, { title: string; subtitle: string }> = {
@@ -81,6 +83,7 @@ export const Header: React.FC<HeaderProps> = ({
   openPairingModal,
   openCustomerDisplay,
   openUserGuide,
+  openOnboarding,
 }) => {
   const { currentUser, lockSession } = useAuth();
   const confirm = useConfirm();
@@ -518,6 +521,37 @@ export const Header: React.FC<HeaderProps> = ({
               </>
             )}
           </div>
+
+          {/* Assistant de Mise en Service / Prêt à Livrer Indicator */}
+          {openOnboarding && (currentUser.role === 'superadmin' || currentUser.role === 'direction') && (
+            <button
+              type="button"
+              onClick={openOnboarding}
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all shadow-2xs cursor-pointer border ${
+                settings?.certifiedReadyForHandover
+                  ? 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border-emerald-300'
+                  : 'bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 border-amber-400/50 shadow-amber-500/20'
+              }`}
+              title={
+                settings?.certifiedReadyForHandover
+                  ? 'Plateforme certifiée prête pour livraison client • Cliquez pour consulter la fiche de mise en service'
+                  : 'Assistant de premier lancement • Complétez les 9 étapes de configuration requises'
+              }
+              aria-label="Assistant de mise en service"
+            >
+              {settings?.certifiedReadyForHandover ? (
+                <>
+                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" aria-hidden="true" />
+                  <span className="hidden sm:inline font-black">Prêt à Livrer</span>
+                </>
+              ) : (
+                <>
+                  <Sparkles className="w-3.5 h-3.5 text-slate-950 shrink-0" aria-hidden="true" />
+                  <span className="hidden sm:inline font-black">Mise en Service</span>
+                </>
+              )}
+            </button>
+          )}
 
           {/* Guide d'Utilisation Officiel RestoMaster OS */}
           {openUserGuide && (

@@ -32,11 +32,11 @@ export const SettingsView: React.FC = () => {
   const [email, setEmail] = useState(settings.email);
 
   // Legal & Cameroon Tax fields
-  const [niu, setNiu] = useState(settings.niu || 'M012012345678A');
-  const [rccm, setRccm] = useState(settings.rccm || 'RC/YAO/2024/B/1894');
-  const [bp, setBp] = useState(settings.bp || 'BP 3626');
-  const [city, setCity] = useState(settings.city || 'Yaoundé');
-  const [taxCenter, setTaxCenter] = useState(settings.taxCenter || 'CIME Yaoundé 1');
+  const [niu, setNiu] = useState(settings.niu || '');
+  const [rccm, setRccm] = useState(settings.rccm || '');
+  const [bp, setBp] = useState(settings.bp || '');
+  const [city, setCity] = useState(settings.city || '');
+  const [taxCenter, setTaxCenter] = useState(settings.taxCenter || '');
 
   // Currency & Tax
   const [currency, setCurrency] = useState(settings.currency);
@@ -44,12 +44,12 @@ export const SettingsView: React.FC = () => {
   const [enableStockAutoDeduction, setEnableStockAutoDeduction] = useState(settings.enableStockAutoDeduction);
 
   // Mobile Money settings
-  const [orangeMoneyMerchantCode, setOrangeMoneyMerchantCode] = useState(settings.orangeMoneyMerchantCode || '784123');
-  const [orangeMoneyPhone, setOrangeMoneyPhone] = useState(settings.orangeMoneyPhone || '699887766');
+  const [orangeMoneyMerchantCode, setOrangeMoneyMerchantCode] = useState(settings.orangeMoneyMerchantCode || '');
+  const [orangeMoneyPhone, setOrangeMoneyPhone] = useState(settings.orangeMoneyPhone || '');
   const [orangeMaxItQrUrl, setOrangeMaxItQrUrl] = useState(settings.orangeMaxItQrUrl || '');
 
-  const [mtnMoMoMerchantCode, setMtnMoMoMerchantCode] = useState(settings.mtnMoMoMerchantCode || '456789');
-  const [mtnMoMoPhone, setMtnMoMoPhone] = useState(settings.mtnMoMoPhone || '677112233');
+  const [mtnMoMoMerchantCode, setMtnMoMoMerchantCode] = useState(settings.mtnMoMoMerchantCode || '');
+  const [mtnMoMoPhone, setMtnMoMoPhone] = useState(settings.mtnMoMoPhone || '');
   const [mtnMoMoQrUrl, setMtnMoMoQrUrl] = useState(settings.mtnMoMoQrUrl || '');
 
   const [savedSuccess, setSavedSuccess] = useState(false);

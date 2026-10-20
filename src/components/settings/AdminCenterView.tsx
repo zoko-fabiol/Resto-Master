@@ -56,6 +56,7 @@ import { ClientsAndLoyaltySection } from './sections/ClientsAndLoyaltySection';
 import { FiscalBillingPaymentsSection } from './sections/FiscalBillingPaymentsSection';
 import { HardwareAndSecuritySection } from './sections/HardwareAndSecuritySection';
 import { OrganizationSection } from './sections/OrganizationSection';
+import { OnboardingWizard } from '../admin/OnboardingWizard';
 
 export type SubMenuKey =
   | 'library'
@@ -139,6 +140,7 @@ export const AdminCenterView: React.FC = () => {
     cashRegisters,
     tables,
     settings,
+    updateSettings,
     activeRestaurant,
     applyConfigProfile,
   } = useRestaurant();
@@ -146,7 +148,39 @@ export const AdminCenterView: React.FC = () => {
   const { currentUser } = useAuth();
   const { showToast } = useToast();
   const confirm = useConfirm();
-  const isSuperAdmin = currentUser?.role === 'direction';
+  const isSuperAdmin = currentUser?.role === 'superadmin' || currentUser?.role === 'direction';
+  const isTrueSuperAdmin = currentUser?.role === 'superadmin';
+
+  const [isOnboardingOpen, setIsOnboardingOpen] = useState(false);
+
+  const handleToggleConfigLock = async () => {
+    if (!isTrueSuperAdmin) {
+      showToast({
+        title: 'Action Réservée',
+        message: 'Seul le Super-Administrateur peut modifier le verrouillage de la plateforme.',
+        type: 'warning',
+      });
+      return;
+    }
+    const currentLock = Boolean(settings.configurationVerrouillee);
+    const ok = await confirm({
+      title: currentLock ? 'Déverrouiller la configuration' : 'Verrouiller la configuration',
+      message: currentLock
+        ? 'Déverrouiller temporairement la configuration structurelle ?'
+        : 'Verrouiller la configuration pour exploitation client ?',
+      confirmText: currentLock ? 'Déverrouiller' : 'Verrouiller',
+    });
+    if (ok) {
+      await updateSettings({ configurationVerrouillee: !currentLock });
+      showToast({
+        title: !currentLock ? 'Configuration Verrouillée' : 'Configuration Déverrouillée',
+        message: !currentLock
+          ? 'La plateforme est verrouillée pour livraison client.'
+          : 'La plateforme est temporairement déverrouillée.',
+        type: 'info',
+      });
+    }
+  };
 
   const handleQuickApplyProfile = async (profileId: ConfigurationProfileType, title: string) => {
     if (!isSuperAdmin) {
@@ -830,6 +864,16 @@ export const AdminCenterView: React.FC = () => {
             <span>Profil Essentiel (12 Modules)</span>
           </button>
 
+          <button
+            type="button"
+            onClick={() => setIsOnboardingOpen(true)}
+            className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-bold bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 transition-all cursor-pointer shadow-xs"
+            title="Ouvrir l'assistant de premier lancement ou revoir l'audit de livraison"
+          >
+            <ShieldCheck className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+            <span>Assistant & Audit de Livraison</span>
+          </button>
+
           <select
             disabled={!isSuperAdmin}
             onChange={(e) => {
@@ -866,6 +910,86 @@ export const AdminCenterView: React.FC = () => {
           </select>
         </div>
       </div>
+
+      {/* 2. Handover & Delivery Status Banner */}
+      {settings.certifiedReadyForHandover ? (
+        <div className="bg-emerald-50 border border-emerald-200 p-4 sm:p-5 rounded-3xl flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-xs">
+          <div className="flex items-start sm:items-center gap-3.5">
+            <div className="w-10 h-10 rounded-2xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-md shadow-emerald-600/20">
+              <ShieldCheck className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-xs font-black text-emerald-950 uppercase tracking-wider">
+                  Plateforme Certifiée & Prête pour Livraison Client
+                </span>
+                {settings.configurationVerrouillee && (
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-900 text-white flex items-center gap-1">
+                    <Lock className="w-3 h-3 text-amber-400" />
+                    <span>Configuration Verrouillée</span>
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-emerald-800 mt-0.5">
+                Audit « Prêt à livrer » validé avec succès
+                {settings.certifiedAt ? ` le ${new Date(settings.certifiedAt).toLocaleString('fr-FR')}` : ''}
+                {settings.certifiedBy ? ` par ${settings.certifiedBy}` : ''}.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => setIsOnboardingOpen(true)}
+              className="px-3.5 py-2 rounded-xl bg-white border border-emerald-300 text-emerald-900 hover:bg-emerald-100 font-bold text-xs transition cursor-pointer shadow-2xs"
+            >
+              Revoir l'Audit & Fiche de Mise en Service
+            </button>
+
+            {isTrueSuperAdmin && (
+              <button
+                type="button"
+                onClick={handleToggleConfigLock}
+                className="px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs transition cursor-pointer flex items-center gap-1.5"
+              >
+                <Lock className="w-3.5 h-3.5 text-amber-400" />
+                <span>{settings.configurationVerrouillee ? 'Déverrouiller' : 'Verrouiller'}</span>
+              </button>
+            )}
+          </div>
+        </div>
+      ) : (
+        <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 p-4 sm:p-5 rounded-3xl flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-xs">
+          <div className="flex items-start sm:items-center gap-3.5">
+            <div className="w-10 h-10 rounded-2xl bg-amber-500 text-slate-950 flex items-center justify-center shrink-0 font-black shadow-md shadow-amber-500/20">
+              <Sparkles className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-xs font-black text-amber-950 uppercase tracking-wider">
+                  Premier Lancement : Plateforme non encore certifiée
+                </span>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-200 text-amber-900">
+                  9 Étapes Obligatoires
+                </span>
+              </div>
+              <p className="text-xs text-amber-800 mt-0.5">
+                Vérifiez la conformité fiscale CGI 2026, l'identité légale, les caisses, les tables et téléchargez le gabarit CSV avant livraison.
+              </p>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setIsOnboardingOpen(true)}
+            className="px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-black text-xs transition cursor-pointer flex items-center gap-2 shrink-0 shadow-md active:scale-98"
+          >
+            <Sparkles className="w-4 h-4 text-amber-400" />
+            <span>Lancer l'Assistant (9 étapes)</span>
+          </button>
+        </div>
+      )}
 
       {/* 2. Inconsistency Alerts Banner */}
       {computedAlerts.length > 0 && (
@@ -1166,6 +1290,12 @@ export const AdminCenterView: React.FC = () => {
           <div>{renderActiveSection()}</div>
         </div>
       )}
+
+      {/* Assistant de Premier Lancement & Certification */}
+      <OnboardingWizard
+        isOpen={isOnboardingOpen}
+        onClose={() => setIsOnboardingOpen(false)}
+      />
     </div>
   );
 };

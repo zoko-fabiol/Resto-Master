@@ -180,7 +180,9 @@ export const tablesFirestoreService = {
           const list = snapshot.docs.map((d) => d.data() as RestaurantTable);
           callback(list);
         },
-        () => {}
+        (err) => {
+          console.warn('[tablesFirestoreService] Écoute tables interrompue:', err);
+        }
       );
     } catch {
       return () => {};
@@ -203,7 +205,9 @@ export const tablesFirestoreService = {
           const list = snapshot.docs.map((d) => d.data() as Zone);
           callback(list);
         },
-        () => {}
+        (err) => {
+          console.warn('[tablesFirestoreService] Écoute zones interrompue:', err);
+        }
       );
     } catch {
       return () => {};

@@ -26,7 +26,8 @@ export const cashFirestoreService = {
       const docRef = doc(db, 'cash_registers', register.id);
       await setDoc(docRef, { ...register, updatedAt: new Date().toISOString() }, { merge: true });
     } catch (err) {
-      console.warn('Erreur saveCashRegister Firestore:', err);
+      console.error('Erreur saveCashRegister Firestore:', err);
+      throw err;
     }
   },
 
@@ -34,7 +35,8 @@ export const cashFirestoreService = {
     try {
       await deleteDoc(doc(db, 'cash_registers', registerId));
     } catch (err) {
-      console.warn('Erreur deleteCashRegister Firestore:', err);
+      console.error('Erreur deleteCashRegister Firestore:', err);
+      throw err;
     }
   },
 
@@ -44,18 +46,18 @@ export const cashFirestoreService = {
   ): () => void {
     try {
       const colRef = collection(db, 'cash_registers');
-      const q = restaurantId
+      const q = restaurantId && restaurantId !== 'all'
         ? query(colRef, where('restaurantId', '==', restaurantId))
         : query(colRef);
 
       return onSnapshot(
         q,
         (snapshot) => {
-          if (!snapshot.empty) {
-            callback(snapshot.docs.map((d) => d.data() as CashRegister));
-          }
+          callback(snapshot.docs.map((d) => d.data() as CashRegister));
         },
-        () => {}
+        (err) => {
+          console.warn('[cashFirestoreService] Écoute cash_registers interrompue:', err);
+        }
       );
     } catch {
       return () => {};

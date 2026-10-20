@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useRestaurant } from '../../../context/RestaurantContext';
-import { Building, Save, CheckCircle2, Plus, Phone, MapPin, Globe, Sparkles, X } from 'lucide-react';
+import { Building, Save, CheckCircle2, Plus, Phone, MapPin, Globe, Sparkles, X, Trash2 } from 'lucide-react';
 import { Outlet } from '../../../types/configuration';
 
 interface Props {
@@ -15,6 +15,7 @@ export const GeneralAndOutletsSection: React.FC<Props> = ({ subTab }) => {
     selectedOutletId,
     setSelectedOutletId,
     addOutlet,
+    deleteOutlet,
     organization,
   } = useRestaurant();
 
@@ -43,7 +44,7 @@ export const GeneralAndOutletsSection: React.FC<Props> = ({ subTab }) => {
   // New Outlet Form State
   const [showNewOutletModal, setShowNewOutletModal] = useState(false);
   const [newOutletName, setNewOutletName] = useState('');
-  const [newOutletCity, setNewOutletCity] = useState('');
+  const [newOutletCity, setNewOutletCity] = useState('Douala');
   const [newOutletAddress, setNewOutletAddress] = useState('');
   const [newOutletPhone, setNewOutletPhone] = useState('');
 
@@ -323,17 +324,38 @@ export const GeneralAndOutletsSection: React.FC<Props> = ({ subTab }) => {
                   {outlet.active ? 'Actif' : 'Inactif'}
                 </span>
 
-                <button
-                  type="button"
-                  onClick={() => setSelectedOutletId(outlet.id)}
-                  className={`text-xs font-bold px-3 py-1 rounded-xl transition-all ${
-                    isSelected
-                      ? 'bg-amber-500 text-slate-950 font-black'
-                      : 'bg-white border border-slate-300 text-slate-700 hover:bg-slate-100'
-                  }`}
-                >
-                  {isSelected ? 'Établissement Actif' : 'Sélectionner'}
-                </button>
+                <div className="flex items-center gap-2">
+                  {!outlet.isMain && outlets.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        if (settings.configurationVerrouillee) {
+                          alert('La plateforme est verrouillée pour livraison. Seul le Super-Administrateur peut supprimer un établissement.');
+                          return;
+                        }
+                        if (window.confirm(`Supprimer l'établissement "${outlet.name}" ?`)) {
+                          await deleteOutlet(outlet.id);
+                        }
+                      }}
+                      className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 transition cursor-pointer"
+                      title="Supprimer cet établissement"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={() => setSelectedOutletId(outlet.id)}
+                    className={`text-xs font-bold px-3 py-1 rounded-xl transition-all ${
+                      isSelected
+                        ? 'bg-amber-500 text-slate-950 font-black'
+                        : 'bg-white border border-slate-300 text-slate-700 hover:bg-slate-100'
+                    }`}
+                  >
+                    {isSelected ? 'Établissement Actif' : 'Sélectionner'}
+                  </button>
+                </div>
               </div>
             </div>
           );

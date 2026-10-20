@@ -68,4 +68,8 @@ export const DEFAULT_SETTINGS: RestaurantSettings = {
   defaultReceiptWidth: '80mm',
   stockDeductionTiming: 'envoi_cuisine',
   priceDisplayMode: 'TTC',
+
+  // Verrouillage de livraison & Certification client
+  configurationVerrouillee: false,
+  certifiedReadyForHandover: false,
 };

@@ -23,7 +23,8 @@ export const productsFirestoreService = {
       const docRef = doc(db, 'products', product.id);
       await setDoc(docRef, payload, { merge: true });
     } catch (err) {
-      console.warn('Erreur lors de l\'enregistrement du produit dans Firestore:', err);
+      console.error('[productsFirestoreService] Erreur lors de l\'enregistrement du produit:', err);
+      throw err;
     }
   },
 
@@ -35,7 +36,8 @@ export const productsFirestoreService = {
       const docRef = doc(db, 'products', productId);
       await deleteDoc(docRef);
     } catch (err) {
-      console.warn('Erreur lors de la suppression du produit dans Firestore:', err);
+      console.error('[productsFirestoreService] Erreur lors de la suppression du produit:', err);
+      throw err;
     }
   },
 
@@ -55,14 +57,15 @@ export const productsFirestoreService = {
       return onSnapshot(
         q,
         (snapshot) => {
-          if (!snapshot.empty) {
-            const list = snapshot.docs.map((d) => d.data() as Product);
-            callback(list);
-          }
+          const list = snapshot.docs.map((d) => d.data() as Product);
+          callback(list);
         },
-        () => {}
+        (err) => {
+          console.warn('[productsFirestoreService] Écoute produits interrompue:', err);
+        }
       );
-    } catch {
+    } catch (err) {
+      console.error('[productsFirestoreService] Erreur subscribeToProducts:', err);
       return () => {};
     }
   },
@@ -75,7 +78,8 @@ export const productsFirestoreService = {
       const docRef = doc(db, 'categories', category.id);
       await setDoc(docRef, category, { merge: true });
     } catch (err) {
-      console.warn('Erreur lors de l\'enregistrement de la catégorie dans Firestore:', err);
+      console.error('[productsFirestoreService] Erreur lors de l\'enregistrement de la catégorie:', err);
+      throw err;
     }
   },
 
@@ -87,7 +91,8 @@ export const productsFirestoreService = {
       const docRef = doc(db, 'categories', categoryId);
       await deleteDoc(docRef);
     } catch (err) {
-      console.warn('Erreur lors de la suppression de la catégorie dans Firestore:', err);
+      console.error('[productsFirestoreService] Erreur lors de la suppression de la catégorie:', err);
+      throw err;
     }
   },
 
@@ -100,15 +105,16 @@ export const productsFirestoreService = {
       return onSnapshot(
         colRef,
         (snapshot) => {
-          if (!snapshot.empty) {
-            const list = snapshot.docs.map((d) => d.data() as Category);
-            list.sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0));
-            callback(list);
-          }
+          const list = snapshot.docs.map((d) => d.data() as Category);
+          list.sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0));
+          callback(list);
         },
-        () => {}
+        (err) => {
+          console.warn('[productsFirestoreService] Écoute catégories interrompue:', err);
+        }
       );
-    } catch {
+    } catch (err) {
+      console.error('[productsFirestoreService] Erreur subscribeToCategories:', err);
       return () => {};
     }
   },

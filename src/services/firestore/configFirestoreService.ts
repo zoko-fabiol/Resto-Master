@@ -78,9 +78,7 @@ export const configFirestoreService = {
       return onSnapshot(
         colRef,
         (snapshot) => {
-          if (!snapshot.empty) {
-            callback(snapshot.docs.map((d) => d.data() as Terminal));
-          }
+          callback(snapshot.docs.map((d) => d.data() as Terminal));
         },
         (err) => {
           console.warn('Abonnement terminals Firestore interrompu:', err);
@@ -117,9 +115,7 @@ export const configFirestoreService = {
       return onSnapshot(
         colRef,
         (snapshot) => {
-          if (!snapshot.empty) {
-            callback(snapshot.docs.map((d) => d.data() as Peripheral));
-          }
+          callback(snapshot.docs.map((d) => d.data() as Peripheral));
         },
         (err) => {
           console.warn('Abonnement peripherals Firestore interrompu:', err);
@@ -268,9 +264,7 @@ export const configFirestoreService = {
       return onSnapshot(
         q,
         (snapshot) => {
-          if (!snapshot.empty) {
-            callback(snapshot.docs.map((d) => d.data() as ConfigurationHistoryItem));
-          }
+          callback(snapshot.docs.map((d) => d.data() as ConfigurationHistoryItem));
         },
         (err) => {
           console.warn('Abonnement config_history Firestore interrompu:', err);
@@ -300,9 +294,7 @@ export const configFirestoreService = {
       return onSnapshot(
         q,
         (snapshot) => {
-          if (!snapshot.empty) {
-            callback(snapshot.docs.map((d) => d.data() as AuditLog));
-          }
+          callback(snapshot.docs.map((d) => d.data() as AuditLog));
         },
         (err) => {
           console.warn('Abonnement audit_logs Firestore interrompu:', err);
@@ -340,9 +332,7 @@ export const configFirestoreService = {
       return onSnapshot(
         q,
         (snapshot) => {
-          if (!snapshot.empty) {
-            callback(snapshot.docs.map((d) => d.data() as NotificationItem));
-          }
+          callback(snapshot.docs.map((d) => d.data() as NotificationItem));
         },
         (err) => {
           console.warn('Abonnement notifications Firestore interrompu:', err);

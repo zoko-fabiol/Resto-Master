@@ -45,6 +45,7 @@ import { LoginScreen } from './components/auth/LoginScreen';
 import { ChangePasswordModal } from './components/auth/ChangePasswordModal';
 import { UserGuideModal } from './components/common/UserGuideModal';
 import { PaymentModal } from './components/pos/PaymentModal';
+import { OnboardingWizard } from './components/admin/OnboardingWizard';
 import { UserRole, UserProfile } from './types/restaurant';
 import { ShieldAlert, Utensils } from 'lucide-react';
 
@@ -100,6 +101,8 @@ const AppContent: React.FC = () => {
     currentDeviceProfile,
     unpairCurrentDevice,
     terminals,
+    settings,
+    outlets,
   } = useRestaurant();
 
   const currentTerminal = terminals.find((t) => t.id === currentDeviceProfile?.terminalId);
@@ -116,6 +119,18 @@ const AppContent: React.FC = () => {
   const [isPairingOpen, setIsPairingOpen] = useState(false);
   const [isDisplayTvOpen, setIsDisplayTvOpen] = useState(false);
   const [isUserGuideOpen, setIsUserGuideOpen] = useState(false);
+  const [isOnboardingOpen, setIsOnboardingOpen] = useState(false);
+
+  // Auto-launch OnboardingWizard for Superadmin on fresh install if not yet certified and no outlets configured
+  useEffect(() => {
+    if (
+      currentUser.role === 'superadmin' &&
+      !settings?.certifiedReadyForHandover &&
+      (!outlets || outlets.length === 0)
+    ) {
+      setIsOnboardingOpen(true);
+    }
+  }, [currentUser.role, settings?.certifiedReadyForHandover, outlets?.length]);
 
   // Redirection selon le rôle à la connexion ou changement de rôle
   const prevRoleRef = React.useRef<UserRole | null>(null);
@@ -354,6 +369,7 @@ const AppContent: React.FC = () => {
           openPairingModal={() => setIsPairingOpen(true)}
           openCustomerDisplay={() => setIsDisplayTvOpen(true)}
           openUserGuide={() => setIsUserGuideOpen(true)}
+          openOnboarding={() => setIsOnboardingOpen(true)}
         />
 
         {/* Dynamic View Body avec padding inférieur sur mobile pour BottomNav */}
@@ -449,6 +465,12 @@ const AppContent: React.FC = () => {
         isOpen={isUserGuideOpen}
         onClose={() => setIsUserGuideOpen(false)}
         initialRole={currentUser.role}
+      />
+
+      {/* Assistant de Premier Lancement & Audit Prêt à Livrer */}
+      <OnboardingWizard
+        isOpen={isOnboardingOpen}
+        onClose={() => setIsOnboardingOpen(false)}
       />
 
       {/* Tactile PIN Lock Screen Overlay */}

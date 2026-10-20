@@ -297,10 +297,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
         },
         {
           id: 'settings',
-          label: 'Configuration Système',
+          label: currentUser.role === 'superadmin' ? 'Configuration Système' : 'Paramètres Restaurant',
           icon: Settings,
-          badge: 'Pro',
-          badgeColor: 'bg-amber-500 text-slate-950 font-bold',
+          badge: currentUser.role === 'superadmin' ? 'Superadmin' : 'Direction',
+          badgeColor:
+            currentUser.role === 'superadmin'
+              ? 'bg-amber-500 text-slate-950 font-black'
+              : 'bg-slate-700 text-slate-200 font-bold',
         },
       ],
     },
