@@ -12,6 +12,7 @@ import {
   Clock,
   CheckCircle,
   AlertCircle,
+  CalendarDays,
   X,
   CreditCard,
   ShoppingBag,
@@ -485,40 +486,40 @@ export const TablesView: React.FC<TablesViewProps> = ({ onOpenOrder, onPayOrder,
       </div>
 
       {/* Legend & Stats Banner */}
-      <div className="bg-slate-50 border border-slate-200/80 px-4 py-2.5 rounded-xl flex flex-wrap items-center justify-between gap-3 text-xs">
-        <div className="flex flex-wrap items-center gap-4 text-slate-600">
-          <span className="flex items-center gap-1.5 font-medium">
-            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-emerald-200"></span>
+      <div className="bg-slate-50 border border-slate-200/80 px-4 py-3 rounded-xl flex flex-wrap items-center justify-between gap-3 text-xs">
+        <div className="flex flex-wrap items-center gap-4 text-slate-700 font-semibold">
+          <span className="flex items-center gap-1.5">
+            <CheckCircle className="w-3.5 h-3.5 text-emerald-600" />
             <span>Libre</span>
           </span>
-          <span className="flex items-center gap-1.5 font-medium">
-            <span className="w-2.5 h-2.5 rounded-full bg-amber-500 ring-2 ring-amber-200"></span>
+          <span className="flex items-center gap-1.5">
+            <Utensils className="w-3.5 h-3.5 text-amber-600" />
             <span>Occupée / En service</span>
           </span>
           {isReservationsEnabled && (
-            <span className="flex items-center gap-1.5 font-medium">
-              <span className="w-2.5 h-2.5 rounded-full bg-blue-500 ring-2 ring-blue-200"></span>
+            <span className="flex items-center gap-1.5">
+              <CalendarDays className="w-3.5 h-3.5 text-blue-600" />
               <span>Réservée</span>
             </span>
           )}
-          <span className="flex items-center gap-1.5 font-medium">
-            <span className="w-2.5 h-2.5 rounded-full bg-rose-500 ring-2 ring-rose-200"></span>
+          <span className="flex items-center gap-1.5">
+            <CreditCard className="w-3.5 h-3.5 text-rose-600" />
             <span>Attente paiement</span>
           </span>
-          <span className="flex items-center gap-1.5 font-medium">
-            <span className="w-2.5 h-2.5 rounded-full bg-gray-400 ring-2 ring-gray-200"></span>
+          <span className="flex items-center gap-1.5">
+            <Sparkles className="w-3.5 h-3.5 text-slate-500" />
             <span>À nettoyer</span>
           </span>
-          <span className="flex items-center gap-1.5 font-medium">
-            <span className="w-2.5 h-2.5 rounded-full bg-red-600 ring-2 ring-red-200"></span>
+          <span className="flex items-center gap-1.5">
+            <AlertCircle className="w-3.5 h-3.5 text-red-600" />
             <span>Hors service</span>
           </span>
         </div>
 
-        <div className="text-slate-500 text-[11px] font-medium flex items-center gap-2">
+        <div className="text-slate-500 text-xs font-medium flex items-center gap-2">
           <span>{activeRestaurant.name}</span>
           <span>•</span>
-          <span>
+          <span className="font-bold text-slate-700 tabular-nums">
             {tables.filter((t) => t.status === 'occupee').length} / {tables.length} tables actives
           </span>
         </div>
@@ -657,14 +658,31 @@ export const TablesView: React.FC<TablesViewProps> = ({ onOpenOrder, onPayOrder,
                     </div>
                   )}
 
-                  {/* Active Order Summary */}
+                  {/* Active Order Summary & Elapsed Time */}
                   {order ? (
-                    <div className="mt-1 px-1.5 py-0.5 rounded bg-black/40 border border-white/10 text-[10px] font-black text-amber-300">
-                      {formatCurrency(order.total, settings.currency)}
+                    <div className="mt-1 flex flex-col items-center gap-0.5">
+                      <div className="px-2 py-0.5 rounded-lg bg-black/50 border border-white/20 text-xs font-black text-amber-300 tabular-nums">
+                        {formatCurrency(order.total, settings.currency)}
+                      </div>
+                      {elapsed > 0 && (
+                        <div className="flex items-center gap-1 text-xs font-bold text-amber-200 tabular-nums">
+                          <Clock className="w-3 h-3 text-amber-400 shrink-0" />
+                          <span>{elapsed} min</span>
+                        </div>
+                      )}
                     </div>
                   ) : (
-                    <div className="text-[9px] uppercase tracking-wider font-bold opacity-70 mt-0.5">
-                      {statusConfig.label}
+                    <div className="flex items-center gap-1 text-xs font-bold opacity-90 mt-0.5">
+                      {table.status === 'libre' ? (
+                        <CheckCircle className="w-3 h-3 text-emerald-400 shrink-0" />
+                      ) : table.status === 'reservee' ? (
+                        <CalendarDays className="w-3 h-3 text-blue-400 shrink-0" />
+                      ) : table.status === 'attente_paiement' ? (
+                        <CreditCard className="w-3 h-3 text-rose-400 shrink-0" />
+                      ) : (
+                        <Sparkles className="w-3 h-3 text-slate-400 shrink-0" />
+                      )}
+                      <span>{statusConfig.label}</span>
                     </div>
                   )}
 
@@ -701,61 +719,72 @@ export const TablesView: React.FC<TablesViewProps> = ({ onOpenOrder, onPayOrder,
                   <div className="flex items-center justify-between">
                     <span className="text-lg font-black text-slate-900">{table.number}</span>
                     <span
-                      className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${statusConfig.badgeClass}`}
+                      className={`text-xs font-bold px-2.5 py-1 rounded-full border flex items-center gap-1.5 ${statusConfig.badgeClass}`}
                     >
-                      {statusConfig.label}
+                      {table.status === 'libre' ? (
+                        <CheckCircle className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                      ) : table.status === 'reservee' ? (
+                        <CalendarDays className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                      ) : table.status === 'attente_paiement' ? (
+                        <CreditCard className="w-3.5 h-3.5 text-rose-600 shrink-0" />
+                      ) : table.status === 'occupee' || table.status === 'en_service' ? (
+                        <Utensils className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                      ) : (
+                        <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                      )}
+                      <span>{statusConfig.label}</span>
                     </span>
                   </div>
-                  <div className="text-[11px] text-slate-500 mt-1 flex items-center gap-1.5 flex-wrap">
+                  <div className="text-xs text-slate-500 mt-1.5 flex items-center gap-1.5 flex-wrap">
                     {isCapacityAllowed && (
                       <>
-                        <span className="flex items-center gap-0.5">
-                          <Users className="w-3 h-3 text-slate-400" />
+                        <span className="flex items-center gap-0.5 font-medium">
+                          <Users className="w-3.5 h-3.5 text-slate-400" />
                           {table.capacity} places
                         </span>
                         <span className="text-slate-300">•</span>
                       </>
                     )}
-                    <span className="truncate">{table.zone}</span>
+                    <span className="truncate font-medium">{table.zone}</span>
                   </div>
                   {table.assignedServerName && (
-                    <div className="text-[10px] font-semibold text-amber-700 mt-1">
+                    <div className="text-xs font-semibold text-amber-700 mt-1">
                       Serveur : {table.assignedServerName}
                     </div>
                   )}
 
                   {/* Tablet Kiosk Status Pills */}
                   {table.tabletLocked && (
-                    <div className="mt-2 py-0.5 px-2 rounded-lg bg-rose-50 border border-rose-200 text-rose-700 text-[10px] font-bold flex items-center gap-1">
-                      <Lock className="w-3 h-3 text-rose-600 shrink-0" />
+                    <div className="mt-2 py-1 px-2.5 rounded-lg bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold flex items-center gap-1.5">
+                      <Lock className="w-3.5 h-3.5 text-rose-600 shrink-0" />
                       <span className="truncate">Tablette Verrouillée</span>
                     </div>
                   )}
                   {table.tabletCallWaiterPending && (
-                    <div className="mt-2 py-0.5 px-2 rounded-lg bg-amber-50 border border-amber-300 text-amber-800 text-[10px] font-bold flex items-center gap-1 animate-bounce">
-                      <Bell className="w-3 h-3 text-amber-600 shrink-0" />
+                    <div className="mt-2 py-1 px-2.5 rounded-lg bg-amber-50 border border-amber-300 text-amber-800 text-xs font-bold flex items-center gap-1.5 animate-bounce">
+                      <Bell className="w-3.5 h-3.5 text-amber-600 shrink-0" />
                       <span className="truncate">Appel Serveur !</span>
                     </div>
                   )}
                 </div>
 
                 {order ? (
-                  <div className="mt-3 pt-2 border-t border-slate-200/60">
-                    <div className="text-xs font-black text-slate-900">
+                  <div className="mt-3 pt-2.5 border-t border-slate-200/60">
+                    <div className="text-sm font-black text-slate-900 tabular-nums">
                       {formatCurrency(order.total, settings.currency)}
                     </div>
-                    <div className="text-[10px] text-slate-600 mt-0.5 flex items-center justify-between">
-                      <span>{order.items.length} art.</span>
+                    <div className="text-xs text-slate-600 mt-1 flex items-center justify-between">
+                      <span className="font-medium">{order.items.length} art.</span>
                       {elapsed > 0 && (
-                        <span className="flex items-center gap-1 text-slate-500">
-                          <Clock className="w-3 h-3" />
-                          {elapsed} min
+                        <span className="flex items-center gap-1 font-bold text-amber-700 bg-amber-50 border border-amber-200/80 px-2 py-0.5 rounded-md tabular-nums">
+                          <Clock className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                          <span>{elapsed} min</span>
                         </span>
                       )}
                     </div>
                   </div>
                 ) : (
-                  <div className="mt-3 pt-2 border-t border-slate-200/40 text-[11px] text-slate-400 italic">
+                  <div className="mt-3 pt-2 border-t border-slate-200/40 text-xs text-slate-400 italic">
                     {table.status === 'libre' ? 'Prête pour accueil' : table.status}
                   </div>
                 )}

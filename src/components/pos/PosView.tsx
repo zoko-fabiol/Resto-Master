@@ -97,6 +97,25 @@ export const PosView: React.FC<PosViewProps> = ({ initialTableId, onOpenPayment,
   const [isProforma, setIsProforma] = useState(false);
   const [companyBillingName, setCompanyBillingName] = useState('');
   const [companyBillingNiu, setCompanyBillingNiu] = useState('');
+  const [isMobileCartOpen, setIsMobileCartOpen] = useState(false);
+
+  // Top articles plus vendus calculés dynamiquement sur les commandes existantes
+  const topSoldProductIds = useMemo(() => {
+    const counts: Record<string, number> = {};
+    orders.forEach((o) => {
+      o.items?.forEach((item) => {
+        counts[item.productId] = (counts[item.productId] || 0) + item.quantity;
+      });
+    });
+    return Object.entries(counts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 4)
+      .map(([pid]) => pid);
+  }, [orders]);
+
+  const popularProducts = useMemo(() => {
+    return products.filter((p) => topSoldProductIds.includes(p.id) && p.available);
+  }, [products, topSoldProductIds]);
 
   // Commande active existante sur la table sélectionnée (Synchronisation temps réel Tablette & POS)
   const existingTableOrder = useMemo(() => {
@@ -721,14 +740,52 @@ export const PosView: React.FC<PosViewProps> = ({ initialTableId, onOpenPayment,
           </div>
         </div>
 
+        {/* Popular / Best Sellers Strip (dérivé des commandes réelles) */}
+        {popularProducts.length > 0 && selectedCategory === 'all' && !searchQuery && (
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-amber-700">
+              <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+              <span>Plus Vendus & Favoris</span>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+              {popularProducts.map((p) => {
+                const inCart = cart.find((i) => i.productId === p.id);
+                return (
+                  <button
+                    key={`pop-${p.id}`}
+                    type="button"
+                    onClick={() => p.available && addToCart(p)}
+                    className="p-2.5 rounded-xl bg-gradient-to-br from-amber-50/80 to-amber-100/40 border border-amber-200/80 hover:border-amber-400 flex items-center gap-2.5 text-left transition-all active:scale-98 shadow-xs cursor-pointer"
+                  >
+                    <div className="w-11 h-11 rounded-lg overflow-hidden shrink-0 bg-slate-100 relative">
+                      <img src={p.image || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=400'} alt={p.name} className="w-full h-full object-cover" />
+                      {inCart && (
+                        <span className="absolute top-0 right-0 w-4.5 h-4.5 bg-amber-600 text-white rounded-bl-lg font-black text-[10px] flex items-center justify-center">
+                          {inCart.quantity}
+                        </span>
+                      )}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-xs font-bold text-slate-900 truncate">{p.name}</div>
+                      <div className="text-xs font-black text-amber-900 tabular-nums mt-0.5">
+                        {formatCurrency(p.price, settings.currency)}
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {/* Categories Bar */}
         <div className="w-full min-w-0 overflow-x-auto pb-1 custom-scrollbar">
-          <div className="flex items-center gap-1.5 w-max">
+          <div className="flex items-center gap-2 w-max">
             <button
               onClick={() => setSelectedCategory('all')}
-              className={`px-3.5 py-2 rounded-xl text-xs font-semibold whitespace-nowrap shrink-0 transition-all ${
+              className={`min-h-[44px] px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold whitespace-nowrap shrink-0 transition-all cursor-pointer ${
                 selectedCategory === 'all'
-                  ? 'bg-amber-600 text-white shadow-xs'
+                  ? 'bg-amber-500 text-slate-950 border border-amber-400 shadow-xs'
                   : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-50'
               }`}
             >
@@ -738,9 +795,9 @@ export const PosView: React.FC<PosViewProps> = ({ initialTableId, onOpenPayment,
               <button
                 key={cat.id}
                 onClick={() => setSelectedCategory(cat.id)}
-                className={`px-3.5 py-2 rounded-xl text-xs font-semibold whitespace-nowrap shrink-0 transition-all ${
+                className={`min-h-[44px] px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold whitespace-nowrap shrink-0 transition-all cursor-pointer ${
                   selectedCategory === cat.id
-                    ? 'bg-amber-600 text-white shadow-xs'
+                    ? 'bg-amber-500 text-slate-950 border border-amber-400 shadow-xs'
                     : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-50'
                 }`}
               >
@@ -751,7 +808,7 @@ export const PosView: React.FC<PosViewProps> = ({ initialTableId, onOpenPayment,
         </div>
 
         {/* Products Grid */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3.5">
           {filteredProducts.map((product) => {
             const inCart = cart.find((i) => i.productId === product.id);
 
@@ -766,17 +823,17 @@ export const PosView: React.FC<PosViewProps> = ({ initialTableId, onOpenPayment,
                 } ${inCart ? 'ring-2 ring-amber-500 border-amber-500' : ''}`}
               >
                 {/* Product Image */}
-                <div className="h-28 bg-slate-100 relative overflow-hidden">
+                <div className="h-32 sm:h-36 bg-slate-100 relative overflow-hidden">
                   <img
                     src={product.image || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=400'}
                     alt={product.name}
-                    className="w-full h-full object-cover"
+                    className="w-full h-full object-cover transition-transform duration-300 hover:scale-105"
                   />
-                  <span className="absolute top-2 left-2 text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-900/80 text-white backdrop-blur-xs">
+                  <span className="absolute top-2 left-2 text-xs font-bold px-2 py-0.5 rounded-full bg-slate-900/80 text-white backdrop-blur-xs">
                     {product.destination === 'cuisine' ? 'Cuisine' : 'Bar'}
                   </span>
                   {inCart && (
-                    <span className="absolute top-2 right-2 w-6 h-6 rounded-full bg-amber-600 text-white font-black text-xs flex items-center justify-center shadow-md animate-scale-in">
+                    <span className="absolute top-2 right-2 min-w-[26px] h-6.5 px-1.5 rounded-full bg-amber-500 text-slate-950 font-black text-xs flex items-center justify-center shadow-md animate-scale-in">
                       {inCart.quantity}
                     </span>
                   )}
@@ -788,21 +845,22 @@ export const PosView: React.FC<PosViewProps> = ({ initialTableId, onOpenPayment,
                 </div>
 
                 {/* Product Info */}
-                <div className="p-3 flex-1 flex flex-col justify-between">
+                <div className="p-3.5 flex-1 flex flex-col justify-between">
                   <div>
-                    <h4 className="text-xs font-bold text-slate-900 line-clamp-1">{product.name}</h4>
-                    <p className="text-[11px] text-slate-500 line-clamp-2 mt-0.5">{product.description}</p>
+                    <h4 className="text-sm font-bold text-slate-900 line-clamp-1">{product.name}</h4>
+                    <p className="text-xs text-slate-500 line-clamp-2 mt-0.5">{product.description}</p>
                   </div>
 
-                  <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center justify-between">
-                    <span className="text-xs font-black text-slate-900">
+                  <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between">
+                    <span className="text-sm sm:text-base font-black text-slate-900 tabular-nums">
                       {formatCurrency(product.price, settings.currency)}
                     </span>
                     <button
                       disabled={!product.available}
-                      className="w-7 h-7 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-700 flex items-center justify-center transition-colors"
+                      className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-amber-500 hover:bg-amber-600 active:bg-amber-700 text-slate-950 flex items-center justify-center transition-colors shadow-xs cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
+                      aria-label={`Ajouter ${product.name} au panier`}
                     >
-                      <Plus className="w-3.5 h-3.5" />
+                      <Plus className="w-4 h-4 sm:w-5 sm:h-5 stroke-[2.5]" />
                     </button>
                   </div>
                 </div>
@@ -812,29 +870,43 @@ export const PosView: React.FC<PosViewProps> = ({ initialTableId, onOpenPayment,
         </div>
       </div>
 
-      {/* Right 4-5 Columns: POS Order Cart & Checkout */}
-      <div className="lg:col-span-5 xl:col-span-4">
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-xs flex flex-col h-full sticky top-20">
+      {/* Right 4-5 Columns: POS Order Cart & Checkout (Drawer sur mobile, colonne fixe sur desktop) */}
+      <div
+        className={`
+          ${isMobileCartOpen ? 'fixed inset-0 z-50 flex flex-col justify-end bg-slate-950/70 backdrop-blur-xs p-2 sm:p-4' : 'hidden lg:block'}
+          lg:static lg:z-auto lg:p-0 lg:bg-transparent lg:backdrop-blur-none lg:col-span-5 xl:col-span-4
+        `}
+      >
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-xl lg:shadow-xs flex flex-col h-full max-h-[88vh] lg:max-h-none overflow-hidden sticky top-20">
           {/* Cart Header */}
           <div className="p-4 border-b border-slate-100 bg-slate-50/70 rounded-t-2xl space-y-3">
             <div className="flex items-center justify-between">
               <div className="font-bold text-slate-900 text-sm flex items-center gap-2">
                 <ShoppingBag className="w-4 h-4 text-amber-600" />
-                Commande en cours
+                <span>Commande en cours</span>
               </div>
               <div className="flex items-center gap-2">
-                <span className="text-[11px] text-slate-500 font-medium">
+                <span className="text-xs text-slate-500 font-medium tabular-nums">
                   {cart.reduce((s, i) => s + i.quantity, 0)} articles
                 </span>
                 {cart.length > 0 && (
                   <button
                     onClick={handleCancelCartClick}
-                    className="text-[10px] font-bold text-rose-600 hover:text-rose-700 bg-rose-50 hover:bg-rose-100 px-2 py-0.5 rounded-md border border-rose-200 transition-colors"
+                    className="text-xs font-bold text-rose-600 hover:text-rose-700 bg-rose-50 hover:bg-rose-100 px-2 py-0.5 rounded-md border border-rose-200 transition-colors cursor-pointer"
                     title="Vider le panier / Annuler la commande"
                   >
                     Vider
                   </button>
                 )}
+                {/* Bouton fermeture sur mobile */}
+                <button
+                  type="button"
+                  onClick={() => setIsMobileCartOpen(false)}
+                  className="lg:hidden p-1.5 rounded-lg text-slate-500 hover:text-slate-900 hover:bg-slate-200 transition-colors cursor-pointer"
+                  aria-label="Fermer le panier mobile"
+                >
+                  <X className="w-5 h-5" />
+                </button>
               </div>
             </div>
 
@@ -1095,39 +1167,47 @@ export const PosView: React.FC<PosViewProps> = ({ initialTableId, onOpenPayment,
 
                             <div className="flex items-center gap-2">
                               {/* Qty Stepper & Numpad trigger */}
-                              <div className="flex items-center gap-1 bg-white rounded-lg p-0.5 border border-slate-200 shadow-2xs">
+                              <div className="flex items-center gap-1 bg-white rounded-xl p-0.5 border border-slate-200 shadow-2xs">
                                 <button
+                                  type="button"
                                   onClick={() => updateQuantity(item.id, -1)}
-                                  className="w-5 h-5 rounded flex items-center justify-center hover:bg-slate-100 text-slate-600 transition-colors"
+                                  className="w-9 h-9 sm:w-10 sm:h-10 rounded-lg flex items-center justify-center hover:bg-slate-100 active:bg-slate-200 text-slate-700 transition-colors cursor-pointer"
+                                  aria-label={`Diminuer la quantité de ${item.productName}`}
                                 >
-                                  <Minus className="w-3 h-3" />
+                                  <Minus className="w-4 h-4" />
                                 </button>
                                 <button
+                                  type="button"
                                   onClick={() => setActiveNumpadItemId(item.id)}
-                                  className="w-6 text-center font-bold text-xs text-slate-900 hover:bg-slate-50 rounded py-0.5"
+                                  className="min-w-[36px] h-9 sm:h-10 text-center font-black text-sm text-slate-900 hover:bg-slate-50 rounded-lg tabular-nums cursor-pointer"
                                   title="Modifier la quantité directement"
+                                  aria-label={`Quantité: ${item.quantity}. Cliquer pour ouvrir le pavé numérique`}
                                 >
                                   {item.quantity}
                                 </button>
                                 <button
+                                  type="button"
                                   onClick={() => updateQuantity(item.id, 1)}
-                                  className="w-5 h-5 rounded flex items-center justify-center hover:bg-slate-100 text-slate-600 transition-colors"
+                                  className="w-9 h-9 sm:w-10 sm:h-10 rounded-lg flex items-center justify-center hover:bg-slate-100 active:bg-slate-200 text-slate-700 transition-colors cursor-pointer"
+                                  aria-label={`Augmenter la quantité de ${item.productName}`}
                                 >
-                                  <Plus className="w-3 h-3" />
+                                  <Plus className="w-4 h-4" />
                                 </button>
                               </div>
 
                               {/* Total line */}
-                              <span className="text-xs font-black text-slate-900 min-w-[65px] text-right">
+                              <span className="text-sm font-black text-slate-900 min-w-[75px] text-right tabular-nums">
                                 {formatCurrency(item.unitPrice * item.quantity, settings.currency)}
                               </span>
 
                               {/* Delete */}
                               <button
+                                type="button"
                                 onClick={() => removeFromCart(item.id)}
-                                className="text-slate-400 hover:text-red-600 p-1 transition-colors"
+                                className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+                                aria-label={`Supprimer ${item.productName} du panier`}
                               >
-                                <Trash2 className="w-3.5 h-3.5" />
+                                <Trash2 className="w-4 h-4" />
                               </button>
                             </div>
                           </div>
@@ -1138,7 +1218,7 @@ export const PosView: React.FC<PosViewProps> = ({ initialTableId, onOpenPayment,
                             <select
                               value={item.seatNumber ?? 1}
                               onChange={(e) => reassignItemSeat(item.id, Number(e.target.value))}
-                              className="text-[10px] font-bold px-1.5 py-1 rounded-lg bg-white border border-slate-200 text-slate-700"
+                              className="text-xs font-bold px-2 py-1.5 rounded-lg bg-white border border-slate-200 text-slate-700 cursor-pointer"
                               title="Déplacer vers un autre couvert"
                             >
                               <option value={0}>Table</option>
@@ -1152,21 +1232,21 @@ export const PosView: React.FC<PosViewProps> = ({ initialTableId, onOpenPayment,
                               placeholder="Instructions (cuisson, sauce...)"
                               value={item.notes || ''}
                               onChange={(e) => updateItemNotes(item.id, e.target.value)}
-                              className="flex-1 px-2 py-1 text-[11px] rounded-lg bg-white border border-slate-200 text-slate-700 placeholder-slate-400"
+                              className="flex-1 px-3 py-1.5 text-xs rounded-lg bg-white border border-slate-200 text-slate-700 placeholder-slate-400"
                             />
 
                             {/* Quick Modifiers Popover Button */}
                             <button
                               type="button"
                               onClick={() => setActiveModifierItemId(item.id)}
-                              className={`flex items-center gap-1 px-2 py-1 text-[10px] font-bold rounded-lg border transition-colors shrink-0 ${
+                              className={`flex items-center gap-1 min-h-[34px] px-2.5 py-1 text-xs font-bold rounded-lg border transition-colors shrink-0 cursor-pointer ${
                                 item.notes
-                                  ? 'bg-amber-100 border-amber-300 text-amber-800'
-                                  : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-100'
+                                  ? 'bg-amber-100 border-amber-300 text-amber-900'
+                                  : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-100'
                               }`}
                               title="Options rapides : Cuisson, garniture, sauce"
                             >
-                              <SlidersHorizontal className="w-3 h-3 text-amber-600" />
+                              <SlidersHorizontal className="w-3.5 h-3.5 text-amber-600" />
                               <span>Options</span>
                             </button>
 
@@ -1779,6 +1859,34 @@ export const PosView: React.FC<PosViewProps> = ({ initialTableId, onOpenPayment,
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+      {/* Floating Mobile Cart Bar (visible sur mobile quand le tiroir est fermé) */}
+      {!isMobileCartOpen && (
+        <div className="lg:hidden fixed bottom-16 left-0 right-0 z-30 p-2.5 sm:p-3 bg-slate-900/98 backdrop-blur-md border-t border-slate-800 text-white shadow-2xl safe-area-pb">
+          <div className="flex items-center justify-between gap-3 max-w-lg mx-auto">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="w-10 h-10 rounded-xl bg-amber-500 text-slate-950 font-black flex items-center justify-center text-sm shrink-0 shadow-xs">
+                {cart.reduce((s, i) => s + i.quantity, 0)}
+              </div>
+              <div className="min-w-0">
+                <div className="text-xs text-slate-400 font-medium truncate">
+                  {selectedTableId ? `Table ${tables.find((t) => t.id === selectedTableId)?.number || ''}` : 'Commande comptoir'}
+                </div>
+                <div className="text-sm font-black text-white tabular-nums">
+                  {formatCurrency(existingTableOrder ? existingTableOrder.total + grandTotal : grandTotal, settings.currency)}
+                </div>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setIsMobileCartOpen(true)}
+              className="px-4 py-2.5 bg-amber-500 hover:bg-amber-400 active:bg-amber-600 text-slate-950 font-bold rounded-xl text-xs sm:text-sm flex items-center gap-2 shadow-md cursor-pointer transition-all shrink-0"
+            >
+              <ShoppingBag className="w-4 h-4" />
+              <span>Voir le Panier</span>
+            </button>
           </div>
         </div>
       )}

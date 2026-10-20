@@ -276,54 +276,62 @@ export const ROLE_LABELS: Record<UserRole, { label: string; color: string }> = {
   aucun: { label: 'Aucun accès (Compte en attente)', color: 'bg-slate-100 text-slate-600 border-slate-300' },
 };
 
-export const TABLE_STATUS_MAP: Record<TableStatus, { label: string; badgeClass: string; borderClass: string; bgClass: string }> = {
+export const TABLE_STATUS_MAP: Record<TableStatus, { label: string; badgeClass: string; borderClass: string; bgClass: string; iconName: string }> = {
   libre: {
     label: 'Libre',
     badgeClass: 'bg-emerald-100 text-emerald-800 border-emerald-200',
     borderClass: 'border-emerald-300 hover:border-emerald-500',
     bgClass: 'bg-emerald-50/50',
+    iconName: 'CheckCircle2',
   },
   reservee: {
     label: 'Réservée',
     badgeClass: 'bg-blue-100 text-blue-800 border-blue-200',
     borderClass: 'border-blue-300 hover:border-blue-500',
     bgClass: 'bg-blue-50/50',
+    iconName: 'CalendarDays',
   },
   occupee: {
     label: 'Occupée',
     badgeClass: 'bg-amber-100 text-amber-800 border-amber-200',
     borderClass: 'border-amber-300 hover:border-amber-500',
     bgClass: 'bg-amber-50/50',
+    iconName: 'Utensils',
   },
   attente_commande: {
     label: 'Attente commande',
     badgeClass: 'bg-orange-100 text-orange-800 border-orange-200',
     borderClass: 'border-orange-300 hover:border-orange-500',
     bgClass: 'bg-orange-50/50',
+    iconName: 'Clock',
   },
   en_service: {
     label: 'En service',
     badgeClass: 'bg-indigo-100 text-indigo-800 border-indigo-200',
     borderClass: 'border-indigo-300 hover:border-indigo-500',
     bgClass: 'bg-indigo-50/50',
+    iconName: 'Sparkles',
   },
   attente_paiement: {
     label: 'Attente paiement',
     badgeClass: 'bg-rose-100 text-rose-800 border-rose-200',
     borderClass: 'border-rose-300 hover:border-rose-500',
     bgClass: 'bg-rose-50/50',
+    iconName: 'CreditCard',
   },
   a_nettoyer: {
     label: 'À nettoyer',
     badgeClass: 'bg-gray-100 text-gray-700 border-gray-200',
     borderClass: 'border-gray-300 hover:border-gray-400',
     bgClass: 'bg-gray-50/50',
+    iconName: 'Sparkles',
   },
   hors_service: {
     label: 'Hors service',
     badgeClass: 'bg-red-100 text-red-800 border-red-200',
     borderClass: 'border-red-300 hover:border-red-400',
     bgClass: 'bg-red-50/50',
+    iconName: 'AlertCircle',
   },
 };
 
