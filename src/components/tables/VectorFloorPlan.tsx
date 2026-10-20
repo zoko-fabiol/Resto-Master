@@ -58,6 +58,9 @@ interface VectorFloorPlanProps {
   onSelectTable: (table: RestaurantTable) => void;
   onTableAction: (table: RestaurantTable) => void;
   onSelectDecor: (decor: DecorElement) => void;
+  onEditTableProps?: (table: RestaurantTable) => void;
+  onEditDecorProps?: (decor: DecorElement) => void;
+  onDeselect?: () => void;
   onUpdateDraftTables: (tables: RestaurantTable[]) => void;
   onUpdateDraftDecor: (decor: DecorElement[]) => void;
   onPushHistory: () => void;
@@ -79,6 +82,9 @@ export const VectorFloorPlan: React.FC<VectorFloorPlanProps> = ({
   onSelectTable,
   onTableAction,
   onSelectDecor,
+  onEditTableProps,
+  onEditDecorProps,
+  onDeselect,
   onUpdateDraftTables,
   onUpdateDraftDecor,
   onPushHistory,
@@ -299,6 +305,9 @@ export const VectorFloorPlan: React.FC<VectorFloorPlanProps> = ({
 
     // Clic milieu, Shift+clic, ou clic direct sur le fond du plan
     if (e.button === 1 || (e.button === 0 && e.shiftKey) || e.target === svgRef.current) {
+      if (isEditMode && e.target === svgRef.current) {
+        onDeselect?.();
+      }
       setIsPanning(true);
       panStartRef.current = { x: e.clientX - pan.x, y: e.clientY - pan.y };
       try {
@@ -750,8 +759,22 @@ export const VectorFloorPlan: React.FC<VectorFloorPlanProps> = ({
         {/* Global Pan & Zoom SVG Group with contentGroupRef */}
         <g ref={contentGroupRef} transform={`translate(${pan.x}, ${pan.y}) scale(${zoom})`}>
           {/* Background Grid */}
-          <rect width={LOGICAL_WIDTH} height={LOGICAL_HEIGHT} fill="#090d16" />
-          <rect width={LOGICAL_WIDTH} height={LOGICAL_HEIGHT} fill="url(#majorGrid)" />
+          <rect
+            width={LOGICAL_WIDTH}
+            height={LOGICAL_HEIGHT}
+            fill="#090d16"
+            onClick={() => {
+              if (isEditMode) onDeselect?.();
+            }}
+          />
+          <rect
+            width={LOGICAL_WIDTH}
+            height={LOGICAL_HEIGHT}
+            fill="url(#majorGrid)"
+            onClick={() => {
+              if (isEditMode) onDeselect?.();
+            }}
+          />
 
           {/* Outer Room Border */}
           <rect
@@ -797,6 +820,12 @@ export const VectorFloorPlan: React.FC<VectorFloorPlanProps> = ({
                 key={decor.id}
                 transform={`translate(${decor.x}, ${decor.y}) rotate(${decor.rotation || 0})`}
                 onPointerDown={(e) => handleDecorPointerDown(e, decor)}
+                onDoubleClick={(e) => {
+                  if (isEditMode) {
+                    e.stopPropagation();
+                    onEditDecorProps?.(decor);
+                  }
+                }}
                 className={isEditMode ? 'cursor-move' : ''}
               >
                 {/* Visual shape by type */}
@@ -1110,6 +1139,12 @@ export const VectorFloorPlan: React.FC<VectorFloorPlanProps> = ({
                 key={table.id}
                 transform={`translate(${posX}, ${posY})`}
                 onPointerDown={(e) => handleTablePointerDown(e, table)}
+                onDoubleClick={(e) => {
+                  if (isEditMode) {
+                    e.stopPropagation();
+                    onEditTableProps?.(table);
+                  }
+                }}
                 className={`select-none ${isEditMode ? 'cursor-move' : 'cursor-pointer'}`}
               >
                 {/* ROTATED SHAPE CONTAINER */}
@@ -1337,6 +1372,22 @@ export const VectorFloorPlan: React.FC<VectorFloorPlanProps> = ({
                       <circle cx="0" cy="0" r="10" fill="#f59e0b" stroke="#ffffff" strokeWidth="2" />
                       <text x="0" y="3.5" textAnchor="middle" fill="#ffffff" fontSize="11" fontWeight="bold">
                         ↻
+                      </text>
+                    </g>
+
+                    {/* Quick Edit Properties Button (X, Y, Nom, Capacité) */}
+                    <g
+                      transform={`translate(${width / 2 + 20}, ${-height / 2 + 18})`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onEditTableProps?.(table);
+                      }}
+                      className="cursor-pointer"
+                    >
+                      <title>Propriétés de la table (Double-clic)</title>
+                      <circle cx="0" cy="0" r="10" fill="#3b82f6" stroke="#ffffff" strokeWidth="2" />
+                      <text x="0" y="3.5" textAnchor="middle" fill="#ffffff" fontSize="10" fontWeight="bold">
+                        ✎
                       </text>
                     </g>
                   </g>

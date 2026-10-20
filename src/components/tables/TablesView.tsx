@@ -45,6 +45,8 @@ import {
   Brush,
   Layers,
   Magnet,
+  Trash2,
+  Copy,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
@@ -168,6 +170,15 @@ export const TablesView: React.FC<TablesViewProps> = ({ onOpenOrder, onPayOrder,
   // Selection states
   const [selectedTableId, setSelectedTableId] = useState<string | null>(null);
   const [selectedDecorId, setSelectedDecorId] = useState<string | null>(null);
+
+  const selectedTable = useMemo(
+    () => (selectedTableId ? draftTables.find((t) => t.id === selectedTableId) : null),
+    [selectedTableId, draftTables]
+  );
+  const selectedDecor = useMemo(
+    () => (selectedDecorId ? draftDecor.find((d) => d.id === selectedDecorId) : null),
+    [selectedDecorId, draftDecor]
+  );
 
   // Modals
   const [serviceModalTable, setServiceModalTable] = useState<RestaurantTable | null>(null);
@@ -781,6 +792,65 @@ export const TablesView: React.FC<TablesViewProps> = ({ onOpenOrder, onPayOrder,
               <Box className="w-3.5 h-3.5 text-amber-600" />
               <span>+ Décor Architectural</span>
             </button>
+
+            {/* Contextual Action Bar for Selected Table (double-clic ou bouton Propriétés) */}
+            {selectedTable && (
+              <div className="flex items-center gap-1.5 bg-blue-50 border border-blue-200 px-2.5 py-1 rounded-xl shadow-2xs">
+                <span className="text-xs font-bold text-blue-900">
+                  Table {selectedTable.number}
+                </span>
+                <button
+                  onClick={() => setEditTableModal(selectedTable)}
+                  className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-blue-600 text-white text-xs font-bold hover:bg-blue-700 transition-colors shadow-2xs"
+                  title="Modifier les propriétés de la table (Double-clic)"
+                >
+                  <Pencil className="w-3 h-3" />
+                  <span>Propriétés</span>
+                </button>
+                <button
+                  onClick={handleDuplicateSelected}
+                  className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-white border border-blue-300 text-blue-800 text-xs font-semibold hover:bg-blue-100 transition-colors shadow-2xs"
+                  title="Dupliquer la table (Ctrl+D)"
+                >
+                  <Copy className="w-3 h-3" />
+                  <span>Dupliquer</span>
+                </button>
+                <button
+                  onClick={handleDeleteSelected}
+                  className="p-1 rounded-lg text-rose-600 hover:bg-rose-100 transition-colors"
+                  title="Supprimer la table (Suppr)"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
+
+            {/* Contextual Action Bar for Selected Decor */}
+            {selectedDecor && (
+              <div className="flex items-center gap-1.5 bg-purple-50 border border-purple-200 px-2.5 py-1 rounded-xl shadow-2xs">
+                <span className="text-xs font-bold text-purple-900">
+                  {selectedDecor.label || selectedDecor.type}
+                </span>
+                <button
+                  onClick={() => {
+                    setEditingDecorElement(selectedDecor);
+                    setShowDecorModal(true);
+                  }}
+                  className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-purple-600 text-white text-xs font-bold hover:bg-purple-700 transition-colors shadow-2xs"
+                  title="Modifier les propriétés de l'élément architectural"
+                >
+                  <Pencil className="w-3 h-3" />
+                  <span>Propriétés</span>
+                </button>
+                <button
+                  onClick={handleDeleteSelected}
+                  className="p-1 rounded-lg text-rose-600 hover:bg-rose-100 transition-colors"
+                  title="Supprimer le décor (Suppr)"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Batch Save / Discard Actions */}
@@ -861,19 +931,25 @@ export const TablesView: React.FC<TablesViewProps> = ({ onOpenOrder, onPayOrder,
           selectedDecorId={selectedDecorId}
           onSelectTable={(table) => {
             setSelectedTableId(table.id);
-            if (isEditMode) {
-              setEditTableModal(table);
-            }
+            setSelectedDecorId(null);
+          }}
+          onEditTableProps={(table) => {
+            setEditTableModal(table);
           }}
           onTableAction={(table) => {
             setServiceModalTable(table);
           }}
           onSelectDecor={(decor) => {
             setSelectedDecorId(decor.id);
-            if (isEditMode) {
-              setEditingDecorElement(decor);
-              setShowDecorModal(true);
-            }
+            setSelectedTableId(null);
+          }}
+          onEditDecorProps={(decor) => {
+            setEditingDecorElement(decor);
+            setShowDecorModal(true);
+          }}
+          onDeselect={() => {
+            setSelectedTableId(null);
+            setSelectedDecorId(null);
           }}
           onUpdateDraftTables={(updated) => {
             if (!dragStartSnapshotRef.current) {
