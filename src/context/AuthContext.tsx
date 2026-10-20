@@ -9,11 +9,12 @@ import {
   sendPasswordResetEmail,
   User as FirebaseUser,
 } from 'firebase/auth';
-import { doc, getDoc, setDoc, collection, getDocs, query, where, limit } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, deleteField, collection, getDocs, query, where, limit } from 'firebase/firestore';
 import { configFirestoreService } from '../services/firestore/configFirestoreService';
 import { DEFAULT_PERMISSIONS } from '../services/permissions/permissionService';
 import { RolePermissionMatrix, PermissionModule, PermissionAction } from '../types/configuration';
 import { cloudFunctionsService } from '../services/functions/cloudFunctionsService';
+import { hashPin, verifyPin } from '../services/security/cryptoService';
 
 const MODULE_TO_PERMISSION: Record<string, PermissionModule> = {
   pos: 'pos',
@@ -65,6 +66,7 @@ export interface AuthContextType {
   unlockSessionWithPin: (pin: string, terminalId?: string) => Promise<{ success: boolean; user?: UserProfile; message?: string }>;
   verifySupervisorPin: (pin: string, action?: string, entityId?: string) => Promise<{ success: boolean; supervisorToken?: string; supervisorName?: string; supervisorRole?: UserRole; message?: string }>;
   updateCurrentUserPin: (newPin: string) => Promise<boolean>;
+  verifyCurrentUserPin: (pin: string) => Promise<boolean>;
   claimInitialSuperadmin: () => Promise<boolean>;
 }
 
@@ -154,6 +156,32 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               );
             }
 
+            // Auto-purge de sécurité immédiat : si un ancien champ pinCode en clair existe, on le migre vers user_pins en PBKDF2 et on le supprime de Firestore
+            if (data.pinCode) {
+              const clearPin = String(data.pinCode);
+              hashPin(clearPin).then(async ({ hash, salt }) => {
+                await setDoc(
+                  doc(db, 'user_pins', fbUser.uid),
+                  {
+                    userId: fbUser.uid,
+                    hash,
+                    salt,
+                    failedAttempts: 0,
+                    lockoutUntil: null,
+                    updatedAt: new Date().toISOString(),
+                    updatedBy: 'AutoSecurityMigration',
+                  },
+                  { merge: true }
+                ).catch(() => {});
+
+                await updateDoc(userDocRef, {
+                  hasPin: true,
+                  pinCode: deleteField(),
+                  updatedAt: new Date().toISOString(),
+                }).catch(() => {});
+              }).catch(() => {});
+            }
+
             const userProfile: UserProfile = {
               id: fbUser.uid,
               email: fbUser.email,
@@ -168,7 +196,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               mustChangePassword: data.mustChangePassword === true,
               tabPermissions: data.tabPermissions,
               additionalTabs: data.additionalTabs,
-              pinCode: data.pinCode || undefined,
               hasPin: Boolean(data.hasPin || data.pinCode),
             };
 
@@ -248,7 +275,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   /**
-   * Déverrouillage sécurisé par code PIN (Cloud Function prioritaire avec fallback Firestore)
+   * Déverrouillage sécurisé par code PIN (Cloud Function prioritaire avec fallback Firestore PBKDF2)
    */
   const unlockSessionWithPin = async (
     pin: string,
@@ -270,6 +297,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             active: true,
             accessibleRestaurantIds: res.user.accessibleRestaurantIds,
             organizationId: res.user.organizationId,
+            hasPin: true,
           },
         };
       }
@@ -277,7 +305,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // Ignorer silencieusement si les Cloud Functions ne sont pas activées ou indisponibles
     }
 
-    // 2. Fallback sécurisé Firestore
+    // 2. Fallback sécurisé Firestore (Chiffrement PBKDF2 / user_pins)
     try {
       if (!pin || !/^\d{4,6}$/.test(pin)) {
         return { success: false, message: 'Le code PIN doit comporter entre 4 et 6 chiffres.' };
@@ -285,33 +313,59 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       // Cas A : Utilisateur courant déjà connecté
       if (currentUser && currentUser.id) {
-        // Obtenir la dernière valeur du code PIN depuis Firestore pour éviter les états périmés
-        const userDocSnap = await getDoc(doc(db, 'users', currentUser.id));
-        const userData = userDocSnap.exists() ? userDocSnap.data() : null;
-        const currentSavedPin = userData?.pinCode || currentUser.pinCode;
-
-        if (currentSavedPin) {
-          if (currentSavedPin === pin) {
-            setCurrentUser((prev) => ({ ...prev, pinCode: currentSavedPin, hasPin: true }));
-            setIsSessionLocked(false);
-            return { success: true, user: { ...currentUser, pinCode: currentSavedPin, hasPin: true } };
-          }
-        } else if (currentUser.role === 'superadmin') {
-          // Premier bootstrap initial UNIQUEMENT si le superadmin n'avait jamais configuré de PIN
-          await setDoc(doc(db, 'users', currentUser.id), { pinCode: pin, hasPin: true }, { merge: true });
-          setCurrentUser((prev) => ({ ...prev, pinCode: pin, hasPin: true }));
-          setIsSessionLocked(false);
-          return { success: true, user: { ...currentUser, pinCode: pin, hasPin: true } };
-        }
-
-        // Vérification dans user_pins
+        // 1. Vérification dans user_pins (hash PBKDF2)
         const pinDocSnap = await getDoc(doc(db, 'user_pins', currentUser.id));
         if (pinDocSnap.exists()) {
           const pinData = pinDocSnap.data();
-          if (pinData.pin === pin) {
-            setIsSessionLocked(false);
-            return { success: true, user: currentUser };
+          if (pinData.hash && pinData.salt) {
+            const isValid = await verifyPin(pin, pinData.hash, pinData.salt);
+            if (isValid) {
+              setIsSessionLocked(false);
+              return { success: true, user: currentUser };
+            }
           }
+        }
+
+        // 2. Rétrocompatibilité / Migration : si un vestige de pinCode existait encore
+        const userDocSnap = await getDoc(doc(db, 'users', currentUser.id));
+        const userData = userDocSnap.exists() ? userDocSnap.data() : null;
+        if (userData?.pinCode && userData.pinCode === pin) {
+          // Migration atomique immédiate vers PBKDF2 et purge du clair
+          const { hash, salt } = await hashPin(pin);
+          await setDoc(doc(db, 'user_pins', currentUser.id), {
+            userId: currentUser.id,
+            hash,
+            salt,
+            failedAttempts: 0,
+            lockoutUntil: null,
+            updatedAt: new Date().toISOString(),
+          }, { merge: true });
+          await updateDoc(doc(db, 'users', currentUser.id), {
+            hasPin: true,
+            pinCode: deleteField(),
+            updatedAt: new Date().toISOString(),
+          });
+          setIsSessionLocked(false);
+          return { success: true, user: { ...currentUser, hasPin: true } };
+        } else if (currentUser.role === 'superadmin' && !userData?.hasPin && !pinDocSnap.exists()) {
+          // Premier bootstrap initial UNIQUEMENT si le superadmin n'avait jamais configuré de PIN
+          const { hash, salt } = await hashPin(pin);
+          await setDoc(doc(db, 'user_pins', currentUser.id), {
+            userId: currentUser.id,
+            hash,
+            salt,
+            failedAttempts: 0,
+            lockoutUntil: null,
+            updatedAt: new Date().toISOString(),
+          }, { merge: true });
+          await updateDoc(doc(db, 'users', currentUser.id), {
+            hasPin: true,
+            pinCode: deleteField(),
+            updatedAt: new Date().toISOString(),
+          });
+          setCurrentUser((prev) => ({ ...prev, hasPin: true }));
+          setIsSessionLocked(false);
+          return { success: true, user: { ...currentUser, hasPin: true } };
         }
       }
 
@@ -322,7 +376,47 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       for (const uDoc of usersSnap.docs) {
         const uData = uDoc.data();
+        
+        // Vérification hashée dans user_pins
+        const pinSnap = await getDoc(doc(db, 'user_pins', uDoc.id));
+        if (pinSnap.exists()) {
+          const pinData = pinSnap.data();
+          if (pinData.hash && pinData.salt) {
+            const isValid = await verifyPin(pin, pinData.hash, pinData.salt);
+            if (isValid) {
+              const matchedUser: UserProfile = {
+                id: uDoc.id,
+                email: uData.email || '',
+                name: uData.name || 'Utilisateur',
+                role: (uData.role as UserRole) || 'serveur',
+                active: true,
+                accessibleRestaurantIds: uData.accessibleRestaurantIds || ['*'],
+                organizationId: uData.organizationId || 'org-main',
+                hasPin: true,
+              };
+              setCurrentUser(matchedUser);
+              setIsSessionLocked(false);
+              return { success: true, user: matchedUser };
+            }
+          }
+        }
+
+        // Migration à la volée si ancien champ pinCode résiduel
         if (uData.pinCode && uData.pinCode === pin) {
+          const { hash, salt } = await hashPin(pin);
+          await setDoc(doc(db, 'user_pins', uDoc.id), {
+            userId: uDoc.id,
+            hash,
+            salt,
+            failedAttempts: 0,
+            lockoutUntil: null,
+            updatedAt: new Date().toISOString(),
+          }, { merge: true });
+          await updateDoc(doc(db, 'users', uDoc.id), {
+            hasPin: true,
+            pinCode: deleteField(),
+            updatedAt: new Date().toISOString(),
+          });
           const matchedUser: UserProfile = {
             id: uDoc.id,
             email: uData.email || '',
@@ -331,7 +425,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             active: true,
             accessibleRestaurantIds: uData.accessibleRestaurantIds || ['*'],
             organizationId: uData.organizationId || 'org-main',
-            pinCode: pin,
             hasPin: true,
           };
           setCurrentUser(matchedUser);
@@ -349,7 +442,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   /**
-   * Vérification de PIN superviseur (Cloud Function prioritaire avec fallback Firestore)
+   * Vérification de PIN superviseur (Cloud Function prioritaire avec fallback Firestore PBKDF2)
    */
   const verifySupervisorPin = async (
     pin: string,
@@ -365,30 +458,35 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         supervisorRole: res.supervisorRole,
       };
     } catch {
-      // Fallback local superviseur (Firestore)
+      // Fallback local superviseur (Firestore PBKDF2)
       try {
         if (!pin || !/^\d{4,6}$/.test(pin)) {
           return { success: false, message: 'Le code PIN doit comporter entre 4 et 6 chiffres.' };
         }
 
-        // 1. Si l'utilisateur connecté est superviseur et que son PIN correspond
-        const userDocRef = doc(db, 'users', currentUser.id);
-        const userSnap = await getDoc(userDocRef);
-        const currentSavedPin = userSnap.exists() ? userSnap.data()?.pinCode : currentUser.pinCode;
-
         const isSupervisor =
           currentUser.role === 'superadmin' || currentUser.role === 'direction' || currentUser.role === 'manager';
 
-        if (isSupervisor && currentSavedPin && currentSavedPin === pin) {
-          return {
-            success: true,
-            supervisorToken: `local-token-${Date.now()}`,
-            supervisorName: currentUser.name,
-            supervisorRole: currentUser.role,
-          };
+        // 1. Si l'utilisateur connecté est superviseur, vérifier son hash dans user_pins
+        if (isSupervisor) {
+          const pinDocSnap = await getDoc(doc(db, 'user_pins', currentUser.id));
+          if (pinDocSnap.exists()) {
+            const pinData = pinDocSnap.data();
+            if (pinData.hash && pinData.salt) {
+              const isValid = await verifyPin(pin, pinData.hash, pinData.salt);
+              if (isValid) {
+                return {
+                  success: true,
+                  supervisorToken: `local-token-${Date.now()}`,
+                  supervisorName: currentUser.name,
+                  supervisorRole: currentUser.role,
+                };
+              }
+            }
+          }
         }
 
-        // 2. Recherche si un autre profil superviseur actif possède ce PIN
+        // 2. Recherche parmi les autres profils superviseurs actifs
         const supSnap = await getDocs(
           query(
             collection(db, 'users'),
@@ -399,7 +497,38 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         for (const docSnap of supSnap.docs) {
           const supData = docSnap.data();
+          const pinSnap = await getDoc(doc(db, 'user_pins', docSnap.id));
+          if (pinSnap.exists()) {
+            const pData = pinSnap.data();
+            if (pData.hash && pData.salt) {
+              const isValid = await verifyPin(pin, pData.hash, pData.salt);
+              if (isValid) {
+                return {
+                  success: true,
+                  supervisorToken: `local-token-${Date.now()}`,
+                  supervisorName: supData.name || 'Superviseur',
+                  supervisorRole: supData.role as UserRole,
+                };
+              }
+            }
+          }
+
+          // Rétrocompatibilité / migration à la volée si ancien champ résiduel
           if (supData.pinCode && supData.pinCode === pin) {
+            const { hash, salt } = await hashPin(pin);
+            await setDoc(doc(db, 'user_pins', docSnap.id), {
+              userId: docSnap.id,
+              hash,
+              salt,
+              failedAttempts: 0,
+              lockoutUntil: null,
+              updatedAt: new Date().toISOString(),
+            }, { merge: true });
+            await updateDoc(doc(db, 'users', docSnap.id), {
+              hasPin: true,
+              pinCode: deleteField(),
+              updatedAt: new Date().toISOString(),
+            });
             return {
               success: true,
               supervisorToken: `local-token-${Date.now()}`,
@@ -417,7 +546,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   /**
-   * Mise à jour du code PIN (Cloud Function prioritaire avec fallback Firestore)
+   * Mise à jour du code PIN (Cloud Function prioritaire avec fallback Firestore PBKDF2)
    */
   const updateCurrentUserPin = async (newPin: string): Promise<boolean> => {
     if (!newPin || !/^\d{4,6}$/.test(newPin)) {
@@ -427,42 +556,71 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       await cloudFunctionsService.setPin(newPin);
     } catch {
-      console.warn('[AuthContext] Cloud Function setPin indisponible, bascule sur enregistrement direct Firestore');
+      console.warn('[AuthContext] Cloud Function setPin indisponible, bascule sur hachage PBKDF2 direct');
     }
 
-    // 2. Enregistrement direct Firestore et mise à jour de l'état
+    // 2. Enregistrement direct sécurisé (hachage PBKDF2) et purge du clair
     try {
       if (currentUser && currentUser.id) {
-        await setDoc(
-          doc(db, 'users', currentUser.id),
-          {
-            hasPin: true,
-            pinCode: newPin,
-            updatedAt: new Date().toISOString(),
-          },
-          { merge: true }
-        );
+        const { hash, salt } = await hashPin(newPin);
 
         await setDoc(
           doc(db, 'user_pins', currentUser.id),
           {
             userId: currentUser.id,
-            pin: newPin,
+            hash,
+            salt,
             failedAttempts: 0,
+            lockoutUntil: null,
             updatedAt: new Date().toISOString(),
+            updatedBy: currentUser.name,
           },
           { merge: true }
+        );
+
+        await updateDoc(
+          doc(db, 'users', currentUser.id),
+          {
+            hasPin: true,
+            pinCode: deleteField(),
+            updatedAt: new Date().toISOString(),
+          }
         );
 
         setCurrentUser((prev) => ({
           ...prev,
           hasPin: true,
-          pinCode: newPin,
         }));
         return true;
       }
     } catch (err) {
-      console.error('[AuthContext] Échec de mise à jour du code PIN dans Firestore:', err);
+      console.error('[AuthContext] Échec de mise à jour sécurisée du code PIN:', err);
+    }
+    return false;
+  };
+
+  /**
+   * Vérification sécurisée du code PIN actuel de l'utilisateur connecté (sans clair)
+   */
+  const verifyCurrentUserPin = async (pin: string): Promise<boolean> => {
+    if (!currentUser || !currentUser.id || !pin) return false;
+    try {
+      const cfRes = await cloudFunctionsService.verifyPin(pin, currentUser.id);
+      if (cfRes && cfRes.success) return true;
+    } catch {
+      // Ignorer fallback
+    }
+
+    try {
+      const pinDocSnap = await getDoc(doc(db, 'user_pins', currentUser.id));
+      if (pinDocSnap.exists()) {
+        const pinData = pinDocSnap.data();
+        if (pinData.hash && pinData.salt) {
+          return await verifyPin(pin, pinData.hash, pinData.salt);
+        }
+      }
+    } catch (err) {
+      console.error('[AuthContext] Erreur verifyCurrentUserPin:', err);
     }
     return false;
   };
@@ -658,6 +816,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         unlockSessionWithPin,
         verifySupervisorPin,
         updateCurrentUserPin,
+        verifyCurrentUserPin,
         claimInitialSuperadmin,
       }}
     >

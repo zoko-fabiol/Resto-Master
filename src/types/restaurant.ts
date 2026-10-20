@@ -645,7 +645,8 @@ export interface Employee {
   id: string;
   fullName: string;
   role: UserRole;
-  pinCode?: string;
+  hasPin?: boolean;
+  pinCode?: string; // Obsolète : remplacé par hasPin et stocké hashé dans user_pins
   matricule?: string;
   department: 'Salle' | 'Cuisine' | 'Bar' | 'Administration' | 'Logistique';
   phone: string;

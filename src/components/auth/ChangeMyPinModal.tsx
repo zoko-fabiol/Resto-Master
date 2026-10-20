@@ -18,7 +18,7 @@ interface ChangeMyPinModalProps {
 }
 
 export const ChangeMyPinModal: React.FC<ChangeMyPinModalProps> = ({ isOpen, onClose }) => {
-  const { currentUser, updateCurrentUserPin } = useAuth();
+  const { currentUser, updateCurrentUserPin, verifyCurrentUserPin } = useAuth();
   const { userAccounts, updateUserAccount, addAuditLog } = useRestaurant();
   const { showToast, playAudioChime } = useToast();
 
@@ -40,40 +40,14 @@ export const ChangeMyPinModal: React.FC<ChangeMyPinModalProps> = ({ isOpen, onCl
     }
   }, [isOpen]);
 
-  // Générer un code PIN unique sans collision
+  // Générer un code PIN aléatoire 4 chiffres
   const handleGeneratePin = () => {
-    const existingPins = new Set(
-      userAccounts
-        .filter((a) => a.id !== currentUser.id && a.email.toLowerCase() !== currentUser.email.toLowerCase())
-        .map((a) => a.pinCode)
-    );
-    for (let attempts = 0; attempts < 1000; attempts++) {
-      const candidate = Math.floor(1000 + Math.random() * 9000).toString();
-      if (!existingPins.has(candidate)) {
-        setNewPin(candidate);
-        setConfirmPin(candidate);
-        setShowPins(true);
-        setErrorMsg('');
-        return;
-      }
-    }
     const candidate = Math.floor(1000 + Math.random() * 9000).toString();
     setNewPin(candidate);
     setConfirmPin(candidate);
     setShowPins(true);
     setErrorMsg('');
   };
-
-  // Détection des doublons / collisions de PIN avec un autre collaborateur
-  const pinCollision = useMemo(() => {
-    if (!newPin || newPin.length < 4) return null;
-    return userAccounts.find(
-      (a) =>
-        a.id !== currentUser.id &&
-        a.email.toLowerCase() !== currentUser.email.toLowerCase() &&
-        a.pinCode === newPin
-    );
-  }, [newPin, userAccounts, currentUser]);
 
   if (!isOpen) return null;
 
@@ -82,10 +56,13 @@ export const ChangeMyPinModal: React.FC<ChangeMyPinModalProps> = ({ isOpen, onCl
     setErrorMsg('');
 
     // 1. Vérification de l'ancien PIN si l'utilisateur en possédait déjà un
-    if (currentUser.pinCode && oldPin !== currentUser.pinCode) {
-      setErrorMsg('L\'ancien code PIN saisi est incorrect.');
-      playAudioChime('error');
-      return;
+    if (currentUser.hasPin) {
+      const isOldValid = await verifyCurrentUserPin(oldPin);
+      if (!isOldValid) {
+        setErrorMsg('L\'ancien code PIN saisi est incorrect.');
+        playAudioChime('error');
+        return;
+      }
     }
 
     // 2. Format 4 chiffres
@@ -102,16 +79,9 @@ export const ChangeMyPinModal: React.FC<ChangeMyPinModalProps> = ({ isOpen, onCl
       return;
     }
 
-    // 4. Doublon
-    if (pinCollision) {
-      setErrorMsg(`Ce code PIN est déjà utilisé par ${pinCollision.name}. Veuillez en choisir un autre.`);
-      playAudioChime('warning');
-      return;
-    }
-
     setIsSubmitting(true);
     try {
-      // Mise à jour via AuthContext
+      // Mise à jour sécurisée via AuthContext (hachage PBKDF2)
       await updateCurrentUserPin(newPin);
 
       // Mise à jour dans RestaurantContext si le compte existe dans la liste
@@ -119,7 +89,7 @@ export const ChangeMyPinModal: React.FC<ChangeMyPinModalProps> = ({ isOpen, onCl
         (a) => a.id === currentUser.id || a.email.toLowerCase() === currentUser.email.toLowerCase()
       );
       if (matchedAccount) {
-        await updateUserAccount(matchedAccount.id, { pinCode: newPin });
+        await updateUserAccount(matchedAccount.id, { hasPin: true });
       }
 
       // Audit log
@@ -193,7 +163,7 @@ export const ChangeMyPinModal: React.FC<ChangeMyPinModalProps> = ({ isOpen, onCl
         {/* Formulaire */}
         <form onSubmit={handleSubmit} className="space-y-3.5">
           {/* Ancien PIN (si l'utilisateur en possède un) */}
-          {currentUser.pinCode && (
+          {currentUser.hasPin && (
             <div>
               <label className="block text-xs font-bold text-slate-700 mb-1">
                 Ancien Code PIN (Actuel)
@@ -233,9 +203,7 @@ export const ChangeMyPinModal: React.FC<ChangeMyPinModalProps> = ({ isOpen, onCl
                 placeholder="••••"
                 value={newPin}
                 onChange={(e) => setNewPin(e.target.value.replace(/\D/g, ''))}
-                className={`w-full px-3 py-2 pr-10 bg-slate-50 border rounded-xl text-xs font-mono text-center tracking-widest text-lg font-bold outline-hidden focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 ${
-                  pinCollision ? 'border-red-400 bg-red-50/20 text-red-900' : 'border-slate-200'
-                }`}
+                className="w-full px-3 py-2 pr-10 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono text-center tracking-widest text-lg font-bold outline-hidden focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
               />
               <button
                 type="button"
@@ -272,13 +240,6 @@ export const ChangeMyPinModal: React.FC<ChangeMyPinModalProps> = ({ isOpen, onCl
               <AlertCircle className="w-3.5 h-3.5 text-red-600 shrink-0" />
               <span>{errorMsg}</span>
             </div>
-          ) : pinCollision ? (
-            <div className="p-2 rounded-xl bg-red-50 border border-red-200 text-red-700 text-[11px] font-medium flex items-center gap-1.5 animate-in fade-in">
-              <AlertCircle className="w-3.5 h-3.5 text-red-600 shrink-0" />
-              <span>
-                Ce PIN est déjà utilisé par <strong>{pinCollision.name}</strong>.
-              </span>
-            </div>
           ) : newPin.length === 4 && newPin === confirmPin ? (
             <div className="p-2 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-[11px] font-semibold flex items-center gap-1.5 animate-in fade-in">
               <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
@@ -297,9 +258,9 @@ export const ChangeMyPinModal: React.FC<ChangeMyPinModalProps> = ({ isOpen, onCl
             </button>
             <button
               type="submit"
-              disabled={isSubmitting || newPin.length !== 4 || newPin !== confirmPin || !!pinCollision}
+              disabled={isSubmitting || newPin.length !== 4 || newPin !== confirmPin}
               className={`px-5 py-2.5 rounded-xl text-white text-xs font-bold shadow-md transition-all ${
-                isSubmitting || newPin.length !== 4 || newPin !== confirmPin || !!pinCollision
+                isSubmitting || newPin.length !== 4 || newPin !== confirmPin
                   ? 'bg-slate-300 cursor-not-allowed shadow-none'
                   : 'bg-amber-600 hover:bg-amber-700 shadow-amber-600/20'
               }`}

@@ -134,9 +134,9 @@ service cloud.firestore {
         isManager() ||
         request.auth.uid == userId
       );
-      allow create: if isDirection();
+      allow create: if isDirection() && !('pinCode' in request.resource.data);
       allow delete: if isDirection();
-      allow update: if isDirection() || (
+      allow update: if (isDirection() || (
         isAuthenticated() && request.auth.uid == userId
         // L'utilisateur ne peut pas modifier ses privilèges critiques
         && (!('role' in request.resource.data) || request.resource.data.role == resource.data.role)
@@ -144,13 +144,27 @@ service cloud.firestore {
         && (!('pinHash' in request.resource.data) || request.resource.data.pinHash == resource.data.pinHash)
         && (!('accessibleRestaurantIds' in request.resource.data) || request.resource.data.accessibleRestaurantIds == resource.data.accessibleRestaurantIds)
         && (!('organizationId' in request.resource.data) || request.resource.data.organizationId == resource.data.organizationId)
+      )) && !('pinCode' in request.resource.data);
+    }
+
+    match /user_pins/{userId} {
+      // Les hashes PBKDF2 de PIN : lecture strictement authentifiée
+      allow read: if isAuthenticated() && (
+        request.auth.uid == userId ||
+        isDirection() ||
+        isManager()
       );
+      // Écriture : direction ou propriétaire, interdiction absolue de stocker un code en clair
+      allow write: if (
+        isDirection() ||
+        (isAuthenticated() && request.auth.uid == userId)
+      ) && !('pin' in request.resource.data) && !('pinCode' in request.resource.data);
     }
 
     match /user_accounts/{accountId} {
       // Lecture limitée aux RH, Managers et Direction
       allow read: if isDirection() || isManager() || isRh();
-      allow write: if isDirection();
+      allow write: if isDirection() && !('pinCode' in request.resource.data);
     }
 
     // =========================================================================

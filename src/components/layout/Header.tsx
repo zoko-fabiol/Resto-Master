@@ -331,7 +331,7 @@ export const Header: React.FC<HeaderProps> = ({
                         <div className="text-[10px] text-amber-800 font-medium">Session : {currentRoleLabel.label}</div>
                       </div>
                     </div>
-                    {currentUser.pinCode && (
+                    {currentUser.hasPin && (
                       <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded bg-white border border-amber-200 text-amber-900 shadow-2xs shrink-0">
                         PIN: ••••
                       </span>

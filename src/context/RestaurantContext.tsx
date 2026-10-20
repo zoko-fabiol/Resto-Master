@@ -78,6 +78,7 @@ import { FeatureService } from '../services/features/featureService';
 import { generateOrderNumber, generateSecureId } from '../lib/utils';
 import { cloudFunctionsService } from '../services/functions/cloudFunctionsService';
 import { TaxEngine } from '../services/fiscal/taxEngine';
+import { hashPin } from '../services/security/cryptoService';
 
 import { db } from '../lib/firebase';
 import {
@@ -1730,14 +1731,29 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   };
 
   const updateEmployeePin = async (employeeId: string, newPin: string) => {
+    try {
+      const { hash, salt } = await hashPin(newPin);
+      await setDoc(
+        doc(db, 'user_pins', employeeId),
+        {
+          userId: employeeId,
+          hash,
+          salt,
+          failedAttempts: 0,
+          lockoutUntil: null,
+          updatedAt: new Date().toISOString(),
+        },
+        { merge: true }
+      );
+    } catch {}
     setEmployees((prev) =>
-      prev.map((e) => (e.id === employeeId ? { ...e, pinCode: newPin } : e))
+      prev.map((e) => (e.id === employeeId ? { ...e, hasPin: true } : e))
     );
     const emp = employees.find((e) => e.id === employeeId);
     addAuditLog(
       'Modification Code PIN',
       'Personnel',
-      `Code PIN modifié pour l'employé ${emp?.fullName || employeeId}`,
+      `Code PIN sécurisé (PBKDF2) pour l'employé ${emp?.fullName || employeeId}`,
       employeeId
     );
   };
@@ -1884,6 +1900,19 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     } catch {
       // Repli direct Firestore si Cloud Functions non activées
       userId = `user-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+      const { hash, salt } = await hashPin(generatedPin);
+      await setDoc(
+        doc(db, 'user_pins', userId),
+        {
+          userId,
+          hash,
+          salt,
+          failedAttempts: 0,
+          lockoutUntil: null,
+          updatedAt: new Date().toISOString(),
+        },
+        { merge: true }
+      );
       await staffFirestoreService.updateUserProfile(userId, {
         name: accountData.name,
         email: accountData.email,
@@ -1892,7 +1921,6 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         active: true,
         phone: accountData.phone,
         matricule: accountData.matricule,
-        pinCode: generatedPin,
         hasPin: true,
         assignedTableId: accountData.assignedTableId,
         assignedTableName: accountData.assignedTableName,

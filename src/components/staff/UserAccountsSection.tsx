@@ -8,6 +8,9 @@ import { useToast } from '../ui/Toast';
 import { cloudFunctionsService } from '../../services/functions/cloudFunctionsService';
 import { staffFirestoreService } from '../../services/firestore/staffFirestoreService';
 import { CredentialHandoverModal, CredentialHandoverData } from './CredentialHandoverModal';
+import { db } from '../../lib/firebase';
+import { doc, setDoc } from 'firebase/firestore';
+import { hashPin } from '../../services/security/cryptoService';
 import {
   Tablet,
   Shield,
@@ -205,8 +208,20 @@ export const UserAccountsSection: React.FC = () => {
       try {
         await cloudFunctionsService.setPin(quickNewPin, selectedAccountForPin.id);
       } catch {
+        const { hash, salt } = await hashPin(quickNewPin);
+        await setDoc(
+          doc(db, 'user_pins', selectedAccountForPin.id),
+          {
+            userId: selectedAccountForPin.id,
+            hash,
+            salt,
+            failedAttempts: 0,
+            lockoutUntil: null,
+            updatedAt: new Date().toISOString(),
+          },
+          { merge: true }
+        );
         await staffFirestoreService.updateUserProfile(selectedAccountForPin.id, {
-          pinCode: quickNewPin,
           hasPin: true,
         });
       }
@@ -287,8 +302,20 @@ export const UserAccountsSection: React.FC = () => {
           try {
             await cloudFunctionsService.setPin(formData.pinCode, editingAccount.id);
           } catch {
+            const { hash, salt } = await hashPin(formData.pinCode);
+            await setDoc(
+              doc(db, 'user_pins', editingAccount.id),
+              {
+                userId: editingAccount.id,
+                hash,
+                salt,
+                failedAttempts: 0,
+                lockoutUntil: null,
+                updatedAt: new Date().toISOString(),
+              },
+              { merge: true }
+            );
             await staffFirestoreService.updateUserProfile(editingAccount.id, {
-              pinCode: formData.pinCode,
               hasPin: true,
             });
           }
