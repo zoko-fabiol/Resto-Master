@@ -365,12 +365,21 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
         {/* User Card */}
         <div className={`p-3 bg-slate-950/60 border-b border-slate-800/60 flex items-center ${collapsed ? 'justify-center' : 'gap-3'}`}>
-          <img
-            src={currentUser.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100'}
-            alt={currentUser.name}
-            className="w-9 h-9 rounded-full object-cover ring-2 ring-amber-500/40 shrink-0"
-            title={`${currentUser.name} (${roleInfo.label})`}
-          />
+          {currentUser.avatar ? (
+            <img
+              src={currentUser.avatar}
+              alt={currentUser.name}
+              className="w-9 h-9 rounded-full object-cover ring-2 ring-amber-500/40 shrink-0"
+              title={`${currentUser.name} (${roleInfo.label})`}
+            />
+          ) : (
+            <div
+              className="w-9 h-9 rounded-full bg-amber-600 text-white flex items-center justify-center text-xs font-bold ring-2 ring-amber-500/40 shrink-0"
+              title={`${currentUser.name} (${roleInfo.label})`}
+            >
+              {currentUser.name ? currentUser.name.slice(0, 2).toUpperCase() : 'RM'}
+            </div>
+          )}
           {!collapsed && (
             <div className="flex-1 min-w-0">
               <div className="text-xs font-semibold text-white truncate">{currentUser.name}</div>

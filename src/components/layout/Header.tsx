@@ -312,11 +312,17 @@ export const Header: React.FC<HeaderProps> = ({
                 <div className="p-3 bg-amber-50/70 border border-amber-200/80 m-2 rounded-xl space-y-2">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2 min-w-0">
-                      <img
-                        src={currentUser.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150'}
-                        alt={currentUser.name}
-                        className="w-7 h-7 rounded-full object-cover ring-1 ring-amber-400 shrink-0"
-                      />
+                      {currentUser.avatar ? (
+                        <img
+                          src={currentUser.avatar}
+                          alt={currentUser.name}
+                          className="w-7 h-7 rounded-full object-cover ring-1 ring-amber-400 shrink-0"
+                        />
+                      ) : (
+                        <div className="w-7 h-7 rounded-full bg-amber-600 text-white flex items-center justify-center text-xs font-bold ring-1 ring-amber-400 shrink-0">
+                          {currentUser.name ? currentUser.name.slice(0, 2).toUpperCase() : 'RM'}
+                        </div>
+                      )}
                       <div className="min-w-0">
                         <div className="text-xs font-bold text-slate-900 truncate">{currentUser.name}</div>
                         <div className="text-[10px] text-amber-800 font-medium">Session : {currentRoleLabel.label}</div>
@@ -513,12 +519,12 @@ export const Header: React.FC<HeaderProps> = ({
             )}
           </div>
 
-          {/* Guide d'Utilisation Officiel Genesis Digital Agency */}
+          {/* Guide d'Utilisation Officiel RestoMaster OS */}
           {openUserGuide && (
             <button
               onClick={openUserGuide}
               className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 text-xs font-bold transition-all shadow-2xs cursor-pointer"
-              title="Consulter le Guide d'Utilisation Officiel RestoMaster OS (Genesis Digital Agency)"
+              title="Consulter le Guide d'Utilisation Officiel RestoMaster OS"
               aria-label="Consulter le guide d'utilisation"
             >
               <BookOpen className="w-3.5 h-3.5 text-amber-600" aria-hidden="true" />

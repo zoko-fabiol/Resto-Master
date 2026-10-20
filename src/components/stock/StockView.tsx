@@ -746,7 +746,7 @@ export const StockView: React.FC = () => {
                 </label>
                 <input
                   type="text"
-                  placeholder="Ex: Marché Central de Kribi, Brasseries..."
+                  placeholder="Ex: Grossiste Boissons, Marché Local..."
                   value={receiveSupplier}
                   onChange={(e) => setReceiveSupplier(e.target.value)}
                   className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200"

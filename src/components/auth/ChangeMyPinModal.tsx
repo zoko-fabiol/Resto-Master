@@ -170,11 +170,17 @@ export const ChangeMyPinModal: React.FC<ChangeMyPinModalProps> = ({ isOpen, onCl
 
         {/* Profil Récap */}
         <div className="my-4 p-3 rounded-2xl bg-slate-50 border border-slate-200/80 flex items-center gap-3">
-          <img
-            src={currentUser.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150'}
-            alt={currentUser.name}
-            className="w-9 h-9 rounded-full object-cover ring-2 ring-amber-500/30"
-          />
+          {currentUser.avatar ? (
+            <img
+              src={currentUser.avatar}
+              alt={currentUser.name}
+              className="w-9 h-9 rounded-full object-cover ring-2 ring-amber-500/30"
+            />
+          ) : (
+            <div className="w-9 h-9 rounded-full bg-amber-600 text-white flex items-center justify-center text-xs font-bold ring-2 ring-amber-500/30 shrink-0">
+              {currentUser.name ? currentUser.name.slice(0, 2).toUpperCase() : 'RM'}
+            </div>
+          )}
           <div className="min-w-0 flex-1">
             <div className="text-xs font-bold text-slate-900 truncate">{currentUser.name}</div>
             <div className="text-[10px] text-slate-500 font-mono">{currentUser.email}</div>

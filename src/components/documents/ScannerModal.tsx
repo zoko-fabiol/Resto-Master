@@ -54,10 +54,10 @@ export const ScannerModal: React.FC<ScannerModalProps> = ({ isOpen, onClose }) =
   };
 
   const simulateCameraCapture = () => {
-    // Sample high-quality document invoice capture
-    const sampleDoc = 'https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?w=900&auto=format&fit=crop&q=80';
+    // Document modèle SVG local
+    const sampleDoc = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="600" height="800" viewBox="0 0 600 800"><rect width="600" height="800" fill="%23f8fafc"/><rect x="40" y="40" width="520" height="720" rx="8" fill="%23ffffff" stroke="%23cbd5e1" stroke-width="2"/><text x="60" y="100" font-family="sans-serif" font-size="20" font-weight="bold" fill="%23334155">DOCUMENT NUMERISE</text><line x1="60" y1="120" x2="540" y2="120" stroke="%23e2e8f0" stroke-width="2"/></svg>';
     setCapturedImage(sampleDoc);
-    simulateOcrExtraction(sampleDoc, 'capture_camera_document.jpg');
+    simulateOcrExtraction(sampleDoc, 'capture_camera_document.svg');
   };
 
   const simulateOcrExtraction = (imgUrl: string, fileName: string) => {
@@ -65,17 +65,12 @@ export const ScannerModal: React.FC<ScannerModalProps> = ({ isOpen, onClose }) =
     setStep('preview_ocr');
 
     setTimeout(() => {
-      // Simulate OCR intelligent extraction from document image
-      const randNum = Math.floor(1000 + Math.random() * 9000);
-      const randAmount = Math.floor(30000 + Math.random() * 120000);
-      const chosenSupplier = suppliers[Math.floor(Math.random() * suppliers.length)]?.company || 'Boucherie du Littoral';
-
-      setDocTitle(`Facture ${chosenSupplier} #${randNum}`);
-      setSupplierName(chosenSupplier);
-      setInvoiceNumber(`FAC-2026-${randNum}`);
-      setAmount(randAmount);
+      setDocTitle(`Document numérisé`);
+      setSupplierName(suppliers[0]?.company || '');
+      setInvoiceNumber('');
+      setAmount(0);
       setIsProcessingOcr(false);
-    }, 1200);
+    }, 600);
   };
 
   const handleSaveDocument = async (e: React.FormEvent) => {
@@ -92,7 +87,7 @@ export const ScannerModal: React.FC<ScannerModalProps> = ({ isOpen, onClose }) =
     await addDocument({
       title: docTitle,
       category: docCategory,
-      fileUrl: capturedImage || 'https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?w=900',
+      fileUrl: capturedImage || '',
       fileName: `${docTitle.toLowerCase().replace(/\s+/g, '_')}.pdf`,
       fileType: 'application/pdf',
       fileSize: '680 KB',

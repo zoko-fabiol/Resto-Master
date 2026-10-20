@@ -465,7 +465,7 @@ export const OperationsOptionsSection: React.FC<Props> = ({ subTab }) => {
           </div>
         )}
 
-        {/* Mode de fonctionnement de la cuisine (Guide Genesis Digital Agency - Section 3, 6, 12) */}
+        {/* Mode de fonctionnement de la cuisine */}
         {subTab === 'cuisine' && (
           <div className="bg-gradient-to-br from-amber-50 to-orange-50/50 p-5 rounded-2xl border border-amber-200 space-y-3">
             <div className="flex items-center justify-between">

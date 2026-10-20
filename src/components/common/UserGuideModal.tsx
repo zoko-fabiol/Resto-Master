@@ -377,10 +377,10 @@ export const UserGuideModal: React.FC<UserGuideModalProps> = ({
           <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-xs text-amber-950 flex items-center justify-between">
             <div>
               <div className="font-bold">Qui puis-je contacter en cas de problème ?</div>
-              <div>Contactez votre manager en premier lieu, ou Genesis Digital Agency pour toute question technique sur la plateforme.</div>
+              <div>Contactez votre manager ou l'administrateur système pour toute question sur la plateforme.</div>
             </div>
             <div className="text-right font-mono text-[11px] text-amber-800 font-bold shrink-0 ml-3">
-              Kribi, Cameroun
+              Support Interne
             </div>
           </div>
         </div>
@@ -419,7 +419,7 @@ export const UserGuideModal: React.FC<UserGuideModalProps> = ({
                 </span>
               </div>
               <p className="text-xs text-slate-300">
-                Manuel pratique pour les propriétaires, managers et équipes en salle, cuisine et caisse • Édité par Genesis Digital Agency (Kribi, Cameroun)
+                Manuel pratique pour les propriétaires, managers et équipes en salle, cuisine et caisse • RestoMaster OS
               </p>
             </div>
           </div>
@@ -504,11 +504,9 @@ export const UserGuideModal: React.FC<UserGuideModalProps> = ({
         {/* Footer */}
         <div className="p-3.5 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between text-xs text-slate-500 gap-2">
           <div className="flex items-center gap-2">
-            <span className="font-bold text-slate-700">Genesis Digital Agency</span>
+            <span className="font-bold text-slate-700">RestoMaster OS</span>
             <span>•</span>
-            <span>Kribi, Cameroun</span>
-            <span>•</span>
-            <span className="text-slate-400">RestoMaster OS React & Firebase</span>
+            <span className="text-slate-400">Système Intégré de Gestion de Restaurant</span>
           </div>
           <button
             onClick={() => window.print()}

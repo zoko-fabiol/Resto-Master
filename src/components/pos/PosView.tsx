@@ -812,8 +812,12 @@ export const PosView: React.FC<PosViewProps> = ({ initialTableId, onOpenPayment,
                     onClick={() => p.available && addToCart(p)}
                     className="p-2.5 rounded-xl bg-gradient-to-br from-amber-50/80 to-amber-100/40 border border-amber-200/80 hover:border-amber-400 flex items-center gap-2.5 text-left transition-all active:scale-98 shadow-xs cursor-pointer"
                   >
-                    <div className="w-11 h-11 rounded-lg overflow-hidden shrink-0 bg-slate-100 relative">
-                      <img src={p.image || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=400'} alt={p.name} className="w-full h-full object-cover" />
+                    <div className="w-11 h-11 rounded-lg overflow-hidden shrink-0 bg-slate-100 flex items-center justify-center relative">
+                      {p.image ? (
+                        <img src={p.image} alt={p.name} className="w-full h-full object-cover" />
+                      ) : (
+                        <Utensils className="w-5 h-5 text-slate-400" />
+                      )}
                       {inCart && (
                         <span className="absolute top-0 right-0 w-4.5 h-4.5 bg-amber-600 text-white rounded-bl-lg font-black text-[10px] flex items-center justify-center">
                           {inCart.quantity}
@@ -879,12 +883,18 @@ export const PosView: React.FC<PosViewProps> = ({ initialTableId, onOpenPayment,
                 } ${inCart ? 'ring-2 ring-amber-500 border-amber-500' : ''}`}
               >
                 {/* Product Image */}
-                <div className="h-32 sm:h-36 bg-slate-100 relative overflow-hidden">
-                  <img
-                    src={product.image || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=400'}
-                    alt={product.name}
-                    className="w-full h-full object-cover transition-transform duration-300 hover:scale-105"
-                  />
+                <div className="h-32 sm:h-36 bg-slate-100 relative overflow-hidden flex items-center justify-center">
+                  {product.image ? (
+                    <img
+                      src={product.image}
+                      alt={product.name}
+                      className="w-full h-full object-cover transition-transform duration-300 hover:scale-105"
+                    />
+                  ) : (
+                    <div className="flex flex-col items-center justify-center text-slate-300">
+                      <Utensils className="w-10 h-10 mb-1" />
+                    </div>
+                  )}
                   <span className="absolute top-2 left-2 text-xs font-bold px-2 py-0.5 rounded-full bg-slate-900/80 text-white backdrop-blur-xs">
                     {product.destination === 'cuisine' ? 'Cuisine' : 'Bar'}
                   </span>

@@ -50,13 +50,27 @@ export class FiscalInvoicePdfService {
     doc.setFontSize(8);
     doc.setTextColor(51, 65, 85);
 
-    const emitterLines = [
-      `Forme : ${settings.formeJuridique || 'SARL'} • Régime : ${(settings.regimeFiscal || 'Régime du Réel').toUpperCase()}`,
-      `NIU : ${settings.niu || 'M012012345678A'} • RCCM : ${settings.rccm || 'RC/DLA/2026/B/000'}`,
-      `Centre des Impôts : ${settings.taxCenter || 'CDI AKWA DOUALA'}`,
-      `Adresse : ${settings.address || 'Douala'}, ${settings.quartier ? settings.quartier + ', ' : ''}${settings.city || 'Cameroun'}`,
-      `Tél : ${settings.phone || '+237 600 000 000'} • Email : ${settings.email || 'contact@restaurant.cm'}`,
-    ];
+    const emitterLines: string[] = [];
+    if (settings.formeJuridique || settings.regimeFiscal) {
+      emitterLines.push(`Forme : ${settings.formeJuridique || '-'} • Régime : ${(settings.regimeFiscal || 'Réel').toUpperCase()}`);
+    }
+    if (settings.niu || settings.rccm) {
+      emitterLines.push(`NIU : ${settings.niu || 'Non renseigné'} • RCCM : ${settings.rccm || 'Non renseigné'}`);
+    }
+    if (settings.taxCenter) {
+      emitterLines.push(`Centre des Impôts : ${settings.taxCenter}`);
+    }
+    const addressLine = [settings.address, settings.quartier, settings.city].filter(Boolean).join(', ');
+    if (addressLine) {
+      emitterLines.push(`Adresse : ${addressLine}`);
+    }
+    const contactLine = [
+      settings.phone ? `Tél : ${settings.phone}` : '',
+      settings.email ? `Email : ${settings.email}` : '',
+    ].filter(Boolean).join(' • ');
+    if (contactLine) {
+      emitterLines.push(contactLine);
+    }
 
     let currentY = 32;
     for (const line of emitterLines) {

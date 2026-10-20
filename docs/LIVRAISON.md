@@ -59,3 +59,40 @@ Avant toute ouverture du site au client, l'équipe technique provisionne le prem
 1. Remettez à la Direction générale du restaurant sa fiche d'accès officielle (e-mail et mot de passe temporaire à changer obligatoirement à la première connexion).
 2. La Direction du client ne voit que l'onglet **Paramètres** opérationnels et n'a pas accès à la Configuration Système verrouillée de l'intégrateur.
 3. La plateforme est livrée **vierge de toute donnée fictive**.
+
+---
+
+## 5. Audit Automatique "Zéro Donnée Fictive"
+
+Avant toute livraison ou déploiement, exécutez systématiquement :
+```bash
+npm run check:demo
+```
+Ce script vérifie l'absence absolue de :
+- Domaines et adresses e-mails de test (`@demo.restaurant`, `@resto.cm`, etc.)
+- Numéros de téléphone fictifs
+- Noms d'établissements inventés (`L'Oasis Gourmande`, `Oasis Express`, etc.)
+- URLs d'images distantes Unsplash (utilisation exclusive d'icônes vectorielles ou d'initiales en local)
+- Préfixes ou simulations fiscales fictives (`SIM-DGI`, `SIM-OCR`)
+
+---
+
+## 6. Outil de Purge des Anciennes Données de Test (Firebase)
+
+En cas de réinitialisation complète de l'environnement de base de données Firebase pour un nouveau client :
+```bash
+# Simulation sans écriture (Dry Run)
+npm run purge:test-data -- --dry-run
+
+# Exécution réelle avec confirmation
+npm run purge:test-data -- --confirm-project-id=<PROJECT_ID>
+```
+
+---
+
+## 7. Conformité Fiscale & Monétaire Cameroun (CGI 2026)
+
+- **Taux combiné légal** : 19,25 % (17,5 % TVA + 10 % CAC sur TVA = 1,75 %).
+- **Arrondi monétaire** : FCFA entiers sans décimales fantômes.
+- **Factures certifiées** : Arrêté du montant en toutes lettres et mention officielle d'enregistrement au journal fiscal interne.
+

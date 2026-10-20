@@ -179,7 +179,7 @@ export const UserAccountsSection: React.FC = () => {
 
     setFormData({
       name: type === 'tablette' ? `Tablette Table ${defaultTable ? defaultTable.number : nextNum}` : '',
-      email: type === 'tablette' ? `tablette${nextNum}@resto.cm` : '',
+      email: type === 'tablette' ? `tablette${nextNum}@restaurant.local` : '',
       pinCode: initialPin,
       role: type === 'tablette' ? 'tablette' : 'serveur',
       accountType: type,
@@ -859,7 +859,7 @@ export const UserAccountsSection: React.FC = () => {
                   <input
                     type="email"
                     required
-                    placeholder="ex: table1@resto.cm"
+                    placeholder="ex: table1@restaurant.local"
                     value={formData.email}
                     onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 outline-hidden font-mono"

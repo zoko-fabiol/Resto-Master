@@ -4,7 +4,7 @@ import {
   PermissionAction,
   RoleLimits,
 } from '../../types/configuration';
-import { INITIAL_ROLE_LIMITS } from '../../lib/configurationSeed';
+import { DEFAULT_ROLE_LIMITS } from '../../config/defaults/roleLimits';
 
 // Matrice par défaut des autorisations par rôle
 export const DEFAULT_PERMISSIONS: Record<
@@ -263,6 +263,6 @@ export class PermissionService {
         requiresApprovalForNegativePrice: false,
       };
     }
-    return INITIAL_ROLE_LIMITS[userRole] || INITIAL_ROLE_LIMITS.serveur;
+    return DEFAULT_ROLE_LIMITS[userRole] || DEFAULT_ROLE_LIMITS.serveur;
   }
 }

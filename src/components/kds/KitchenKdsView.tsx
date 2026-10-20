@@ -387,7 +387,7 @@ export const KitchenKdsView: React.FC = () => {
 
   return (
     <div className="space-y-6 pb-16">
-      {/* Bannière Mode Sans Compte Cuisinier (Section 6 & 12 du Guide Genesis) */}
+      {/* Bannière Mode Sans Compte Cuisinier */}
       {settings?.kitchenOperationMode === 'sans_compte' && (
         <div className="bg-amber-500/10 border border-amber-500/30 text-amber-200 px-4 py-3 rounded-2xl flex items-center justify-between text-xs">
           <div className="flex items-center gap-2.5">

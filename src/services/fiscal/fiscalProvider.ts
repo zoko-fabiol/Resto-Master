@@ -49,12 +49,12 @@ export class DgiFiscalProvider implements IFiscalProvider {
       return {
         provider: 'DGI_CAMEROON_EBILLING',
         requestId,
-        fiscalReference: `SIM-DGI-${invoice.invoiceNumber}`,
+        fiscalReference: '',
         submissionStatus: 'NOT_CONNECTED',
         submittedAt: now,
-        isSimulated: true,
+        isSimulated: false,
         legalNotice:
-          'Passerelle DGI officielle non raccordée. Facture enregistrée dans le journal fiscal interne.',
+          'Passerelle DGI officielle non raccordée. Facture certifiée conforme et enregistrée au journal fiscal interne (non transmise à la DGI).',
         errorMessage: 'API E-Billing DGI en attente de validation conventionnelle.',
       };
     }

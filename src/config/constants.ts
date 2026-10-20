@@ -4,10 +4,9 @@
 // ============================================================
 
 export const SITES: string[] = [
-  'Yaoundé Bastos',
-  'Douala Akwa',
-  'Kribi Beach',
-  'Direction Générale',
+  'Restaurant Principal',
+  'Cuisine Centrale',
+  'Direction',
 ];
 
 export const MONTHS: string[] = [

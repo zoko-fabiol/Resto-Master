@@ -13,8 +13,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { DEFAULT_OPERATION_RULES } from '../src/types/configuration';
-import { INITIAL_FEATURES } from '../src/lib/configurationSeed';
+import { DEFAULT_OPERATION_RULES, DEFAULT_FEATURES } from '../src/config/defaults';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -46,7 +45,7 @@ const allSrcFiles = getAllFiles(SRC_DIR);
 // Catégorisation des fichiers pour l'audit
 const isSettingsFile = (f: string) => f.includes(`${path.sep}settings${path.sep}`);
 const isTypesFile = (f: string) => f.includes(`${path.sep}types${path.sep}`);
-const isSeedFile = (f: string) => f.includes('configurationSeed.ts') || f.includes('seedData.ts') || f.includes('FeatureService.ts');
+const isSeedFile = (f: string) => f.includes('defaults') || f.includes('FeatureService.ts');
 const isConfigService = (f: string) => f.includes('configFirestoreService.ts');
 
 // Fichiers applicatifs exécutant réellement la logique métier (hors écrans d'administration/réglages/types/seeds)
@@ -180,7 +179,7 @@ if (orphanedLocalSwitches.length > 0) {
 // ============================================================================
 // 3. FONCTIONNALITÉS CATALOGUE (INITIAL_FEATURES) JAMAIS LUES
 // ============================================================================
-const declaredFeatures = INITIAL_FEATURES.map((f) => f.id);
+const declaredFeatures = DEFAULT_FEATURES.map((f) => f.id);
 const activeFeatures: string[] = [];
 const deadFeatures: string[] = [];
 

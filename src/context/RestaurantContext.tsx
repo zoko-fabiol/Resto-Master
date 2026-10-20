@@ -48,38 +48,6 @@ import {
   WeeklySchedule,
 } from '../types/restaurant';
 import {
-  INITIAL_SETTINGS,
-  INITIAL_CATEGORIES,
-  INITIAL_STOCK_ITEMS,
-  INITIAL_PRODUCTS,
-  INITIAL_TABLES,
-  INITIAL_ORDERS,
-  INITIAL_RESERVATIONS,
-  INITIAL_SUPPLIERS,
-  INITIAL_PURCHASE_ORDERS,
-  INITIAL_CUSTOMERS,
-  INITIAL_EMPLOYEES,
-  INITIAL_ATTENDANCE,
-  INITIAL_CASH_SESSION,
-  INITIAL_CASH_MOVEMENTS,
-  INITIAL_EXPENSES,
-  INITIAL_DOCUMENTS,
-  INITIAL_AUDIT_LOGS,
-  INITIAL_NOTIFICATIONS,
-  INITIAL_STOCK_LOTS,
-  INITIAL_HYGIENE_CHECKS,
-  INITIAL_EVENTS,
-  INITIAL_DELIVERIES,
-  INITIAL_WITHHOLDINGS,
-  INITIAL_FISCAL_OBLIGATIONS,
-  INITIAL_CLIENT_CREDITS,
-  INITIAL_CANCELLATION_LOGS,
-  INITIAL_ORGANIZATION,
-  INITIAL_ZONES,
-  INITIAL_CASH_REGISTERS,
-  INITIAL_USER_ACCOUNTS,
-} from '../lib/seedData';
-import {
   FeatureItem,
   FeatureStatus,
   Outlet,
@@ -88,7 +56,6 @@ import {
   Peripheral,
   PrinterSettings,
   OperationRules,
-  DEFAULT_OPERATION_RULES,
   RoleLimits,
   RolePermissionMatrix,
   PermissionModule,
@@ -98,15 +65,14 @@ import {
   ConfigurationProfileType,
 } from '../types/configuration';
 import {
-  INITIAL_FEATURES,
-  INITIAL_OUTLETS,
-  INITIAL_TERMINALS,
-  INITIAL_PERIPHERALS,
-  INITIAL_ROLE_LIMITS,
+  DEFAULT_FEATURES,
+  DEFAULT_ROLE_LIMITS,
+  DEFAULT_OPERATION_RULES,
+  DEFAULT_SETTINGS,
+  DEFAULT_ORGANIZATION,
+  DEFAULT_CASH_SESSION,
   DEFAULT_PERMISSIONS,
-  INITIAL_CONFIG_HISTORY,
-  CONFIGURATION_ALERTS_INITIAL,
-} from '../lib/configurationSeed';
+} from '../config/defaults';
 import { FeatureService } from '../services/features/featureService';
 import { generateOrderNumber, generateSecureId } from '../lib/utils';
 import { cloudFunctionsService } from '../services/functions/cloudFunctionsService';
@@ -133,7 +99,6 @@ import { reservationsFirestoreService } from '../services/firestore/reservations
 import { staffFirestoreService } from '../services/firestore/staffFirestoreService';
 import { fiscalFirestoreService } from '../services/firestore/fiscalFirestoreService';
 import { configFirestoreService } from '../services/firestore/configFirestoreService';
-import { firebaseSeedService } from '../services/firestore/firebaseSeedService';
 import { offlineSyncService } from '../services/firestore/offlineSyncService';
 import { printerService } from '../services/printing/printerService';
 import { cloudinaryService } from '../services/media/cloudinaryService';
@@ -336,7 +301,7 @@ interface RestaurantContextType {
   // Architecture Multi-Restaurants, Organisation & Hiérarchie
   organization: Organization;
   updateOrganization: (orgUpdates: Partial<Organization>) => Promise<void>;
-  activeRestaurant: Outlet;
+  activeRestaurant: Outlet | undefined;
   changeActiveRestaurant: (outletId: string) => void;
   zones: Zone[];
   allZones: Zone[];
@@ -413,7 +378,37 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     [showToast]
   );
 
-  // Local state with localStorage fallback
+  // Versionnage et purge automatique des données résiduelles de test
+  const STORAGE_VERSION_KEY = 'restomaster_storage_version';
+  const CURRENT_STORAGE_VERSION = '2.0.0-clean';
+
+  if (typeof window !== 'undefined') {
+    try {
+      const version = localStorage.getItem(STORAGE_VERSION_KEY);
+      if (version !== CURRENT_STORAGE_VERSION) {
+        const keysToRemove: string[] = [];
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (
+            key &&
+            (key.startsWith('restomaster_') ||
+              key.startsWith('rh_app_') ||
+              key.startsWith('stock_expert_') ||
+              key.startsWith('pos_') ||
+              key === 'rh_app_data')
+          ) {
+            keysToRemove.push(key);
+          }
+        }
+        keysToRemove.forEach((k) => localStorage.removeItem(k));
+        localStorage.setItem(STORAGE_VERSION_KEY, CURRENT_STORAGE_VERSION);
+      }
+    } catch (e) {
+      console.warn('[Storage] Purge error:', e);
+    }
+  }
+
+  // Local state with localStorage fallback pour les configurations uniquement
   const loadState = <T,>(key: string, fallback: T): T => {
     try {
       const item = localStorage.getItem(`restomaster_${key}`);
@@ -431,48 +426,46 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     }
   };
 
-  const [settings, setSettings] = useState<RestaurantSettings>(() => loadState('settings', INITIAL_SETTINGS));
-  const [categories, setCategories] = useState<Category[]>(() => loadState('categories', INITIAL_CATEGORIES));
-  const [stockItems, setStockItems] = useState<StockItem[]>(() => loadState('stockItems', INITIAL_STOCK_ITEMS));
-  const [stockMovements, setStockMovements] = useState<StockMovement[]>(() => loadState('stockMovements', []));
-  const [products, setProducts] = useState<Product[]>(() => loadState('products', INITIAL_PRODUCTS));
-  const [tables, setTables] = useState<RestaurantTable[]>(() => loadState('tables', INITIAL_TABLES));
-  const [orders, setOrders] = useState<Order[]>(() => loadState('orders', INITIAL_ORDERS));
-  const [reservations, setReservations] = useState<Reservation[]>(() => loadState('reservations', INITIAL_RESERVATIONS));
-  const [suppliers, setSuppliers] = useState<Supplier[]>(() => loadState('suppliers', INITIAL_SUPPLIERS));
-  const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrder[]>(() => loadState('purchaseOrders', INITIAL_PURCHASE_ORDERS));
-  const [customers, setCustomers] = useState<Customer[]>(() => loadState('customers', INITIAL_CUSTOMERS));
-  const [employees, setEmployees] = useState<Employee[]>(() => loadState('employees', INITIAL_EMPLOYEES));
-  const [attendances, setAttendances] = useState<Attendance[]>(() => loadState('attendances', INITIAL_ATTENDANCE));
-  const [userAccounts, setUserAccounts] = useState<UserAccount[]>(() =>
-    loadState('user_accounts', INITIAL_USER_ACCOUNTS)
-  );
-  const [cashSession, setCashSession] = useState<CashRegisterSession>(() => loadState('cashSession', INITIAL_CASH_SESSION));
-  const [cashMovements, setCashMovements] = useState<CashMovement[]>(() => loadState('cashMovements', INITIAL_CASH_MOVEMENTS));
-  const [expenses, setExpenses] = useState<Expense[]>(() => loadState('expenses', INITIAL_EXPENSES));
-  const [documents, setDocuments] = useState<DocumentItem[]>(() => loadState('documents', INITIAL_DOCUMENTS));
-  const [auditLogs, setAuditLogs] = useState<AuditLog[]>(() => loadState('auditLogs', INITIAL_AUDIT_LOGS));
-  const [notifications, setNotifications] = useState<NotificationItem[]>(() => loadState('notifications', INITIAL_NOTIFICATIONS));
+  const [settings, setSettings] = useState<RestaurantSettings>(() => loadState('settings', DEFAULT_SETTINGS));
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [stockItems, setStockItems] = useState<StockItem[]>([]);
+  const [stockMovements, setStockMovements] = useState<StockMovement[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [tables, setTables] = useState<RestaurantTable[]>([]);
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [reservations, setReservations] = useState<Reservation[]>([]);
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrder[]>([]);
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [attendances, setAttendances] = useState<Attendance[]>([]);
+  const [userAccounts, setUserAccounts] = useState<UserAccount[]>([]);
+  const [cashSession, setCashSession] = useState<CashRegisterSession>(() => loadState('cashSession', DEFAULT_CASH_SESSION));
+  const [cashMovements, setCashMovements] = useState<CashMovement[]>([]);
+  const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [documents, setDocuments] = useState<DocumentItem[]>([]);
+  const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
+  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
 
   // Nouveaux Modules & Données Métier Cameroun
-  const [stockLots, setStockLots] = useState<StockLot[]>(() => loadState('stockLots', INITIAL_STOCK_LOTS));
-  const [hygieneChecks, setHygieneChecks] = useState<HygieneCheck[]>(() => loadState('hygieneChecks', INITIAL_HYGIENE_CHECKS));
-  const [events, setEvents] = useState<RestaurantEvent[]>(() => loadState('events', INITIAL_EVENTS));
-  const [deliveries, setDeliveries] = useState<DeliveryOrder[]>(() => loadState('deliveries', INITIAL_DELIVERIES));
-  const [withholdings, setWithholdings] = useState<WithholdingRecord[]>(() => loadState('withholdings', INITIAL_WITHHOLDINGS));
-  const [fiscalObligations, setFiscalObligations] = useState<FiscalObligation[]>(() => loadState('fiscalObligations', INITIAL_FISCAL_OBLIGATIONS));
-  const [clientCredits, setClientCredits] = useState<ClientCreditAccount[]>(() => loadState('clientCredits', INITIAL_CLIENT_CREDITS));
-  const [cancellationLogs, setCancellationLogs] = useState<CancellationLog[]>(() => loadState('cancellationLogs', INITIAL_CANCELLATION_LOGS));
-  const [fiscalJournal, setFiscalJournal] = useState<FiscalJournalItem[]>(() => loadState('fiscalJournal', []));
-  const [invoices, setInvoices] = useState<Invoice[]>(() => loadState('invoices', []));
-  const [mediaAssets, setMediaAssets] = useState<MediaAsset[]>(() => loadState('mediaAssets', []));
+  const [stockLots, setStockLots] = useState<StockLot[]>([]);
+  const [hygieneChecks, setHygieneChecks] = useState<HygieneCheck[]>([]);
+  const [events, setEvents] = useState<RestaurantEvent[]>([]);
+  const [deliveries, setDeliveries] = useState<DeliveryOrder[]>([]);
+  const [withholdings, setWithholdings] = useState<WithholdingRecord[]>([]);
+  const [fiscalObligations, setFiscalObligations] = useState<FiscalObligation[]>([]);
+  const [clientCredits, setClientCredits] = useState<ClientCreditAccount[]>([]);
+  const [cancellationLogs, setCancellationLogs] = useState<CancellationLog[]>([]);
+  const [fiscalJournal, setFiscalJournal] = useState<FiscalJournalItem[]>([]);
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [mediaAssets, setMediaAssets] = useState<MediaAsset[]>([]);
   const [isOnline, setIsOnline] = useState<boolean>(navigator.onLine);
   const [offlineQueue, setOfflineQueue] = useState<any[]>(() => loadState('offlineQueue', []));
 
-  // Centre d'Administration & Configuration Professionnel (eZee Optimus style)
-  const [features, setFeatures] = useState<FeatureItem[]>(() => loadState('features', INITIAL_FEATURES));
-  const [outlets, setOutlets] = useState<Outlet[]>(() => loadState('outlets', INITIAL_OUTLETS));
-  const [terminals, setTerminals] = useState<Terminal[]>(() => loadState('terminals', INITIAL_TERMINALS));
+  // Centre d'Administration & Configuration Professionnel
+  const [features, setFeatures] = useState<FeatureItem[]>(() => loadState('features', DEFAULT_FEATURES));
+  const [outlets, setOutlets] = useState<Outlet[]>([]);
+  const [terminals, setTerminals] = useState<Terminal[]>([]);
   const [currentDeviceProfile, setCurrentDeviceProfile] = useState<DeviceProfile | null>(() => {
     try {
       const saved = localStorage.getItem('restomaster_device_profile');
@@ -483,8 +476,8 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     return null;
   });
   const [rolePermissions, setRolePermissions] = useState<RolePermissionMatrix>(() => loadState('rolePermissions', DEFAULT_PERMISSIONS));
-  const [roleLimits, setRoleLimits] = useState<Record<UserRole, RoleLimits>>(() => loadState('roleLimits', INITIAL_ROLE_LIMITS));
-  const [peripherals, setPeripherals] = useState<Peripheral[]>(() => loadState('peripherals', INITIAL_PERIPHERALS));
+  const [roleLimits, setRoleLimits] = useState<Record<UserRole, RoleLimits>>(() => loadState('roleLimits', DEFAULT_ROLE_LIMITS));
+  const [peripherals, setPeripherals] = useState<Peripheral[]>([]);
   const [printerSettings, setPrinterSettings] = useState<PrinterSettings>(() =>
     loadState('printerSettings', {
       autoPrintReceiptOnPayment: true,
@@ -496,16 +489,16 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const [operationRules, setOperationRules] = useState<OperationRules>(() =>
     loadState('operations_rules', DEFAULT_OPERATION_RULES)
   );
-  const [configHistory, setConfigHistory] = useState<ConfigurationHistoryItem[]>(() => loadState('configHistory', INITIAL_CONFIG_HISTORY));
-  const [configAlerts, setConfigAlerts] = useState<ConfigurationAlert[]>(() => loadState('configAlerts', CONFIGURATION_ALERTS_INITIAL));
+  const [configHistory, setConfigHistory] = useState<ConfigurationHistoryItem[]>([]);
+  const [configAlerts, setConfigAlerts] = useState<ConfigurationAlert[]>([]);
   const [selectedOutletId, setSelectedOutletId] = useState<string>(() => loadState('selectedOutletId', ''));
   const [selectedTerminalId, setSelectedTerminalId] = useState<string>(() => loadState('selectedTerminalId', ''));
   const [adminDisplayMode, setAdminDisplayMode] = useState<'simple' | 'avance'>('avance');
 
   // Architecture Multi-Restaurants & Organisation
-  const [organization, setOrganization] = useState<Organization>(() => loadState('organization', INITIAL_ORGANIZATION));
-  const [zones, setZones] = useState<Zone[]>(() => loadState('zones', INITIAL_ZONES));
-  const [cashRegisters, setCashRegisters] = useState<CashRegister[]>(() => loadState('cashRegisters', INITIAL_CASH_REGISTERS));
+  const [organization, setOrganization] = useState<Organization>(() => loadState('organization', DEFAULT_ORGANIZATION));
+  const [zones, setZones] = useState<Zone[]>([]);
+  const [cashRegisters, setCashRegisters] = useState<CashRegister[]>([]);
   const [activeZoneId, setActiveZoneId] = useState<string | 'all'>(() => loadState('activeZoneId', 'all'));
   const [activeCashRegisterId, setActiveCashRegisterId] = useState<string>(() => loadState('activeCashRegisterId', ''));
 
@@ -545,13 +538,6 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       window.removeEventListener('offline', handleOffline);
     };
   }, []);
-
-  // Initialisation et migration automatique localStorage -> Firestore au démarrage
-  useEffect(() => {
-    firebaseSeedService.initializeOrMigrateToFirestore().catch((err) => {
-      handleSyncError('Initialisation base Firestore', err);
-    });
-  }, [handleSyncError]);
 
   // Offline sync queue subscriber
   useEffect(() => {

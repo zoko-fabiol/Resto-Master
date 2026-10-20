@@ -15,6 +15,7 @@ export const GeneralAndOutletsSection: React.FC<Props> = ({ subTab }) => {
     selectedOutletId,
     setSelectedOutletId,
     addOutlet,
+    organization,
   } = useRestaurant();
 
   // General Identity
@@ -42,9 +43,9 @@ export const GeneralAndOutletsSection: React.FC<Props> = ({ subTab }) => {
   // New Outlet Form State
   const [showNewOutletModal, setShowNewOutletModal] = useState(false);
   const [newOutletName, setNewOutletName] = useState('');
-  const [newOutletCity, setNewOutletCity] = useState('Douala');
+  const [newOutletCity, setNewOutletCity] = useState('');
   const [newOutletAddress, setNewOutletAddress] = useState('');
-  const [newOutletPhone, setNewOutletPhone] = useState('+237 ');
+  const [newOutletPhone, setNewOutletPhone] = useState('');
 
   const handleSaveGeneral = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -67,12 +68,12 @@ export const GeneralAndOutletsSection: React.FC<Props> = ({ subTab }) => {
 
     const created: Outlet = {
       id: `out-${Date.now()}`,
-      organizationId: 'org-master-cm',
+      organizationId: organization?.id || '',
       name: newOutletName.trim(),
       commercialName: newOutletName.trim(),
-      city: newOutletCity,
-      address: newOutletAddress.trim() || 'Rue principale',
-      phone: newOutletPhone.trim() || '+237 600 00 00 00',
+      city: newOutletCity.trim(),
+      address: newOutletAddress.trim(),
+      phone: newOutletPhone.trim(),
       isMain: outlets.length === 0,
       active: true,
       operationalProfile: 'restaurant_classique',
@@ -363,7 +364,7 @@ export const GeneralAndOutletsSection: React.FC<Props> = ({ subTab }) => {
                 <input
                   type="text"
                   required
-                  placeholder="ex: L'Oasis Express Bonapriso"
+                  placeholder="ex: Restaurant Principal"
                   value={newOutletName}
                   onChange={(e) => setNewOutletName(e.target.value)}
                   className="w-full p-2.5 rounded-xl border border-slate-300 font-semibold"

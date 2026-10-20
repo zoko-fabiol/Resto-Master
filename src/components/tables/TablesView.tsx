@@ -220,7 +220,7 @@ export const TablesView: React.FC<TablesViewProps> = ({ onOpenOrder, onPayOrder,
     const initialY = 20 + ((Math.floor(countInZone / 4) * 22) % 60);
 
     await addTable({
-      restaurantId: activeRestaurant.id,
+      restaurantId: activeRestaurant?.id || '',
       number: newTableNumber.trim(),
       capacity: Number(newTableCapacity) || 4,
       zoneId: targetZoneId,
@@ -246,7 +246,7 @@ export const TablesView: React.FC<TablesViewProps> = ({ onOpenOrder, onPayOrder,
     if (!newZoneName.trim()) return;
 
     await addZone({
-      restaurantId: activeRestaurant.id,
+      restaurantId: activeRestaurant?.id || '',
       name: newZoneName.trim(),
       type: newZoneType,
       capacity: Number(newZoneCapacity) || 30,
@@ -517,7 +517,7 @@ export const TablesView: React.FC<TablesViewProps> = ({ onOpenOrder, onPayOrder,
         </div>
 
         <div className="text-slate-500 text-xs font-medium flex items-center gap-2">
-          <span>{activeRestaurant.name}</span>
+          <span>{activeRestaurant?.name || 'Restaurant'}</span>
           <span>•</span>
           <span className="font-bold text-slate-700 tabular-nums">
             {tables.filter((t) => t.status === 'occupee').length} / {tables.length} tables actives
@@ -569,14 +569,14 @@ export const TablesView: React.FC<TablesViewProps> = ({ onOpenOrder, onPayOrder,
               <Compass className="w-10 h-10" />
               <div>
                 <div>PLAN ARCHITECTURAL</div>
-                <div>{activeRestaurant.name.toUpperCase()}</div>
+                <div>{activeRestaurant?.name ? activeRestaurant.name.toUpperCase() : 'RESTAURANT'}</div>
               </div>
             </div>
 
             {/* Zone Label Watermark */}
             <div className="absolute top-4 left-6 pointer-events-none text-slate-500 font-black tracking-widest text-lg sm:text-2xl uppercase opacity-40">
               {selectedZoneId === 'all'
-                ? activeRestaurant.name
+                ? activeRestaurant?.name || 'RESTAURANT'
                 : zones.find((z) => z.id === selectedZoneId)?.name || 'SALLE'}
             </div>
 

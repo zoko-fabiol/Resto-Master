@@ -65,3 +65,19 @@ Ce document consigne les décisions d'architecture prises pour la livraison d'un
   - Aucun code PIN ou mot de passe en clair ne transite vers le client ni ne réside en mémoire navigateur.
   - Les mots de passe temporaires sont générés de manière cryptographique forte avec obligation de renouvellement au premier lancement (`mustChangePassword`).
 - **Conséquences** : Zéro vulnérabilité d'élévation de privilèges via DevTools ou localStorage. Isolation complète des sessions sur postes partagés.
+
+---
+
+### ADR-007 : Éradication Totale des Fausses Données et Isolation des Catalogues Neutres (Phase C)
+- **Date** : 2026-10-20
+- **Statut** : Accepté & Implémenté
+- **Contexte** : Le système contenait d'importants jeux de données de démonstration codés en dur (`seedData.ts`, `configurationSeed.ts`, faux numéros camerounais, courriels inventés, établissements Oasis, agence Genesis, et images distantes Unsplash) avec un service d'amorçage automatique qui réinjectait ces fausses données dans Firestore au démarrage.
+- **Décision** :
+  - Suppression totale de `seedData.ts`, `configurationSeed.ts` et `firebaseSeedService.ts`.
+  - Migration des configurations structurelles neutres dans `src/config/defaults/` (`DEFAULT_SETTINGS`, `DEFAULT_ORGANIZATION`, `DEFAULT_CASH_SESSION`, `DEFAULT_FEATURES`, `DEFAULT_ROLE_LIMITS`, `DEFAULT_OPERATION_RULES`).
+  - Initialisation de toutes les entités métier de `RestaurantContext` à des tableaux vides `[]`.
+  - Purge automatique des clés `localStorage` obsolètes (`restomaster_*`, `rh_app_*`, `stock_expert_*`) basée sur le versionnage `restomaster_storage_version: "2.0.0-clean"`.
+  - Remplacement de toutes les URLs Unsplash en dur par des initiales stylisées ou icônes vectorielles locales.
+  - Implémentation du script de pré-validation `scripts/check-no-demo.ts` exécuté à chaque build pour garantir le respect strict du critère "Zéro Donnée Fictive".
+- **Conséquences** : La plateforme livrée est garantie 100% vierge, prête à être configurée pour un nouveau restaurant client sans aucun résidu de données fictives.
+

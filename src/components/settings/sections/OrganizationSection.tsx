@@ -23,18 +23,16 @@ export const OrganizationSection: React.FC = () => {
   const { organization, updateOrganization, outlets, changeActiveRestaurant, selectedOutletId } = useRestaurant();
   const { currentUser } = useAuth();
 
-  const [name, setName] = useState(organization?.name || 'GROUPE NOURISH & DELIGHT CAMEROUN');
-  const [legalName, setLegalName] = useState(
-    organization?.legalName || "SOCIÉTÉ D'EXPLOITATION HÔTELIÈRE ET DE RESTAURATION DU CAMEROUN SA"
-  );
-  const [taxId, setTaxId] = useState(organization?.taxId || 'M012012345678A');
-  const [rccm, setRccm] = useState(organization?.rccm || 'RC/YAO/2024/B/1894');
+  const [name, setName] = useState(organization?.name || '');
+  const [legalName, setLegalName] = useState(organization?.legalName || '');
+  const [taxId, setTaxId] = useState(organization?.taxId || '');
+  const [rccm, setRccm] = useState(organization?.rccm || '');
   const [headquartersAddress, setHeadquartersAddress] = useState(
-    organization?.headquartersAddress || 'Boulevard du 20 Mai, Yaoundé, Cameroun'
+    organization?.headquartersAddress || ''
   );
-  const [city, setCity] = useState(organization?.city || 'Yaoundé');
-  const [email, setEmail] = useState(organization?.email || 'direction@nourish-delight.cm');
-  const [phone, setPhone] = useState(organization?.phone || '+237 699 00 11 22');
+  const [city, setCity] = useState(organization?.city || '');
+  const [email, setEmail] = useState(organization?.email || '');
+  const [phone, setPhone] = useState(organization?.phone || '');
   const [currency, setCurrency] = useState<'FCFA' | 'EUR' | 'USD' | 'CAD' | 'GBP'>(
     organization?.currency || 'FCFA'
   );

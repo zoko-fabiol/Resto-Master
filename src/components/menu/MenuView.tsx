@@ -240,12 +240,16 @@ export const MenuView: React.FC = () => {
               className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden flex flex-col justify-between"
             >
               <div>
-                <div className="h-36 bg-slate-100 relative overflow-hidden">
-                  <img
-                    src={p.image || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=500'}
-                    alt={p.name}
-                    className="w-full h-full object-cover"
-                  />
+                <div className="h-36 bg-slate-100 relative overflow-hidden flex items-center justify-center">
+                  {p.image ? (
+                    <img
+                      src={p.image}
+                      alt={p.name}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <Utensils className="w-10 h-10 text-slate-300" />
+                  )}
                   <div className="absolute top-2 left-2 flex items-center gap-1.5">
                     <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-900/80 text-white backdrop-blur-xs">
                       {p.destination === 'cuisine' ? 'Cuisine' : 'Bar'}

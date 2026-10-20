@@ -374,7 +374,7 @@ export const EventsView: React.FC = () => {
                   <input
                     type="text"
                     required
-                    placeholder="Ex: +237 699 00 11 22"
+                    placeholder="Ex: +237 6XX XX XX XX"
                     value={clientPhone}
                     onChange={(e) => setClientPhone(e.target.value)}
                     className="w-full p-2 border border-slate-300 rounded-lg"

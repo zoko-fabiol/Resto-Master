@@ -444,7 +444,7 @@ const AppContent: React.FC = () => {
         />
       )}
 
-      {/* Guide d'Utilisation Officiel Genesis Digital Agency Modal */}
+      {/* Guide d'Utilisation Officiel RestoMaster OS Modal */}
       <UserGuideModal
         isOpen={isUserGuideOpen}
         onClose={() => setIsUserGuideOpen(false)}
