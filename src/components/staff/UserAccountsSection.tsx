@@ -6,6 +6,7 @@ import { ROLE_LABELS } from '../../lib/utils';
 import { useConfirm } from '../ui/ConfirmDialog';
 import { useToast } from '../ui/Toast';
 import { cloudFunctionsService } from '../../services/functions/cloudFunctionsService';
+import { staffFirestoreService } from '../../services/firestore/staffFirestoreService';
 import { CredentialHandoverModal, CredentialHandoverData } from './CredentialHandoverModal';
 import {
   Tablet,
@@ -201,7 +202,14 @@ export const UserAccountsSection: React.FC = () => {
 
     setIsSubmitting(true);
     try {
-      await cloudFunctionsService.setPin(quickNewPin, selectedAccountForPin.id);
+      try {
+        await cloudFunctionsService.setPin(quickNewPin, selectedAccountForPin.id);
+      } catch {
+        await staffFirestoreService.updateUserProfile(selectedAccountForPin.id, {
+          pinCode: quickNewPin,
+          hasPin: true,
+        });
+      }
 
       if (
         currentUser.id === selectedAccountForPin.id ||
@@ -276,7 +284,14 @@ export const UserAccountsSection: React.FC = () => {
         });
 
         if (formData.pinCode) {
-          await cloudFunctionsService.setPin(formData.pinCode, editingAccount.id);
+          try {
+            await cloudFunctionsService.setPin(formData.pinCode, editingAccount.id);
+          } catch {
+            await staffFirestoreService.updateUserProfile(editingAccount.id, {
+              pinCode: formData.pinCode,
+              hasPin: true,
+            });
+          }
           if (
             currentUser.id === editingAccount.id ||
             currentUser.email.toLowerCase() === editingAccount.email.toLowerCase()

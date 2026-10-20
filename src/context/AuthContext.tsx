@@ -168,6 +168,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               mustChangePassword: data.mustChangePassword === true,
               tabPermissions: data.tabPermissions,
               additionalTabs: data.additionalTabs,
+              pinCode: data.pinCode || undefined,
+              hasPin: Boolean(data.hasPin || data.pinCode),
             };
 
             setCurrentUser(userProfile);
@@ -246,7 +248,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   /**
-   * Déverrouillage sécurisé par code PIN via Cloud Function unlockWithPin.
    * Déverrouillage sécurisé par code PIN (Cloud Function prioritaire avec fallback Firestore)
    */
   const unlockSessionWithPin = async (
@@ -272,47 +273,56 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           },
         };
       }
-    } catch (cfErr: any) {
-      console.warn('[AuthContext] Cloud Function unlockWithPin indisponible, exécution du fallback Firestore:', cfErr?.message);
+    } catch {
+      // Ignorer silencieusement si les Cloud Functions ne sont pas activées ou indisponibles
     }
 
     // 2. Fallback sécurisé Firestore
     try {
+      if (!pin || !/^\d{4,6}$/.test(pin)) {
+        return { success: false, message: 'Le code PIN doit comporter entre 4 et 6 chiffres.' };
+      }
+
       // Cas A : Utilisateur courant déjà connecté
       if (currentUser && currentUser.id) {
-        // Si le PIN correspond au pinCode en mémoire ou si aucun PIN n'était encore enregistré pour le Superadmin
-        if (currentUser.pinCode && currentUser.pinCode === pin) {
-          setIsSessionLocked(false);
-          return { success: true, user: currentUser };
-        }
+        // Obtenir la dernière valeur du code PIN depuis Firestore pour éviter les états périmés
+        const userDocSnap = await getDoc(doc(db, 'users', currentUser.id));
+        const userData = userDocSnap.exists() ? userDocSnap.data() : null;
+        const currentSavedPin = userData?.pinCode || currentUser.pinCode;
 
-        // Si c'est le Superadmin et qu'aucun PIN n'était encore configuré, on valide et enregistre ce PIN
-        if (currentUser.role === 'superadmin' && !currentUser.pinCode) {
+        if (currentSavedPin) {
+          if (currentSavedPin === pin) {
+            setCurrentUser((prev) => ({ ...prev, pinCode: currentSavedPin, hasPin: true }));
+            setIsSessionLocked(false);
+            return { success: true, user: { ...currentUser, pinCode: currentSavedPin, hasPin: true } };
+          }
+        } else if (currentUser.role === 'superadmin') {
+          // Premier bootstrap initial UNIQUEMENT si le superadmin n'avait jamais configuré de PIN
           await setDoc(doc(db, 'users', currentUser.id), { pinCode: pin, hasPin: true }, { merge: true });
           setCurrentUser((prev) => ({ ...prev, pinCode: pin, hasPin: true }));
           setIsSessionLocked(false);
-          return { success: true, user: currentUser };
+          return { success: true, user: { ...currentUser, pinCode: pin, hasPin: true } };
         }
 
-        // Recherche dans le document Firestore user_pins
+        // Vérification dans user_pins
         const pinDocSnap = await getDoc(doc(db, 'user_pins', currentUser.id));
         if (pinDocSnap.exists()) {
           const pinData = pinDocSnap.data();
-          if (pinData.pin === pin || pinData.hash === pin) {
+          if (pinData.pin === pin) {
             setIsSessionLocked(false);
             return { success: true, user: currentUser };
           }
         }
       }
 
-      // Cas B : Recherche globale dans les utilisateurs actifs
+      // Cas B : Recherche globale dans les utilisateurs actifs (commutation de serveur POS par PIN)
       const usersSnap = await getDocs(
         query(collection(db, 'users'), where('active', '==', true))
       );
 
       for (const uDoc of usersSnap.docs) {
         const uData = uDoc.data();
-        if (uData.pinCode === pin) {
+        if (uData.pinCode && uData.pinCode === pin) {
           const matchedUser: UserProfile = {
             id: uDoc.id,
             email: uData.email || '',
@@ -330,17 +340,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       }
 
-      // Cas C : Si c'est le compte superadmin et que l'utilisateur tape un PIN valide à 4 chiffres
-      if (currentUser && currentUser.role === 'superadmin' && /^\d{4,6}$/.test(pin)) {
-        await setDoc(doc(db, 'users', currentUser.id), { pinCode: pin, hasPin: true }, { merge: true });
-        setCurrentUser((prev) => ({ ...prev, pinCode: pin, hasPin: true }));
-        setIsSessionLocked(false);
-        return { success: true, user: currentUser };
-      }
-
+      // Rejet strict de tout code PIN non reconnu (aucun passe-droit permissif)
       return { success: false, message: 'Code PIN incorrect. Veuillez réessayer.' };
     } catch (fallbackErr: any) {
-      console.error('[AuthContext] Erreur fallback déverrouillage:', fallbackErr);
+      console.error('[AuthContext] Erreur déverrouillage PIN Firestore:', fallbackErr);
       return { success: false, message: 'Code PIN incorrect. Veuillez réessayer.' };
     }
   };
@@ -362,18 +365,53 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         supervisorRole: res.supervisorRole,
       };
     } catch {
-      // Fallback local superviseur
-      if (
-        (currentUser.role === 'superadmin' || currentUser.role === 'direction' || currentUser.role === 'manager') &&
-        (!currentUser.pinCode || currentUser.pinCode === pin)
-      ) {
-        return {
-          success: true,
-          supervisorToken: `local-token-${Date.now()}`,
-          supervisorName: currentUser.name,
-          supervisorRole: currentUser.role,
-        };
+      // Fallback local superviseur (Firestore)
+      try {
+        if (!pin || !/^\d{4,6}$/.test(pin)) {
+          return { success: false, message: 'Le code PIN doit comporter entre 4 et 6 chiffres.' };
+        }
+
+        // 1. Si l'utilisateur connecté est superviseur et que son PIN correspond
+        const userDocRef = doc(db, 'users', currentUser.id);
+        const userSnap = await getDoc(userDocRef);
+        const currentSavedPin = userSnap.exists() ? userSnap.data()?.pinCode : currentUser.pinCode;
+
+        const isSupervisor =
+          currentUser.role === 'superadmin' || currentUser.role === 'direction' || currentUser.role === 'manager';
+
+        if (isSupervisor && currentSavedPin && currentSavedPin === pin) {
+          return {
+            success: true,
+            supervisorToken: `local-token-${Date.now()}`,
+            supervisorName: currentUser.name,
+            supervisorRole: currentUser.role,
+          };
+        }
+
+        // 2. Recherche si un autre profil superviseur actif possède ce PIN
+        const supSnap = await getDocs(
+          query(
+            collection(db, 'users'),
+            where('active', '==', true),
+            where('role', 'in', ['superadmin', 'direction', 'manager'])
+          )
+        );
+
+        for (const docSnap of supSnap.docs) {
+          const supData = docSnap.data();
+          if (supData.pinCode && supData.pinCode === pin) {
+            return {
+              success: true,
+              supervisorToken: `local-token-${Date.now()}`,
+              supervisorName: supData.name || 'Superviseur',
+              supervisorRole: supData.role as UserRole,
+            };
+          }
+        }
+      } catch (err) {
+        console.error('[AuthContext] Erreur vérification superviseur Firestore:', err);
       }
+
       return { success: false, message: 'Autorisation superviseur refusée (code PIN invalide).' };
     }
   };

@@ -37,7 +37,23 @@ export interface RecordPaymentParams {
   notes?: string;
 }
 
+const USE_CLOUD_FUNCTIONS = import.meta.env.VITE_USE_CLOUD_FUNCTIONS === 'true';
+
 export class CloudFunctionsService {
+  /**
+   * Helper centralisé exécutant l'appel Cloud Function.
+   * Si les Cloud Functions ne sont pas activées/déployées (VITE_USE_CLOUD_FUNCTIONS != true),
+   * lève immédiatement une exception typée sans déclencher de requête réseau ni d'erreur CORS.
+   */
+  private async call<TData = unknown, TResult = unknown>(name: string, data?: TData): Promise<TResult> {
+    if (!USE_CLOUD_FUNCTIONS) {
+      throw new Error(`unavailable: Cloud Function "${name}" non configurée ou non déployée dans cet environnement.`);
+    }
+    const fn = httpsCallable(functions, name);
+    const res = await fn(data);
+    return res.data as TResult;
+  }
+
   // 1. Rôles et Utilisateurs
   async createUser(data: {
     email: string;
@@ -52,9 +68,19 @@ export class CloudFunctionsService {
     assignedTableId?: string;
     assignedTableName?: string;
   }) {
-    const fn = httpsCallable(functions, 'createUser');
-    const res = await fn(data);
-    return res.data as { success: boolean; userId: string; temporaryPassword?: string; generatedPin?: string };
+    return this.call<{
+      email: string;
+      password?: string;
+      name: string;
+      role: UserRole;
+      phone?: string;
+      outlets?: string[];
+      organizationId?: string;
+      pin?: string;
+      accountType?: 'staff' | 'tablette';
+      assignedTableId?: string;
+      assignedTableName?: string;
+    }, { success: boolean; userId: string; temporaryPassword?: string; generatedPin?: string }>('createUser', data);
   }
 
   async setUserRole(data: {
@@ -64,34 +90,30 @@ export class CloudFunctionsService {
     organizationId?: string;
     active?: boolean;
   }) {
-    const fn = httpsCallable(functions, 'setUserRole');
-    const res = await fn(data);
-    return res.data as { success: boolean; userId: string; role: UserRole };
+    return this.call<{
+      userId: string;
+      role: UserRole;
+      outlets?: string[];
+      organizationId?: string;
+      active?: boolean;
+    }, { success: boolean; userId: string; role: UserRole }>('setUserRole', data);
   }
 
   async deleteUser(data: { userId: string }) {
-    const fn = httpsCallable(functions, 'deleteUser');
-    const res = await fn(data);
-    return res.data as { success: boolean; userId: string };
+    return this.call<{ userId: string }, { success: boolean; userId: string }>('deleteUser', data);
   }
 
   // 2. Sécurité PIN & Superviseur
   async setPin(pin: string, userId?: string) {
-    const fn = httpsCallable(functions, 'setPin');
-    const res = await fn({ pin, userId });
-    return res.data as { success: boolean };
+    return this.call<{ pin: string; userId?: string }, { success: boolean }>('setPin', { pin, userId });
   }
 
   async verifyPin(pin: string, userId?: string) {
-    const fn = httpsCallable(functions, 'verifyPin');
-    const res = await fn({ pin, userId });
-    return res.data as { success: boolean };
+    return this.call<{ pin: string; userId?: string }, { success: boolean }>('verifyPin', { pin, userId });
   }
 
   async unlockWithPin(pin: string, terminalId?: string) {
-    const fn = httpsCallable(functions, 'unlockWithPin');
-    const res = await fn({ pin, terminalId });
-    return res.data as {
+    return this.call<{ pin: string; terminalId?: string }, {
       success: boolean;
       customToken: string;
       user: {
@@ -102,40 +124,37 @@ export class CloudFunctionsService {
         accessibleRestaurantIds: string[];
         organizationId: string;
       };
-    };
+    }>('unlockWithPin', { pin, terminalId });
   }
 
   async verifySupervisor(pin: string, action: string, entityId?: string) {
-    const fn = httpsCallable(functions, 'verifySupervisor');
-    const res = await fn({ pin, action, entityId });
-    return res.data as {
+    return this.call<{ pin: string; action: string; entityId?: string }, {
       success: boolean;
       supervisorToken: string;
       supervisorName: string;
       supervisorRole: UserRole;
       expiresInSeconds: number;
-    };
+    }>('verifySupervisor', { pin, action, entityId });
   }
 
   // 3. Commandes Certifiées Serveur
   async createOrder(params: CreateOrderParams) {
-    const fn = httpsCallable(functions, 'createOrder');
-    const res = await fn(params);
-    return res.data as { success: boolean; order: any };
+    return this.call<CreateOrderParams, { success: boolean; order: any }>('createOrder', params);
   }
 
   async addItemsToOrder(orderId: string, items: OrderItemInput[], guestCount?: number) {
-    const fn = httpsCallable(functions, 'addItemsToOrder');
-    const res = await fn({ orderId, items, guestCount });
-    return res.data as { success: boolean; orderId: string; total: number; itemsCount: number };
+    return this.call<{ orderId: string; items: OrderItemInput[]; guestCount?: number }, {
+      success: boolean;
+      orderId: string;
+      total: number;
+      itemsCount: number;
+    }>('addItemsToOrder', { orderId, items, guestCount });
   }
 
   // 4. Paiement Transactionnel & Idempotent
   async recordPayment(params: RecordPaymentParams) {
-    const fn = httpsCallable(functions, 'recordPayment');
     const idempotencyKey = params.idempotencyKey || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `idemp-${Date.now()}`);
-    const res = await fn({ ...params, idempotencyKey });
-    return res.data as {
+    return this.call<RecordPaymentParams, {
       success: boolean;
       paymentId: string;
       orderId: string;
@@ -143,7 +162,7 @@ export class CloudFunctionsService {
       totalPaid: number;
       remainingToPay: number;
       isFullyPaid: boolean;
-    };
+    }>('recordPayment', { ...params, idempotencyKey });
   }
 
   // 5. Annulation et Void
@@ -153,9 +172,12 @@ export class CloudFunctionsService {
     supervisorToken: string;
     actionAfterCancel?: 'restock' | 'waste';
   }) {
-    const fn = httpsCallable(functions, 'cancelOrder');
-    const res = await fn(params);
-    return res.data as { success: boolean; orderId: string; creditNoteId?: string; status: string };
+    return this.call<{
+      orderId: string;
+      reason: string;
+      supervisorToken: string;
+      actionAfterCancel?: 'restock' | 'waste';
+    }, { success: boolean; orderId: string; creditNoteId?: string; status: string }>('cancelOrder', params);
   }
 
   async voidItem(params: {
@@ -165,9 +187,13 @@ export class CloudFunctionsService {
     supervisorToken: string;
     actionAfterCancel?: 'restock' | 'waste';
   }) {
-    const fn = httpsCallable(functions, 'voidItem');
-    const res = await fn(params);
-    return res.data as { success: boolean; orderId: string; newTotal: number; remainingItemsCount: number };
+    return this.call<{
+      orderId: string;
+      itemIndex: number;
+      reason: string;
+      supervisorToken: string;
+      actionAfterCancel?: 'restock' | 'waste';
+    }, { success: boolean; orderId: string; newTotal: number; remainingItemsCount: number }>('voidItem', params);
   }
 
   // 6. Sessions de Caisse
@@ -178,9 +204,13 @@ export class CloudFunctionsService {
     initialFloat: number;
     notes?: string;
   }) {
-    const fn = httpsCallable(functions, 'openCashSession');
-    const res = await fn(params);
-    return res.data as { success: boolean; session: any };
+    return this.call<{
+      restaurantId: string;
+      registerId: string;
+      terminalId: string;
+      initialFloat: number;
+      notes?: string;
+    }, { success: boolean; session: any }>('openCashSession', params);
   }
 
   async closeCashSession(params: {
@@ -189,9 +219,12 @@ export class CloudFunctionsService {
     varianceJustification?: string;
     notes?: string;
   }) {
-    const fn = httpsCallable(functions, 'closeCashSession');
-    const res = await fn(params);
-    return res.data as {
+    return this.call<{
+      sessionId: string;
+      blindCountAmount: number;
+      varianceJustification?: string;
+      notes?: string;
+    }, {
       success: boolean;
       sessionId: string;
       zReportNumber: string;
@@ -199,21 +232,19 @@ export class CloudFunctionsService {
       countedTotal: number;
       variance: number;
       status: string;
-    };
+    }>('closeCashSession', params);
   }
 
   // 7. Facturation Certifiée DGI
   async issueInvoice(orderId: string, clientInfo?: any) {
-    const fn = httpsCallable(functions, 'issueInvoice');
-    const res = await fn({ orderId, clientInfo });
-    return res.data as {
+    return this.call<{ orderId: string; clientInfo?: any }, {
       success: boolean;
       invoiceId: string;
       invoiceNumber: string;
       chainHash: string;
       totalTTC: number;
       alreadyIssued?: boolean;
-    };
+    }>('issueInvoice', { orderId, clientInfo });
   }
 
   // 8. Journal d'Audit Immuable
@@ -224,22 +255,22 @@ export class CloudFunctionsService {
     entityId?: string;
     restaurantId?: string;
   }) {
-    const fn = httpsCallable(functions, 'appendAuditLog');
-    const res = await fn(params);
-    return res.data as { success: boolean; logId: string; chainHash: string };
+    return this.call<{
+      action: string;
+      module: string;
+      details: string;
+      entityId?: string;
+      restaurantId?: string;
+    }, { success: boolean; logId: string; chainHash: string }>('appendAuditLog', params);
   }
 
   // 9. Appairage Sécurisé des Équipements
   async generatePairingCode(terminalId: string) {
-    const fn = httpsCallable(functions, 'generatePairingCode');
-    const res = await fn({ terminalId });
-    return res.data as { success: boolean; terminalId: string; pairingCode: string; expiresAt: string };
+    return this.call<{ terminalId: string }, { success: boolean; terminalId: string; pairingCode: string; expiresAt: string }>('generatePairingCode', { terminalId });
   }
 
   async pairDevice(params: { pairingCode: string; deviceName?: string; ipAddress?: string }) {
-    const fn = httpsCallable(functions, 'pairDevice');
-    const res = await fn(params);
-    return res.data as {
+    return this.call<{ pairingCode: string; deviceName?: string; ipAddress?: string }, {
       success: boolean;
       terminal: {
         terminalId: string;
@@ -253,7 +284,7 @@ export class CloudFunctionsService {
         pairedAt: string;
         pairingCode: string;
       };
-    };
+    }>('pairDevice', params);
   }
 }
 

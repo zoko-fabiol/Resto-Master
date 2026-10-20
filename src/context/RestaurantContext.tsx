@@ -1861,21 +1861,48 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const createUserAccount = async (
     accountData: Omit<UserAccount, 'id' | 'createdAt' | 'updatedAt'> & { pin?: string; password?: string }
   ): Promise<UserAccount & { temporaryPassword?: string; generatedPin?: string }> => {
-    const res = await cloudFunctionsService.createUser({
-      email: accountData.email,
-      name: accountData.name,
-      role: accountData.role,
-      phone: accountData.phone,
-      pin: accountData.pin,
-      accountType: accountData.accountType,
-      assignedTableId: accountData.assignedTableId,
-      assignedTableName: accountData.assignedTableName,
-      outlets: selectedOutletId ? [selectedOutletId] : undefined,
-      organizationId: organization?.id,
-    });
+    let userId: string;
+    let temporaryPassword = accountData.password || `Temp${Math.random().toString(36).slice(2, 8)}!`;
+    let generatedPin = accountData.pin || Math.floor(1000 + Math.random() * 9000).toString();
+
+    try {
+      const res = await cloudFunctionsService.createUser({
+        email: accountData.email,
+        name: accountData.name,
+        role: accountData.role,
+        phone: accountData.phone,
+        pin: accountData.pin,
+        accountType: accountData.accountType,
+        assignedTableId: accountData.assignedTableId,
+        assignedTableName: accountData.assignedTableName,
+        outlets: selectedOutletId ? [selectedOutletId] : undefined,
+        organizationId: organization?.id,
+      });
+      userId = res.userId;
+      if (res.temporaryPassword) temporaryPassword = res.temporaryPassword;
+      if (res.generatedPin) generatedPin = res.generatedPin;
+    } catch {
+      // Repli direct Firestore si Cloud Functions non activées
+      userId = `user-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+      await staffFirestoreService.updateUserProfile(userId, {
+        name: accountData.name,
+        email: accountData.email,
+        role: accountData.role,
+        accountType: accountData.accountType,
+        active: true,
+        phone: accountData.phone,
+        matricule: accountData.matricule,
+        pinCode: generatedPin,
+        hasPin: true,
+        assignedTableId: accountData.assignedTableId,
+        assignedTableName: accountData.assignedTableName,
+        tabPermissions: accountData.tabPermissions,
+        additionalTabs: accountData.additionalTabs,
+      });
+    }
 
     if (accountData.matricule || accountData.tabPermissions || accountData.additionalTabs) {
-      await staffFirestoreService.updateUserProfile(res.userId, {
+      await staffFirestoreService.updateUserProfile(userId, {
         matricule: accountData.matricule,
         tabPermissions: accountData.tabPermissions,
         additionalTabs: accountData.additionalTabs,
@@ -1885,19 +1912,19 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     const nowStr = new Date().toISOString().slice(0, 10);
     const newAccount: UserAccount & { temporaryPassword?: string; generatedPin?: string } = {
       ...accountData,
-      id: res.userId,
+      id: userId,
       hasPin: true,
       createdAt: nowStr,
       updatedAt: nowStr,
-      temporaryPassword: res.temporaryPassword,
-      generatedPin: res.generatedPin,
+      temporaryPassword,
+      generatedPin,
     };
 
     addAuditLog(
       'Création Compte Utilisateur',
       'Personnel',
       `Création du compte ${newAccount.name} (${newAccount.accountType === 'tablette' ? 'Borne Tablette ' + (newAccount.assignedTableName || '') : 'Rôle ' + newAccount.role})`,
-      res.userId
+      userId
     );
 
     return newAccount;
@@ -1908,13 +1935,17 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       const current = userAccounts.find((a) => a.id === id);
       const roleToSet = updates.role || current?.role || 'serveur';
       const activeToSet = updates.active !== undefined ? updates.active : (current?.active !== false);
-      await cloudFunctionsService.setUserRole({
-        userId: id,
-        role: roleToSet,
-        active: activeToSet,
-        outlets: selectedOutletId ? [selectedOutletId] : undefined,
-        organizationId: organization?.id,
-      });
+      try {
+        await cloudFunctionsService.setUserRole({
+          userId: id,
+          role: roleToSet,
+          active: activeToSet,
+          outlets: selectedOutletId ? [selectedOutletId] : undefined,
+          organizationId: organization?.id,
+        });
+      } catch {
+        // Ignorer si Cloud Functions non déployées, staffFirestoreService synchronisera le profil
+      }
     }
 
     await staffFirestoreService.updateUserProfile(id, updates);
@@ -1929,7 +1960,13 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
   const deleteUserAccount = async (id: string) => {
     const target = userAccounts.find((a) => a.id === id);
-    await cloudFunctionsService.deleteUser({ userId: id });
+    try {
+      await cloudFunctionsService.deleteUser({ userId: id });
+    } catch {
+      // Ignorer si Cloud Functions non déployées
+    }
+    // Désactiver dans Firestore pour couper immédiatement les accès
+    await staffFirestoreService.updateUserProfile(id, { active: false });
     addAuditLog(
       'Suppression Compte Utilisateur',
       'Personnel',
