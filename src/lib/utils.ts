@@ -261,6 +261,7 @@ export function getMtnMomoUssdCode(
 }
 
 export const ROLE_LABELS: Record<UserRole, { label: string; color: string }> = {
+  superadmin: { label: 'Super Administrateur (Intégrateur)', color: 'bg-rose-100 text-rose-800 border-rose-200' },
   direction: { label: 'Direction Générale (PDG)', color: 'bg-purple-100 text-purple-800 border-purple-200' },
   manager: { label: 'Responsable Restaurant', color: 'bg-indigo-100 text-indigo-800 border-indigo-200' },
   serveur: { label: 'Service & Salle', color: 'bg-blue-100 text-blue-800 border-blue-200' },

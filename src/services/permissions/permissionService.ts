@@ -11,6 +11,22 @@ export const DEFAULT_PERMISSIONS: Record<
   UserRole,
   Record<PermissionModule, Record<PermissionAction, boolean>>
 > = {
+  superadmin: {
+    pos: { view: true, create: true, edit: true, delete: true, validate: true, cancel: true, export: true },
+    tables: { view: true, create: true, edit: true, delete: true, validate: true, cancel: true, export: true },
+    caisse: { view: true, create: true, edit: true, delete: true, validate: true, cancel: true, export: true },
+    invoices: { view: true, create: true, edit: true, delete: true, validate: true, cancel: true, export: true },
+    stock: { view: true, create: true, edit: true, delete: true, validate: true, cancel: true, export: true },
+    purchases: { view: true, create: true, edit: true, delete: true, validate: true, cancel: true, export: true },
+    clients: { view: true, create: true, edit: true, delete: true, validate: true, cancel: true, export: true },
+    finance: { view: true, create: true, edit: true, delete: true, validate: true, cancel: true, export: true },
+    fiscal: { view: true, create: true, edit: true, delete: true, validate: true, cancel: true, export: true },
+    staff: { view: true, create: true, edit: true, delete: true, validate: true, cancel: true, export: true },
+    audit: { view: true, create: true, edit: true, delete: true, validate: true, cancel: true, export: true },
+    events: { view: true, create: true, edit: true, delete: true, validate: true, cancel: true, export: true },
+    delivery: { view: true, create: true, edit: true, delete: true, validate: true, cancel: true, export: true },
+    settings: { view: true, create: true, edit: true, delete: true, validate: true, cancel: true, export: true },
+  },
   direction: {
     pos: { view: true, create: true, edit: true, delete: true, validate: true, cancel: true, export: true },
     tables: { view: true, create: true, edit: true, delete: true, validate: true, cancel: true, export: true },
@@ -231,11 +247,22 @@ export class PermissionService {
     action: PermissionAction,
     matrix = DEFAULT_PERMISSIONS
   ): boolean {
-    if (userRole === 'direction') return true;
+    if (userRole === 'superadmin' || userRole === 'direction') return true;
     return Boolean(matrix[userRole]?.[module]?.[action]);
   }
 
   public static getLimits(userRole: UserRole): RoleLimits {
+    if (userRole === 'superadmin') {
+      return {
+        maxDiscountPercent: 100,
+        maxRefundAmount: 50000000,
+        maxExpenseAmount: 100000000,
+        requiresApprovalForDiscount: false,
+        requiresApprovalForRefund: false,
+        requiresApprovalForCancel: false,
+        requiresApprovalForNegativePrice: false,
+      };
+    }
     return INITIAL_ROLE_LIMITS[userRole] || INITIAL_ROLE_LIMITS.serveur;
   }
 }

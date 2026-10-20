@@ -102,6 +102,7 @@ export const INITIAL_SETTINGS: RestaurantSettings = {
   invoicePrefix: '2026-RESTO-001',
   nextInvoiceSequence: 43,
   maxDiscountByRole: {
+    superadmin: 100,
     direction: 100,
     manager: 15,
     comptable: 10,

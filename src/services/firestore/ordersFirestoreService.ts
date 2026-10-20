@@ -23,7 +23,7 @@ export const ordersFirestoreService = {
       const cleanOrder = JSON.parse(
         JSON.stringify({
           ...order,
-          restaurantId: order.restaurantId || 'out-1',
+          restaurantId: order.restaurantId || '',
           updatedAt: new Date().toISOString(),
         })
       );

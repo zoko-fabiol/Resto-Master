@@ -143,8 +143,8 @@ export const MenuView: React.FC = () => {
 
     try {
       const asset = await cloudinaryService.upload(file, {
-        organizationId: 'org-cameroun-hospitality',
-        restaurantId: activeRestaurant?.id || 'out-1',
+        organizationId: activeRestaurant?.organizationId || '',
+        restaurantId: activeRestaurant?.id || '',
         category: 'food',
         entityType: 'product',
         confidentialityLevel: 'public',

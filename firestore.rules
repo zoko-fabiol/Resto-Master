@@ -10,8 +10,15 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    function isSuperadmin() {
+      return isAuthenticated() && (
+        request.auth.token.role == 'superadmin'
+      );
+    }
+
     function isDirection() {
       return isAuthenticated() && (
+        isSuperadmin() ||
         request.auth.token.role == 'direction'
       );
     }
@@ -64,7 +71,7 @@ service cloud.firestore {
     function hasOutletAccess(outletId) {
       return isAuthenticated() && (
         isDirection() ||
-        (request.auth.token.outlets != null && outletId in request.auth.token.outlets)
+        (request.auth.token.outlets != null && (outletId in request.auth.token.outlets || '*' in request.auth.token.outlets))
       );
     }
 

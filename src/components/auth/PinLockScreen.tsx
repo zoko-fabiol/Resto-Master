@@ -19,13 +19,14 @@ interface PinLockScreenProps {
 }
 
 export const PinLockScreen: React.FC<PinLockScreenProps> = ({ onUnlockSuccess }) => {
-  const { currentUser, unlockSessionWithPin, isSessionLocked } = useAuth();
-  const { activeRestaurant, addAuditLog, employees } = useRestaurant();
+  const { unlockSessionWithPin, isSessionLocked } = useAuth();
+  const { activeRestaurant, currentDeviceProfile } = useRestaurant();
   const { showToast, playAudioChime } = useToast();
 
   const [pin, setPin] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
   const [isShaking, setIsShaking] = useState(false);
+  const [isVerifying, setIsVerifying] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
 
   // Horloge en temps réel
@@ -36,14 +37,14 @@ export const PinLockScreen: React.FC<PinLockScreenProps> = ({ onUnlockSuccess })
 
   // Détection automatique quand 4 chiffres sont saisis
   useEffect(() => {
-    if (pin.length === 4) {
+    if (pin.length === 4 && !isVerifying) {
       handleValidate(pin);
     }
-  }, [pin]);
+  }, [pin, isVerifying]);
 
   // Support clavier physique pour déverrouiller la session
   useEffect(() => {
-    if (!isSessionLocked) return;
+    if (!isSessionLocked || isVerifying) return;
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (/^[0-9]$/.test(e.key)) {
@@ -60,74 +61,65 @@ export const PinLockScreen: React.FC<PinLockScreenProps> = ({ onUnlockSuccess })
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isSessionLocked, pin]);
+  }, [isSessionLocked, isVerifying, pin]);
 
   const handleKeyPress = (num: string) => {
-    if (pin.length < 6) {
+    if (pin.length < 6 && !isVerifying) {
       setPin((prev) => prev + num);
       setErrorMsg('');
     }
   };
 
   const handleBackspace = () => {
-    setPin((prev) => prev.slice(0, -1));
-    setErrorMsg('');
+    if (!isVerifying) {
+      setPin((prev) => prev.slice(0, -1));
+      setErrorMsg('');
+    }
   };
 
   const handleClear = () => {
-    setPin('');
-    setErrorMsg('');
+    if (!isVerifying) {
+      setPin('');
+      setErrorMsg('');
+    }
   };
 
-  const handleValidate = (pinToTest: string) => {
-    // 1. Tenter déverrouillage via AuthContext
-    const res = unlockSessionWithPin(pinToTest);
+  const handleValidate = async (pinToTest: string) => {
+    setIsVerifying(true);
+    setErrorMsg('');
 
-    if (res.success && res.user) {
-      playAudioChime('success');
-      showToast(`Session déverrouillée : Bienvenue ${res.user.name}`, 'success');
+    try {
+      // Déverrouillage sécurisé par Cloud Function (vérification PBKDF2 et détection lockout)
+      const res = await unlockSessionWithPin(pinToTest, currentDeviceProfile?.terminalId);
 
-      // Traçabilité Horodatée dans le Journal d'Audit
-      const nowStr = new Date().toLocaleTimeString('fr-FR');
-      addAuditLog(
-        'Connexion Code PIN',
-        'Personnel',
-        `${res.user.name} (${res.user.role}) s'est authentifié avec succès par Code PIN à ${nowStr} sur ${activeRestaurant?.name || 'le restaurant'}.`,
-        res.user.id
-      );
+      if (res.success && res.user) {
+        playAudioChime('success');
+        showToast(`Session déverrouillée : Bienvenue ${res.user.name}`, 'success');
+        setPin('');
+        setErrorMsg('');
+        if (onUnlockSuccess) onUnlockSuccess();
+        return;
+      }
 
-      setPin('');
-      setErrorMsg('');
-      if (onUnlockSuccess) onUnlockSuccess();
-      return;
+      // Échec de validation
+      playAudioChime('warning');
+      setIsShaking(true);
+      setErrorMsg(res.message || 'Code PIN incorrect. Veuillez vérifier et réessayer.');
+      setTimeout(() => {
+        setPin('');
+        setIsShaking(false);
+      }, 600);
+    } catch (err: any) {
+      playAudioChime('warning');
+      setIsShaking(true);
+      setErrorMsg(err?.message || 'Erreur lors de la validation du code PIN.');
+      setTimeout(() => {
+        setPin('');
+        setIsShaking(false);
+      }, 600);
+    } finally {
+      setIsVerifying(false);
     }
-
-    // 2. Vérifier si le PIN correspond à un employé de la liste
-    const matchedEmployee = employees.find((e) => e.pinCode === pinToTest);
-    if (matchedEmployee) {
-      playAudioChime('success');
-      showToast(`Employé authentifié : ${matchedEmployee.fullName}`, 'success');
-      const nowStr = new Date().toLocaleTimeString('fr-FR');
-      addAuditLog(
-        'Connexion Code PIN Employé',
-        'Personnel',
-        `${matchedEmployee.fullName} (${matchedEmployee.role}) a déverrouillé le terminal à ${nowStr}`,
-        matchedEmployee.id
-      );
-      setPin('');
-      setErrorMsg('');
-      if (onUnlockSuccess) onUnlockSuccess();
-      return;
-    }
-
-    // Échec de validation : animation de secousse et message d'erreur
-    playAudioChime('warning');
-    setIsShaking(true);
-    setErrorMsg('Code PIN incorrect. Veuillez vérifier et réessayer.');
-    setTimeout(() => {
-      setPin('');
-      setIsShaking(false);
-    }, 600);
   };
 
   if (!isSessionLocked) return null;

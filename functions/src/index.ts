@@ -1,6 +1,6 @@
 import { onCall } from 'firebase-functions/v2/https';
 import { handleCreateUser, handleSetUserRole } from './modules/users.js';
-import { handleSetPin, handleVerifyPin, handleVerifySupervisor } from './modules/pin.js';
+import { handleSetPin, handleVerifyPin, handleVerifySupervisor, handleUnlockWithPin } from './modules/pin.js';
 import { handleCreateOrder, handleAddItemsToOrder } from './modules/orders.js';
 import { handleRecordPayment } from './modules/payments.js';
 import { handleCancelOrder, handleVoidItem } from './modules/cancellations.js';
@@ -23,6 +23,7 @@ export const setUserRole = onCall(FUNCTION_OPTIONS, handleSetUserRole);
 export const setPin = onCall(FUNCTION_OPTIONS, handleSetPin);
 export const verifyPin = onCall(FUNCTION_OPTIONS, handleVerifyPin);
 export const verifySupervisor = onCall(FUNCTION_OPTIONS, handleVerifySupervisor);
+export const unlockWithPin = onCall(FUNCTION_OPTIONS, handleUnlockWithPin);
 
 // 3. Commandes Certifiées Serveur
 export const createOrder = onCall(FUNCTION_OPTIONS, handleCreateOrder);

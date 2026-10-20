@@ -53,3 +53,15 @@ Ce document consigne les décisions d'architecture prises pour la livraison d'un
   - L'exécution réelle `--execute` exige la confirmation interactive du `projectId` exact.
   - Le script ne s'exécute jamais automatiquement au build ni au déploiement.
 - **Conséquences** : Sécurité maximale contre les pertes accidentelles de données.
+
+---
+
+## ADR-006 : Authentification et Déverrouillage PIN Exclusivement Serveur (Custom Claims)
+- **Contexte** : Le déverrouillage de session comparait les codes PIN localement dans le navigateur (parcours de `employees` et `user_accounts`), et restaurait les rôles depuis `localStorage`.
+- **Décision** :
+  - L'attribution et la vérification des rôles s'appuient exclusivement sur les **Firebase Custom Claims** (`getIdTokenResult`) et la collection Firestore `users/{uid}`.
+  - Le rôle `superadmin` possède un accès universel non restreint.
+  - Tout déverrouillage tactile par code PIN (`PinLockScreen`) appelle la Cloud Function `unlockWithPin(pin, terminalId)`. Le serveur vérifie le hachage PBKDF2 avec sel, applique un verrouillage anti force-brute (5 essais: 1 min, 6 essais: 5 min, 7+ essais: 15 min), journalise dans `audit_logs` et génère un jeton d'authentification Firebase Auth personnalisé (`createCustomToken`).
+  - Aucun code PIN ou mot de passe en clair ne transite vers le client ni ne réside en mémoire navigateur.
+  - Les mots de passe temporaires sont générés de manière cryptographique forte avec obligation de renouvellement au premier lancement (`mustChangePassword`).
+- **Conséquences** : Zéro vulnérabilité d'élévation de privilèges via DevTools ou localStorage. Isolation complète des sessions sur postes partagés.

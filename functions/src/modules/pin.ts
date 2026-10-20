@@ -1,5 +1,5 @@
 import { CallableRequest, HttpsError } from 'firebase-functions/v2/https';
-import { db, FieldValue } from '../firebase.js';
+import { db, auth, FieldValue } from '../firebase.js';
 import { getCallerContext, hashPin, verifyPinHash, createSupervisorToken } from '../auth.js';
 import { UserRole } from '../types.js';
 
@@ -19,6 +19,11 @@ interface VerifySupervisorData {
   entityId?: string;
 }
 
+interface UnlockWithPinData {
+  pin: string;
+  terminalId?: string;
+}
+
 const MAX_FAILED_ATTEMPTS = 5;
 const LOCKOUT_DURATION_MS = 5 * 60 * 1000; // 5 minutes de blocage après 5 erreurs
 
@@ -29,11 +34,11 @@ export async function handleSetPin(request: CallableRequest<SetPinData>) {
   const caller = getCallerContext(request);
   const targetUserId = request.data.userId || caller.uid;
 
-  // Seul l'utilisateur lui-même ou un membre de la direction peut modifier un PIN
-  if (targetUserId !== caller.uid && caller.role !== 'direction') {
+  // Seul l'utilisateur lui-même, la direction ou le superadmin peut modifier un PIN
+  if (targetUserId !== caller.uid && caller.role !== 'superadmin' && caller.role !== 'direction') {
     throw new HttpsError(
       'permission-denied',
-      'Seule la direction peut modifier le code PIN d\'un autre utilisateur.'
+      'Seul un Super Administrateur ou la Direction peut modifier le code PIN d\'un autre utilisateur.'
     );
   }
 
@@ -135,10 +140,10 @@ export async function handleVerifySupervisor(request: CallableRequest<VerifySupe
     throw new HttpsError('invalid-argument', 'Le code PIN et l\'action ciblée sont requis.');
   }
 
-  // Récupérer tous les comptes de rôle 'direction' ou 'manager'
+  // Récupérer tous les comptes de rôle 'superadmin', 'direction' ou 'manager'
   const supervisorsSnap = await db
     .collection('users')
-    .where('role', 'in', ['direction', 'manager'])
+    .where('role', 'in', ['superadmin', 'direction', 'manager'])
     .where('active', '==', true)
     .get();
 
@@ -208,4 +213,172 @@ export async function handleVerifySupervisor(request: CallableRequest<VerifySupe
     supervisorRole: matchedSupervisor.role,
     expiresInSeconds: 120,
   };
+}
+
+/**
+ * Déverrouille une session de caisse ou terminal via code PIN vérifié côté serveur.
+ * Applique un verrouillage progressif (5 essais -> 1 min, 6 -> 5 min, 7+ -> 15 min),
+ * journalise dans audit_logs et renvoie un jeton personnalisé Firebase Auth avec les claims.
+ */
+export async function handleUnlockWithPin(request: CallableRequest<UnlockWithPinData>) {
+  const { pin, terminalId } = request.data || {};
+  if (!pin || !/^\d{4,6}$/.test(pin)) {
+    throw new HttpsError('invalid-argument', 'Le code PIN doit comporter entre 4 et 6 chiffres.');
+  }
+
+  // Clé de verrouillage pour le terminal ou poste de travail
+  const lockKey = terminalId ? `term_${terminalId}` : 'term_default';
+  const lockRef = db.collection('_terminal_pin_locks').doc(lockKey);
+  const lockSnap = await lockRef.get();
+
+  if (lockSnap.exists) {
+    const lockData = lockSnap.data()!;
+    const lockoutUntil = lockData.lockoutUntil ? lockData.lockoutUntil.toMillis() : null;
+    if (lockoutUntil && Date.now() < lockoutUntil) {
+      const remainingSeconds = Math.ceil((lockoutUntil - Date.now()) / 1000);
+      throw new HttpsError(
+        'resource-exhausted',
+        `Terminal temporairement verrouillé suite à plusieurs tentatives erronées. Réessayez dans ${remainingSeconds} secondes.`
+      );
+    }
+  }
+
+  // Déterminer l'établissement si terminalId est renseigné
+  let targetRestaurantId: string | null = null;
+  if (terminalId) {
+    const terminalSnap = await db.collection('terminals').doc(terminalId).get();
+    if (terminalSnap.exists) {
+      const tData = terminalSnap.data()!;
+      targetRestaurantId = tData.restaurantId || tData.outletId || null;
+    }
+  }
+
+  // Récupérer les utilisateurs actifs
+  const usersSnap = await db.collection('users').where('active', '==', true).get();
+  if (usersSnap.empty) {
+    throw new HttpsError('not-found', 'Aucun compte utilisateur actif n\'est configuré sur le système.');
+  }
+
+  // Filtrer les utilisateurs habilités sur cet établissement
+  const candidateDocs = usersSnap.docs.filter((d) => {
+    const data = d.data();
+    if (data.role === 'superadmin' || data.role === 'direction') return true;
+    if (!targetRestaurantId) return true;
+    const accessible = data.accessibleRestaurantIds || [];
+    return accessible.includes(targetRestaurantId) || accessible.includes('*');
+  });
+
+  let matchedUser: {
+    id: string;
+    name: string;
+    email: string;
+    role: UserRole;
+    accessibleRestaurantIds: string[];
+    organizationId: string;
+  } | null = null;
+
+  for (const userDoc of candidateDocs) {
+    const pinSnap = await db.collection('user_pins').doc(userDoc.id).get();
+    if (!pinSnap.exists) continue;
+
+    const pinData = pinSnap.data()!;
+    const userLockout = pinData.lockoutUntil ? pinData.lockoutUntil.toMillis() : null;
+    if (userLockout && Date.now() < userLockout) continue;
+
+    if (verifyPinHash(pin, pinData.hash, pinData.salt)) {
+      const uData = userDoc.data();
+      matchedUser = {
+        id: userDoc.id,
+        name: uData.name || 'Personnel',
+        email: uData.email,
+        role: uData.role as UserRole,
+        accessibleRestaurantIds: uData.accessibleRestaurantIds || [],
+        organizationId: uData.organizationId || '',
+      };
+
+      // Réinitialiser les tentatives échouées de cet utilisateur
+      await pinSnap.ref.update({
+        failedAttempts: 0,
+        lockoutUntil: null,
+        lastSuccessAt: FieldValue.serverTimestamp(),
+      });
+      break;
+    }
+  }
+
+  if (matchedUser) {
+    // Réinitialiser le verrouillage du terminal
+    if (lockSnap.exists) {
+      await lockRef.set({ failedAttempts: 0, lockoutUntil: null }, { merge: true });
+    }
+
+    // Créer un Custom Token Firebase Auth avec les custom claims complets
+    const customToken = await auth.createCustomToken(matchedUser.id, {
+      role: matchedUser.role,
+      outlets: matchedUser.accessibleRestaurantIds,
+      organizationId: matchedUser.organizationId,
+      active: true,
+    });
+
+    // Journal d'audit de sécurité
+    await db.collection('audit_logs').add({
+      action: 'Déverrouillage Terminal PIN',
+      module: 'Sécurité',
+      details: `${matchedUser.name} (${matchedUser.role}) a déverrouillé le terminal ${terminalId || 'Générique'} par code PIN serveur`,
+      userName: matchedUser.name,
+      userRole: matchedUser.role,
+      userId: matchedUser.id,
+      timestamp: FieldValue.serverTimestamp(),
+    });
+
+    return {
+      success: true,
+      customToken,
+      user: matchedUser,
+    };
+  }
+
+  // Échec : incrémenter les tentatives du terminal avec verrouillage progressif (5: 1m, 6: 5m, 7+: 15m)
+  const currentFails = lockSnap.exists ? (lockSnap.data()?.failedAttempts || 0) + 1 : 1;
+  let lockoutMs = 0;
+  if (currentFails >= 7) {
+    lockoutMs = 15 * 60 * 1000; // 15 minutes
+  } else if (currentFails >= 6) {
+    lockoutMs = 5 * 60 * 1000; // 5 minutes
+  } else if (currentFails >= 5) {
+    lockoutMs = 1 * 60 * 1000; // 1 minute
+  }
+
+  await lockRef.set(
+    {
+      failedAttempts: currentFails,
+      lockoutUntil: lockoutMs > 0 ? new Date(Date.now() + lockoutMs) : null,
+      lastFailedAt: FieldValue.serverTimestamp(),
+      terminalId: terminalId || null,
+    },
+    { merge: true }
+  );
+
+  await db.collection('audit_logs').add({
+    action: 'Échec Déverrouillage PIN',
+    module: 'Sécurité',
+    details: `Tentative de code PIN erronée sur le terminal ${terminalId || 'Générique'} (Échec ${currentFails})`,
+    timestamp: FieldValue.serverTimestamp(),
+  });
+
+  if (lockoutMs > 0) {
+    const minutes = Math.ceil(lockoutMs / 60000);
+    throw new HttpsError(
+      'resource-exhausted',
+      `Trop de tentatives erronées. Terminal bloqué pendant ${minutes} minute(s).`
+    );
+  }
+
+  const remaining = 5 - currentFails;
+  throw new HttpsError(
+    'permission-denied',
+    remaining > 0
+      ? `Code PIN incorrect. ${remaining} tentative(s) restante(s).`
+      : 'Code PIN incorrect.'
+  );
 }

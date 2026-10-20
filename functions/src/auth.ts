@@ -50,8 +50,8 @@ export function assertRoles(caller: CallerContext, allowedRoles: UserRole[]): vo
     );
   }
 
-  if (caller.role === 'direction') {
-    return; // La Direction a un accès universel
+  if (caller.role === 'superadmin' || caller.role === 'direction') {
+    return; // Superadmin et Direction possèdent un accès universel
   }
 
   if (!allowedRoles.includes(caller.role)) {

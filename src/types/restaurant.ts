@@ -1,4 +1,5 @@
 export type UserRole =
+  | 'superadmin'
   | 'direction'
   | 'manager'
   | 'serveur'
@@ -52,6 +53,7 @@ export interface UserProfile {
   avatar?: string;
   phone?: string;
   active: boolean;
+  mustChangePassword?: boolean;
   pinCode?: string;
   badgeNumber?: string;
   permissions?: string[];

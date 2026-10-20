@@ -5,6 +5,7 @@ import { getCallerContext, assertRoles, consumeSupervisorToken } from '../auth.j
 import { CreateOrderRequest, AddItemsToOrderRequest, UserRole } from '../types.js';
 
 const ROLE_MAX_DISCOUNT: Record<UserRole, number> = {
+  superadmin: 100,
   direction: 100,
   finance: 20,
   manager: 15,

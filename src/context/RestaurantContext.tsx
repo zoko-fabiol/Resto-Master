@@ -498,8 +498,8 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   );
   const [configHistory, setConfigHistory] = useState<ConfigurationHistoryItem[]>(() => loadState('configHistory', INITIAL_CONFIG_HISTORY));
   const [configAlerts, setConfigAlerts] = useState<ConfigurationAlert[]>(() => loadState('configAlerts', CONFIGURATION_ALERTS_INITIAL));
-  const [selectedOutletId, setSelectedOutletId] = useState<string>(() => loadState('selectedOutletId', 'out-1'));
-  const [selectedTerminalId, setSelectedTerminalId] = useState<string>(() => loadState('selectedTerminalId', 'term-1'));
+  const [selectedOutletId, setSelectedOutletId] = useState<string>(() => loadState('selectedOutletId', ''));
+  const [selectedTerminalId, setSelectedTerminalId] = useState<string>(() => loadState('selectedTerminalId', ''));
   const [adminDisplayMode, setAdminDisplayMode] = useState<'simple' | 'avance'>('avance');
 
   // Architecture Multi-Restaurants & Organisation
@@ -507,7 +507,7 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const [zones, setZones] = useState<Zone[]>(() => loadState('zones', INITIAL_ZONES));
   const [cashRegisters, setCashRegisters] = useState<CashRegister[]>(() => loadState('cashRegisters', INITIAL_CASH_REGISTERS));
   const [activeZoneId, setActiveZoneId] = useState<string | 'all'>(() => loadState('activeZoneId', 'all'));
-  const [activeCashRegisterId, setActiveCashRegisterId] = useState<string>(() => loadState('activeCashRegisterId', 'reg-1'));
+  const [activeCashRegisterId, setActiveCashRegisterId] = useState<string>(() => loadState('activeCashRegisterId', ''));
 
   // Restaurant Actif & Données Filtrées
   const activeRestaurant = useMemo(() => {

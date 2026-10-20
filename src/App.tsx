@@ -41,12 +41,15 @@ const CustomerOrderDisplayView = lazy(() => import('./components/kds/CustomerOrd
 import { CameroonComplianceModal } from './components/compliance/CameroonComplianceModal';
 import { DevicePairingScreen } from './components/auth/DevicePairingScreen';
 import { PinLockScreen } from './components/auth/PinLockScreen';
+import { LoginScreen } from './components/auth/LoginScreen';
+import { ChangePasswordModal } from './components/auth/ChangePasswordModal';
 import { UserGuideModal } from './components/common/UserGuideModal';
 import { PaymentModal } from './components/pos/PaymentModal';
 import { UserRole, UserProfile } from './types/restaurant';
-import { ShieldAlert } from 'lucide-react';
+import { ShieldAlert, Utensils } from 'lucide-react';
 
 export const ROLE_DEFAULT_TAB: Record<UserRole, string> = {
+  superadmin: 'settings',
   direction: 'dashboard',
   manager: 'dashboard',
   serveur: 'tables',
@@ -80,7 +83,16 @@ const TAB_FEATURE_MAP: Record<string, string> = {
 const AppContent: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const { canAccess, currentUser, isSessionLocked, setCurrentUser, lockSession, logout } = useAuth();
+  const {
+    canAccess,
+    currentUser,
+    firebaseAuthUser,
+    isAuthLoading,
+    isSessionLocked,
+    setCurrentUser,
+    lockSession,
+    logout,
+  } = useAuth();
   const {
     seatReservation,
     isFeatureEnabled,
@@ -221,6 +233,56 @@ const AppContent: React.FC = () => {
     navigate(`/${tab}`);
   };
 
+  // 0. Chargement de session initial
+  if (isAuthLoading) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center text-amber-500">
+        <div className="w-12 h-12 rounded-2xl bg-amber-500/20 text-amber-400 flex items-center justify-center animate-pulse mb-3">
+          <Utensils className="w-6 h-6" />
+        </div>
+        <p className="text-xs text-slate-400 font-medium">Chargement de RestoMaster OS...</p>
+      </div>
+    );
+  }
+
+  // 1. Gate d'authentification stricte : si non connecté -> LoginScreen (B1)
+  if (!firebaseAuthUser) {
+    return <LoginScreen />;
+  }
+
+  // 2. Changement de mot de passe obligatoire au premier lancement (B9)
+  if (currentUser.mustChangePassword) {
+    return (
+      <ChangePasswordModal
+        isOpen={true}
+        onSuccess={() => {}}
+      />
+    );
+  }
+
+  // 3. Compte connecté mais inactif ou sans rôle attribué (B1)
+  if (!currentUser.active || currentUser.role === 'aucun') {
+    return (
+      <div className="min-h-screen bg-slate-950 flex flex-col justify-center items-center p-4">
+        <div className="flex flex-col items-center justify-center text-center p-8 bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl max-w-lg w-full">
+          <div className="w-16 h-16 rounded-2xl bg-amber-500/20 text-amber-400 flex items-center justify-center mb-4">
+            <ShieldAlert className="w-8 h-8" />
+          </div>
+          <h2 className="text-xl font-bold text-white mb-2">Compte en attente d'activation</h2>
+          <p className="text-xs text-slate-400 mb-6 leading-relaxed">
+            Votre compte <span className="text-slate-200 font-semibold">{currentUser.email}</span> est authentifié mais n'a aucun rôle actif attribué. Veuillez vous adresser à la direction ou au responsable d'établissement pour activer vos privilèges.
+          </p>
+          <button
+            onClick={() => logout()}
+            className="px-6 py-2.5 bg-slate-800 hover:bg-slate-700 active:scale-95 text-white rounded-xl text-xs font-semibold transition cursor-pointer"
+          >
+            Se déconnecter
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   // Mode Écran TV Retrait Client (QSR / Fast-Food)
   if (currentDeviceProfile?.type === 'ecran_retrait' || isDisplayTvOpen) {
     return (
@@ -296,75 +358,57 @@ const AppContent: React.FC = () => {
 
         {/* Dynamic View Body avec padding inférieur sur mobile pour BottomNav */}
         <main className="flex-1 p-3 sm:p-5 lg:p-7 max-w-7xl w-full mx-auto min-w-0 pb-20 lg:pb-7">
-          {!currentUser.active || currentUser.role === 'aucun' ? (
-            <div className="flex flex-col items-center justify-center min-h-[50vh] text-center p-8 bg-white rounded-2xl border border-slate-200 shadow-sm max-w-lg mx-auto my-12">
-              <div className="w-16 h-16 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center mb-4">
-                <ShieldAlert className="w-8 h-8" />
-              </div>
-              <h2 className="text-xl font-bold text-slate-800 mb-2">Compte en attente d'activation</h2>
-              <p className="text-sm text-slate-600 mb-6">
-                Votre profil utilisateur n'a aucun rôle actif attribué. Veuillez vous adresser à la direction ou au responsable d'établissement pour activer vos privilèges.
-              </p>
-              <button
-                onClick={() => logout()}
-                className="px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-sm font-semibold transition"
-              >
-                Se déconnecter
-              </button>
-            </div>
-          ) : (
-            <ModuleErrorBoundary key={currentTab} moduleName={currentTab}>
-              <Suspense fallback={<ModuleSkeleton moduleName={currentTab} />}>
-                {currentTab === 'dashboard' && <DashboardView navigateTo={handleSelectTab} />}
-                {currentTab === 'tables' && (
-                  <TablesView
-                    onOpenOrder={handleOpenOrderOnTable}
-                    onPayOrder={handleOpenPayment}
-                    onOpenKiosk={(tId) => {
-                      setIsTabletKioskUnlocked(false);
-                      setKioskTableId(tId);
-                      navigate('/kiosk');
-                    }}
-                  />
-                )}
-                {currentTab === 'pos' && (
-                  <PosView
-                    initialTableId={posInitialTableId}
-                    onOpenPayment={handleOpenPayment}
-                    mode="restaurant"
-                  />
-                )}
-                {currentTab === 'bar_pos' && (
-                  <PosView
-                    initialTableId={posInitialTableId}
-                    onOpenPayment={handleOpenPayment}
-                    mode="bar"
-                  />
-                )}
-                {currentTab === 'kitchen_kds' && <KitchenKdsView />}
-                {currentTab === 'bar_kds' && <BarKdsView />}
-                {currentTab === 'reservations' && (
-                  <ReservationsView onSeatGuest={handleSeatGuestFromReservation} />
-                )}
-                {currentTab === 'events' && <EventsView />}
-                {currentTab === 'delivery' && <DeliveryView />}
-                {currentTab === 'menu' && <MenuView />}
-                {currentTab === 'stock' && <StockView />}
-                {currentTab === 'purchases' && <PurchasesView />}
-                {currentTab === 'hygiene' && <HygieneView />}
-                {currentTab === 'caisse' && <CashRegisterView onOpenPayment={handleOpenPayment} />}
-                {currentTab === 'main_courante' && <MainCouranteView />}
-                {currentTab === 'fiscal' && <FiscalCenterView />}
-                {currentTab === 'finance' && <FinanceView />}
-                {currentTab === 'clients' && <ClientsView />}
-                {currentTab === 'staff' && <StaffView />}
-                {currentTab === 'documents' && <DocumentsView />}
-                {currentTab === 'reports' && <ReportsView />}
-                {currentTab === 'audit' && <AuditView />}
-                {currentTab === 'settings' && <AdminCenterView />}
-              </Suspense>
-            </ModuleErrorBoundary>
-          )}
+          <ModuleErrorBoundary key={currentTab} moduleName={currentTab}>
+            <Suspense fallback={<ModuleSkeleton moduleName={currentTab} />}>
+              {currentTab === 'dashboard' && <DashboardView navigateTo={handleSelectTab} />}
+              {currentTab === 'tables' && (
+                <TablesView
+                  onOpenOrder={handleOpenOrderOnTable}
+                  onPayOrder={handleOpenPayment}
+                  onOpenKiosk={(tId) => {
+                    setIsTabletKioskUnlocked(false);
+                    setKioskTableId(tId);
+                    navigate('/kiosk');
+                  }}
+                />
+              )}
+              {currentTab === 'pos' && (
+                <PosView
+                  initialTableId={posInitialTableId}
+                  onOpenPayment={handleOpenPayment}
+                  mode="restaurant"
+                />
+              )}
+              {currentTab === 'bar_pos' && (
+                <PosView
+                  initialTableId={posInitialTableId}
+                  onOpenPayment={handleOpenPayment}
+                  mode="bar"
+                />
+              )}
+              {currentTab === 'kitchen_kds' && <KitchenKdsView />}
+              {currentTab === 'bar_kds' && <BarKdsView />}
+              {currentTab === 'reservations' && (
+                <ReservationsView onSeatGuest={handleSeatGuestFromReservation} />
+              )}
+              {currentTab === 'events' && <EventsView />}
+              {currentTab === 'delivery' && <DeliveryView />}
+              {currentTab === 'menu' && <MenuView />}
+              {currentTab === 'stock' && <StockView />}
+              {currentTab === 'purchases' && <PurchasesView />}
+              {currentTab === 'hygiene' && <HygieneView />}
+              {currentTab === 'caisse' && <CashRegisterView onOpenPayment={handleOpenPayment} />}
+              {currentTab === 'main_courante' && <MainCouranteView />}
+              {currentTab === 'fiscal' && <FiscalCenterView />}
+              {currentTab === 'finance' && <FinanceView />}
+              {currentTab === 'clients' && <ClientsView />}
+              {currentTab === 'staff' && <StaffView />}
+              {currentTab === 'documents' && <DocumentsView />}
+              {currentTab === 'reports' && <ReportsView />}
+              {currentTab === 'audit' && <AuditView />}
+              {currentTab === 'settings' && <AdminCenterView />}
+            </Suspense>
+          </ModuleErrorBoundary>
         </main>
       </div>
 

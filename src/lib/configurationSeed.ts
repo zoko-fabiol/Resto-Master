@@ -870,6 +870,15 @@ export const INITIAL_FEATURES: FeatureItem[] = [
 ];
 
 export const INITIAL_ROLE_LIMITS: Record<UserRole, RoleLimits> = {
+  superadmin: {
+    maxDiscountPercent: 100,
+    maxRefundAmount: 50000000,
+    maxExpenseAmount: 100000000,
+    requiresApprovalForDiscount: false,
+    requiresApprovalForRefund: false,
+    requiresApprovalForCancel: false,
+    requiresApprovalForNegativePrice: false,
+  },
   direction: {
     maxDiscountPercent: 100,
     maxRefundAmount: 5000000,

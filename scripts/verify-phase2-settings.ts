@@ -134,6 +134,7 @@ const initialSettings: RestaurantSettings = {
   invoicePrefix: '2026-RESTO-001',
   nextInvoiceSequence: 1,
   maxDiscountByRole: {
+    superadmin: 100,
     direction: 100,
     manager: 15,
     comptable: 10,

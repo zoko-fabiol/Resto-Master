@@ -21,7 +21,7 @@ export const tablesFirestoreService = {
       const payload = JSON.parse(
         JSON.stringify({
           ...table,
-          restaurantId: table.restaurantId || 'out-1',
+          restaurantId: table.restaurantId || '',
           updatedAt: new Date().toISOString(),
         })
       );

@@ -50,7 +50,7 @@ export class CloudFunctionsService {
   }) {
     const fn = httpsCallable(functions, 'createUser');
     const res = await fn(data);
-    return res.data as { success: boolean; userId: string };
+    return res.data as { success: boolean; userId: string; temporaryPassword?: string };
   }
 
   async setUserRole(data: {
@@ -76,6 +76,23 @@ export class CloudFunctionsService {
     const fn = httpsCallable(functions, 'verifyPin');
     const res = await fn({ pin, userId });
     return res.data as { success: boolean };
+  }
+
+  async unlockWithPin(pin: string, terminalId?: string) {
+    const fn = httpsCallable(functions, 'unlockWithPin');
+    const res = await fn({ pin, terminalId });
+    return res.data as {
+      success: boolean;
+      customToken: string;
+      user: {
+        id: string;
+        email: string;
+        name: string;
+        role: UserRole;
+        accessibleRestaurantIds: string[];
+        organizationId: string;
+      };
+    };
   }
 
   async verifySupervisor(pin: string, action: string, entityId?: string) {

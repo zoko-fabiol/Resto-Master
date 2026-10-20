@@ -7,6 +7,8 @@ interface SupervisorPinModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: (supervisor?: any) => void;
+  action?: string;
+  entityId?: string;
   title?: string;
   description?: string;
 }
@@ -15,6 +17,8 @@ export const SupervisorPinModal: React.FC<SupervisorPinModalProps> = ({
   isOpen,
   onClose,
   onSuccess,
+  action = 'SUPERVISOR_ACTION',
+  entityId,
   title = 'Autorisation Superviseur / Admin requise',
   description = 'Veuillez saisir votre Code PIN Manager ou Direction pour autoriser cette action.',
 }) => {
@@ -24,24 +28,26 @@ export const SupervisorPinModal: React.FC<SupervisorPinModalProps> = ({
   const [pin, setPin] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
   const [isShaking, setIsShaking] = useState(false);
+  const [isVerifying, setIsVerifying] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
       setPin('');
       setErrorMsg('');
       setIsShaking(false);
+      setIsVerifying(false);
     }
   }, [isOpen]);
 
   useEffect(() => {
-    if (pin.length === 4) {
+    if (pin.length === 4 && !isVerifying) {
       handleValidate(pin);
     }
-  }, [pin]);
+  }, [pin, isVerifying]);
 
   // Support complet du clavier physique (chiffres 0-9, pavé numérique, Backspace, Escape, Suppr)
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen || isVerifying) return;
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (/^[0-9]$/.test(e.key)) {
@@ -61,42 +67,66 @@ export const SupervisorPinModal: React.FC<SupervisorPinModalProps> = ({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, pin]);
+  }, [isOpen, isVerifying, pin]);
 
   if (!isOpen) return null;
 
   const handleKeyPress = (num: string) => {
-    if (pin.length < 4) {
+    if (pin.length < 4 && !isVerifying) {
       setPin((prev) => prev + num);
       setErrorMsg('');
     }
   };
 
   const handleBackspace = () => {
-    setPin((prev) => prev.slice(0, -1));
-    setErrorMsg('');
+    if (!isVerifying) {
+      setPin((prev) => prev.slice(0, -1));
+      setErrorMsg('');
+    }
   };
 
   const handleClear = () => {
-    setPin('');
-    setErrorMsg('');
+    if (!isVerifying) {
+      setPin('');
+      setErrorMsg('');
+    }
   };
 
-  const handleValidate = (pinToTest: string) => {
-    const res = verifySupervisorPin(pinToTest);
-    if (res.success) {
-      playAudioChime('success');
-      showToast(`Autorisation accordée par ${res.user?.name || 'Superviseur'}`, 'success');
-      onSuccess(res.user);
-      onClose();
-    } else {
+  const handleValidate = async (pinToTest: string) => {
+    setIsVerifying(true);
+    setErrorMsg('');
+
+    try {
+      // Vérification serveur sécurisée avec émission d'un jeton à usage unique
+      const res = await verifySupervisorPin(pinToTest, action, entityId);
+      if (res.success && res.supervisorToken) {
+        playAudioChime('success');
+        showToast(`Autorisation accordée par ${res.supervisorName || 'Superviseur'}`, 'success');
+        onSuccess({
+          supervisorToken: res.supervisorToken,
+          supervisorName: res.supervisorName,
+          supervisorRole: res.supervisorRole,
+        });
+        onClose();
+      } else {
+        playAudioChime('error');
+        setIsShaking(true);
+        setErrorMsg(res.message || 'Code PIN Superviseur incorrect ou droits insuffisants.');
+        setTimeout(() => {
+          setIsShaking(false);
+          setPin('');
+        }, 500);
+      }
+    } catch (err: any) {
       playAudioChime('error');
       setIsShaking(true);
-      setErrorMsg('Code PIN Superviseur incorrect ou droits insuffisants.');
+      setErrorMsg(err?.message || 'Erreur lors de la vérification superviseur.');
       setTimeout(() => {
         setIsShaking(false);
         setPin('');
       }, 500);
+    } finally {
+      setIsVerifying(false);
     }
   };
 
