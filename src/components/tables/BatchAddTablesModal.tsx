@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { RestaurantTable, TableShape, Zone } from '../../types/restaurant';
 import { X, Layers, Grid, Hash, Users, ArrowRight } from 'lucide-react';
+import { computeBatchTablePositions } from './floorPlanPlacement';
 
 interface BatchAddTablesModalProps {
   zones: Zone[];
@@ -42,46 +43,22 @@ export const BatchAddTablesModal: React.FC<BatchAddTablesModalProps> = ({
     const targetZoneObj = zones.find((z) => z.id === targetZoneId);
     const zoneName = targetZoneObj?.name || defaultZone?.name || 'Salle Principale';
 
-    const newTables: Omit<RestaurantTable, 'id'>[] = [];
-    const spacingX = shape === 'rectangulaire' ? 160 : 130;
-    const spacingY = 130;
-    const originX = 140;
-    const originY = 140;
-
-    let columns = count;
-    if (layout === 'grille') {
-      columns = count <= 4 ? 2 : count <= 8 ? 4 : 5;
-    } else if (layout === 'colonne') {
-      columns = 1;
-    }
-
-    const defaultWidth = shape === 'rectangulaire' ? 140 : 100;
-    const defaultHeight = 100;
-
-    for (let i = 0; i < count; i++) {
-      const colIndex = i % columns;
-      const rowIndex = Math.floor(i / columns);
-
-      const posX = Math.min(1080, originX + colIndex * spacingX);
-      const posY = Math.min(680, originY + rowIndex * spacingY);
-
-      const tableNumberStr = `${prefix}${startNumber + i}`;
-
-      newTables.push({
-        number: tableNumberStr,
-        capacity,
-        shape,
-        status: 'libre',
-        zoneId: targetZoneId,
-        zone: zoneName,
-        x: posX,
-        y: posY,
-        width: defaultWidth,
-        height: defaultHeight,
-        rotation: 0,
-        active: true,
-      });
-    }
+    const positions = computeBatchTablePositions(count, layout, shape);
+    const newTables: Omit<RestaurantTable, 'id'>[] = positions.map((pos, idx) => ({
+      number: `${prefix}${startNumber + idx}`,
+      capacity,
+      shape,
+      status: 'libre',
+      zoneId: targetZoneId,
+      zone: zoneName,
+      x: pos.x,
+      y: pos.y,
+      width: pos.width,
+      height: pos.height,
+      rotation: 0,
+      active: true,
+      coordVersion: 2,
+    }));
 
     onAddBatch(newTables);
     onClose();

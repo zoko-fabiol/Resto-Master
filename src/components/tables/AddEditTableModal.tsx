@@ -1,10 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { RestaurantTable, TableShape, Zone } from '../../types/restaurant';
-import { X, Trash2, Hash, Users, Layers, Layout } from 'lucide-react';
+import { X, Trash2, Hash, Users, Layers, Layout, Compass, Move } from 'lucide-react';
 import { useConfirm } from '../ui/ConfirmDialog';
+import { findFirstAvailableTablePosition } from './floorPlanPlacement';
 
 interface AddEditTableModalProps {
   initialTable?: RestaurantTable | null;
+  existingTables?: RestaurantTable[];
   zones: Zone[];
   activeZoneId: string | 'all';
   restaurantId: string;
@@ -15,6 +17,7 @@ interface AddEditTableModalProps {
 
 export const AddEditTableModal: React.FC<AddEditTableModalProps> = ({
   initialTable,
+  existingTables = [],
   zones,
   activeZoneId,
   restaurantId,
@@ -28,10 +31,20 @@ export const AddEditTableModal: React.FC<AddEditTableModalProps> = ({
   const defaultZoneId =
     initialTable?.zoneId || (activeZoneId !== 'all' ? activeZoneId : zones[0]?.id || 'salle-1');
 
+  // Détermination de la position intelligente initiale (D-08)
+  const initialPos = useMemo(() => {
+    if (initialTable && initialTable.x !== undefined && initialTable.y !== undefined) {
+      return { x: initialTable.x, y: initialTable.y };
+    }
+    return findFirstAvailableTablePosition(existingTables, 100, 100);
+  }, [initialTable, existingTables]);
+
   const [number, setNumber] = useState(initialTable?.number || '');
   const [capacity, setCapacity] = useState(initialTable?.capacity || 4);
   const [shape, setShape] = useState<TableShape>(initialTable?.shape || 'carree');
   const [zoneId, setZoneId] = useState(defaultZoneId);
+  const [x, setX] = useState<number>(initialPos.x);
+  const [y, setY] = useState<number>(initialPos.y);
   const [width, setWidth] = useState(
     initialTable?.width || (initialTable?.shape === 'rectangulaire' ? 140 : 100)
   );
@@ -63,13 +76,14 @@ export const AddEditTableModal: React.FC<AddEditTableModalProps> = ({
       shape,
       zoneId,
       zone: zoneName,
-      width,
-      height,
-      rotation,
+      x: Math.round(Number(x) || 100),
+      y: Math.round(Number(y) || 100),
+      width: Math.max(40, Math.round(Number(width) || 100)),
+      height: Math.max(40, Math.round(Number(height) || 100)),
+      rotation: ((Math.round(Number(rotation) || 0) % 360) + 360) % 360,
       status: initialTable?.status || 'libre',
       active: true,
-      x: initialTable?.x ?? 200,
-      y: initialTable?.y ?? 200,
+      coordVersion: 2,
     });
     onClose();
   };
@@ -99,7 +113,7 @@ export const AddEditTableModal: React.FC<AddEditTableModalProps> = ({
         </div>
 
         {/* Form Body */}
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+        <form onSubmit={handleSubmit} className="p-6 space-y-4 max-h-[80vh] overflow-y-auto">
           <div>
             <label className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
               <Hash className="w-3.5 h-3.5 text-amber-600" />
@@ -127,7 +141,7 @@ export const AddEditTableModal: React.FC<AddEditTableModalProps> = ({
                 max="50"
                 value={capacity}
                 onChange={(e) => setCapacity(Math.max(1, parseInt(e.target.value, 10) || 2))}
-                className="w-full text-xs font-bold border border-slate-200 rounded-xl px-3 py-2.5 mt-1 focus:ring-2 focus:ring-amber-500 focus:outline-hidden"
+                className="w-full text-xs font-bold border border-slate-200 rounded-xl px-3 py-2.5 mt-1 focus:ring-2 focus:ring-amber-500 focus:outline-hidden tabular-nums"
               />
             </div>
             <div>
@@ -163,48 +177,100 @@ export const AddEditTableModal: React.FC<AddEditTableModalProps> = ({
             </select>
           </div>
 
+          {/* Coordonnées spatiales X / Y (Section 2.3) */}
+          <div className="bg-slate-50 p-3 rounded-2xl border border-slate-200 space-y-3">
+            <div className="flex items-center gap-1.5 text-slate-700 font-bold text-xs">
+              <Move className="w-3.5 h-3.5 text-amber-600" />
+              <span>Positionnement spatial (Unités 1200 × 800)</span>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-semibold text-slate-600">Position X (px)</label>
+                <input
+                  type="number"
+                  min="30"
+                  max="1170"
+                  step="10"
+                  value={x}
+                  onChange={(e) => setX(parseInt(e.target.value, 10) || 100)}
+                  className="w-full text-xs font-bold border border-slate-200 rounded-xl px-3 py-2 mt-1 bg-white focus:ring-2 focus:ring-amber-500 focus:outline-hidden tabular-nums"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-slate-600">Position Y (px)</label>
+                <input
+                  type="number"
+                  min="30"
+                  max="770"
+                  step="10"
+                  value={y}
+                  onChange={(e) => setY(parseInt(e.target.value, 10) || 100)}
+                  className="w-full text-xs font-bold border border-slate-200 rounded-xl px-3 py-2 mt-1 bg-white focus:ring-2 focus:ring-amber-500 focus:outline-hidden tabular-nums"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Dimensions et Angle (Section 2.3) */}
           <div className="grid grid-cols-3 gap-3">
             <div>
               <label className="text-xs font-semibold text-slate-700">Largeur (px)</label>
               <input
                 type="number"
-                min="60"
-                max="300"
+                min="40"
+                max="400"
                 step="10"
                 value={width}
-                onChange={(e) => setWidth(Math.max(60, parseInt(e.target.value, 10) || 100))}
-                className="w-full text-xs font-bold border border-slate-200 rounded-xl px-3 py-2 mt-1 focus:ring-2 focus:ring-amber-500 focus:outline-hidden"
+                onChange={(e) => setWidth(Math.max(40, parseInt(e.target.value, 10) || 100))}
+                className="w-full text-xs font-bold border border-slate-200 rounded-xl px-3 py-2 mt-1 focus:ring-2 focus:ring-amber-500 focus:outline-hidden tabular-nums"
               />
             </div>
             <div>
               <label className="text-xs font-semibold text-slate-700">Hauteur (px)</label>
               <input
                 type="number"
-                min="60"
-                max="300"
+                min="40"
+                max="400"
                 step="10"
                 value={height}
-                onChange={(e) => setHeight(Math.max(60, parseInt(e.target.value, 10) || 100))}
-                className="w-full text-xs font-bold border border-slate-200 rounded-xl px-3 py-2 mt-1 focus:ring-2 focus:ring-amber-500 focus:outline-hidden"
+                onChange={(e) => setHeight(Math.max(40, parseInt(e.target.value, 10) || 100))}
+                className="w-full text-xs font-bold border border-slate-200 rounded-xl px-3 py-2 mt-1 focus:ring-2 focus:ring-amber-500 focus:outline-hidden tabular-nums"
               />
             </div>
             <div>
-              <label className="text-xs font-semibold text-slate-700">Rotation</label>
-              <select
+              <label className="text-xs font-semibold text-slate-700 flex items-center gap-1">
+                <Compass className="w-3 h-3 text-amber-600" />
+                <span>Angle (°)</span>
+              </label>
+              <input
+                type="number"
+                min="0"
+                max="359"
+                step="15"
                 value={rotation}
-                onChange={(e) => setRotation(parseInt(e.target.value, 10))}
-                className="w-full text-xs font-bold border border-slate-200 rounded-xl px-3 py-2 mt-1 bg-white focus:ring-2 focus:ring-amber-500 focus:outline-hidden"
-              >
-                <option value="0">0°</option>
-                <option value="45">45°</option>
-                <option value="90">90°</option>
-                <option value="135">135°</option>
-                <option value="180">180°</option>
-                <option value="225">225°</option>
-                <option value="270">270°</option>
-                <option value="315">315°</option>
-              </select>
+                onChange={(e) => setRotation(parseInt(e.target.value, 10) || 0)}
+                className="w-full text-xs font-bold border border-slate-200 rounded-xl px-3 py-2 mt-1 focus:ring-2 focus:ring-amber-500 focus:outline-hidden tabular-nums"
+              />
             </div>
+          </div>
+
+          {/* Boutons d'angles rapides */}
+          <div className="flex items-center gap-1.5 pt-1">
+            <span className="text-[11px] font-medium text-slate-500">Angles rapides :</span>
+            {[0, 45, 90, 180, 270].map((deg) => (
+              <button
+                key={deg}
+                type="button"
+                onClick={() => setRotation(deg)}
+                className={`px-2 py-0.5 rounded-lg text-xs font-semibold transition-colors ${
+                  rotation === deg
+                    ? 'bg-amber-600 text-white'
+                    : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                }`}
+              >
+                {deg}°
+              </button>
+            ))}
           </div>
 
           {/* Footer actions */}

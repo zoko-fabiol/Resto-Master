@@ -930,6 +930,7 @@ export const TablesView: React.FC<TablesViewProps> = ({ onOpenOrder, onPayOrder,
       {editTableModal && (
         <AddEditTableModal
           initialTable={editTableModal}
+          existingTables={currentTables}
           zones={zones}
           activeZoneId={selectedZoneId}
           restaurantId={activeRestaurant?.id || ''}
@@ -963,6 +964,7 @@ export const TablesView: React.FC<TablesViewProps> = ({ onOpenOrder, onPayOrder,
       {/* ADD TABLE MODAL */}
       {showAddTableModal && (
         <AddEditTableModal
+          existingTables={currentTables}
           zones={zones}
           activeZoneId={selectedZoneId}
           restaurantId={activeRestaurant?.id || ''}
