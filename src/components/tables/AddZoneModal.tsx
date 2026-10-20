@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Zone, ZoneType } from '../../types/restaurant';
-import { X, Layers, Sparkles } from 'lucide-react';
+import { X, Layers } from 'lucide-react';
 
 interface AddZoneModalProps {
   restaurantId: string;

@@ -7,7 +7,6 @@ import {
   KeyRound,
   CheckCircle2,
   AlertCircle,
-  Sparkles,
   ArrowRight,
   Tv,
   Tablet,

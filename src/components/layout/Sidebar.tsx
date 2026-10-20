@@ -23,7 +23,7 @@ import {
   X,
   FileSpreadsheet,
   Bike,
-  Sparkles,
+  PartyPopper,
   Thermometer,
   ShieldCheck,
   ChevronLeft,
@@ -167,7 +167,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {
           id: 'events',
           label: 'Banquets & Traiteur',
-          icon: Sparkles,
+          icon: PartyPopper,
           badge: 'Catering',
           badgeColor: 'bg-purple-500/20 text-purple-400 font-bold',
           featureKey: 'events_banquets',

@@ -27,7 +27,7 @@ import {
   Plus,
   Search,
   ExternalLink,
-  Sparkles,
+  KeyRound,
   Smartphone,
   Check,
   X,
@@ -1048,7 +1048,7 @@ export const UserAccountsSection: React.FC = () => {
                       onClick={() => setFormData((prev) => ({ ...prev, pinCode: generateRandomPin() }))}
                       className="text-[10px] text-amber-700 hover:text-amber-800 font-bold flex items-center gap-1 hover:underline cursor-pointer"
                     >
-                      <Sparkles className="w-3 h-3 text-amber-600" />
+                      <KeyRound className="w-3 h-3 text-amber-600" />
                       <span>Générer un PIN</span>
                     </button>
                   </div>
@@ -1316,7 +1316,7 @@ export const UserAccountsSection: React.FC = () => {
                                     : 'Définir comme onglet accordé en extra'
                                 }
                               >
-                                <Sparkles className="w-3.5 h-3.5" />
+                                <Key className="w-3.5 h-3.5" />
                               </button>
                             </div>
                           </div>
@@ -1401,7 +1401,7 @@ export const UserAccountsSection: React.FC = () => {
                     onClick={() => setQuickNewPin(generateRandomPin())}
                     className="text-[10px] text-amber-700 hover:text-amber-800 font-bold flex items-center gap-1 hover:underline cursor-pointer"
                   >
-                    <Sparkles className="w-3 h-3 text-amber-600" />
+                    <KeyRound className="w-3 h-3 text-amber-600" />
                     <span>Générer un PIN</span>
                   </button>
                 </div>

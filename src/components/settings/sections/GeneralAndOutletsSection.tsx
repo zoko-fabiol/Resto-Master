@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useRestaurant } from '../../../context/RestaurantContext';
-import { Building, Save, CheckCircle2, Plus, Phone, MapPin, Globe, Sparkles, X, Trash2 } from 'lucide-react';
+import { Building, Save, CheckCircle2, Plus, Phone, MapPin, Globe, X, Trash2 } from 'lucide-react';
 import { Outlet } from '../../../types/configuration';
 import { useConfirm } from '../../ui/ConfirmDialog';
 import { useToast } from '../../ui/Toast';

@@ -12,7 +12,6 @@ import {
   Scale,
   Printer,
   X,
-  Sparkles,
   Layers,
   ChevronRight,
 } from 'lucide-react';
@@ -137,7 +136,7 @@ export const CameroonComplianceModal: React.FC<CameroonComplianceModalProps> = (
           <div className="bg-slate-900 text-white rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
             <div className="space-y-1 text-center sm:text-left">
               <div className="text-xs font-bold text-amber-400 uppercase tracking-wider flex items-center gap-1.5 justify-center sm:justify-start">
-                <Sparkles className="w-4 h-4 text-amber-400" />
+                <ShieldCheck className="w-4 h-4 text-amber-400" />
                 <span>État de la Configuration Réglementaire</span>
               </div>
               <div className="text-base font-bold text-white">

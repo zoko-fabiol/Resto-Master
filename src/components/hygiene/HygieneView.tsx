@@ -5,7 +5,6 @@ import {
   Plus,
   CheckCircle2,
   AlertTriangle,
-  Sparkles,
   ClipboardCheck,
   Search,
   Flame,

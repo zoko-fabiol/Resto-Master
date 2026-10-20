@@ -11,7 +11,6 @@ import {
   Coins,
   Percent,
   Layers,
-  Sparkles,
   CheckCircle2,
   Smartphone,
   Upload,

@@ -21,7 +21,7 @@ import {
   ArrowDownRight,
   CheckCircle2,
   Clock,
-  Sparkles,
+  Star,
 } from 'lucide-react';
 
 export const ReportsView: React.FC = () => {
@@ -529,7 +529,7 @@ export const ReportsView: React.FC = () => {
                             <span>{dish.name}</span>
                             {idx < 3 && (
                               <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-amber-100 text-amber-900 border border-amber-200 flex items-center gap-0.5">
-                                <Sparkles className="w-2.5 h-2.5 text-amber-600" />
+                                <Star className="w-2.5 h-2.5 text-amber-600 fill-amber-500" />
                                 Star
                               </span>
                             )}

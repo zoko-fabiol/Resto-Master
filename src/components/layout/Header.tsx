@@ -32,7 +32,7 @@ import {
   WifiOff,
   RefreshCw,
   X,
-  Sparkles,
+  Rocket,
 } from 'lucide-react';
 import { ChangeMyPinModal } from '../auth/ChangeMyPinModal';
 
@@ -546,7 +546,7 @@ export const Header: React.FC<HeaderProps> = ({
                 </>
               ) : (
                 <>
-                  <Sparkles className="w-3.5 h-3.5 text-slate-950 shrink-0" aria-hidden="true" />
+                  <Rocket className="w-3.5 h-3.5 text-slate-950 shrink-0" aria-hidden="true" />
                   <span className="hidden sm:inline font-black">Mise en Service</span>
                 </>
               )}

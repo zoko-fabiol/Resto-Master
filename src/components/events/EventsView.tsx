@@ -7,7 +7,6 @@ import {
   Plus,
   Users,
   Clock,
-  Sparkles,
   Search,
   CheckCircle2,
   DollarSign,

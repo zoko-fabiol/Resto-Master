@@ -19,7 +19,6 @@ import {
   Printer,
   Receipt,
   FileText,
-  Sparkles,
   ArrowRight,
   Split,
   Layers,

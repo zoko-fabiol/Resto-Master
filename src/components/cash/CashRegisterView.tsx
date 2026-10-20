@@ -18,7 +18,6 @@ import {
   FileText,
   Calculator,
   RefreshCw,
-  Sparkles,
   Eye,
   EyeOff,
   ShieldAlert,

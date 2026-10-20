@@ -39,7 +39,7 @@ import {
   ChefHat,
   Check,
   Crown,
-  Sparkles,
+  Star,
 } from 'lucide-react';
 import { ModernRuleToggle } from './ModernRuleToggle';
 
@@ -818,7 +818,7 @@ export const HardwareAndSecuritySection: React.FC<Props> = ({ subTab }) => {
             <div>
               <div className="flex items-center justify-between gap-2 mb-1">
                 <h4 className="font-bold text-slate-900 text-sm flex items-center gap-1.5">
-                  {p.highlight && <Sparkles className="w-4 h-4 text-amber-600 shrink-0" />}
+                  {p.highlight && <Star className="w-4 h-4 text-amber-600 fill-amber-500 shrink-0" />}
                   <span>{p.title}</span>
                 </h4>
                 {p.badge && (

@@ -19,7 +19,6 @@ import {
   UploadCloud,
   Image as ImageIcon,
   Loader2,
-  Sparkles,
 } from 'lucide-react';
 
 export const MenuView: React.FC = () => {

@@ -25,7 +25,7 @@ import {
   X,
   ExternalLink,
   Crown,
-  Sparkles,
+  Rocket,
 } from 'lucide-react';
 import { useRestaurant } from '../../context/RestaurantContext';
 import { useAuth } from '../../context/AuthContext';
@@ -503,7 +503,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
         <div className="bg-gradient-to-r from-slate-950 via-slate-900 to-indigo-950 text-white px-6 py-5 flex items-center justify-between border-b border-slate-800 shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-amber-500 to-amber-300 text-slate-950 flex items-center justify-center shadow-lg shadow-amber-500/20 font-black">
-              <Sparkles className="w-6 h-6" />
+              <Rocket className="w-6 h-6" />
             </div>
             <div>
               <div className="flex items-center gap-2">

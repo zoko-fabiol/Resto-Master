@@ -18,7 +18,7 @@ import {
   Tag,
   AlertCircle,
   Clock,
-  Sparkles,
+  Flame,
   ShoppingBag,
   SlidersHorizontal,
   X,
@@ -799,7 +799,7 @@ export const PosView: React.FC<PosViewProps> = ({ initialTableId, onOpenPayment,
         {popularProducts.length > 0 && selectedCategory === 'all' && !searchQuery && (
           <div className="space-y-2">
             <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-amber-700">
-              <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+              <Flame className="w-3.5 h-3.5 text-amber-500" />
               <span>Plus Vendus & Favoris</span>
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">

@@ -326,7 +326,7 @@ export const TABLE_STATUS_MAP: Record<TableStatus, { label: string; badgeClass: 
     badgeClass: 'bg-indigo-100 text-indigo-800 border-indigo-200',
     borderClass: 'border-indigo-300 hover:border-indigo-500',
     bgClass: 'bg-indigo-50/50',
-    iconName: 'Sparkles',
+    iconName: 'UtensilsCrossed',
   },
   attente_paiement: {
     label: 'Attente paiement',
@@ -340,7 +340,7 @@ export const TABLE_STATUS_MAP: Record<TableStatus, { label: string; badgeClass: 
     badgeClass: 'bg-gray-100 text-gray-700 border-gray-200',
     borderClass: 'border-gray-300 hover:border-gray-400',
     bgClass: 'bg-gray-50/50',
-    iconName: 'Sparkles',
+    iconName: 'Brush',
   },
   hors_service: {
     label: 'Hors service',

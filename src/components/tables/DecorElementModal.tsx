@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { DecorElement, DecorType, Zone } from '../../types/restaurant';
-import { X, Trash2, Box, Sparkles } from 'lucide-react';
+import { X, Trash2, Box } from 'lucide-react';
 
 interface DecorElementModalProps {
   initialElement?: DecorElement | null;

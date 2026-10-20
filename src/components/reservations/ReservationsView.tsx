@@ -15,7 +15,7 @@ import {
   Search,
   Filter,
   X,
-  Sparkles,
+  Wand2,
 } from 'lucide-react';
 
 interface ReservationsViewProps {
@@ -418,7 +418,7 @@ export const ReservationsView: React.FC<ReservationsViewProps> = ({ onSeatGuest 
                     onClick={() => handleSuggestTable(guestCount)}
                     className="text-[11px] font-bold text-amber-600 hover:text-amber-700 flex items-center gap-1 hover:underline"
                   >
-                    <Sparkles className="w-3 h-3 text-amber-500" />
+                    <Wand2 className="w-3 h-3 text-amber-500" />
                     <span>Suggérer table adaptée ({guestCount}p)</span>
                   </button>
                 </div>

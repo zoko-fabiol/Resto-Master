@@ -15,7 +15,7 @@ import {
   Cake,
   MessageSquare,
   Crown,
-  Sparkles,
+  BadgePercent,
   Share2,
 } from 'lucide-react';
 import { ModernRuleToggle } from './ModernRuleToggle';
@@ -163,7 +163,7 @@ export const ClientsAndLoyaltySection: React.FC<Props> = ({ subTab }) => {
           key: 'loyalty_promotions',
           label: 'Promotions automatiques heures creuses',
           description: 'Remises tarifaires automatiques sur plages horaires définies',
-          icon: Sparkles,
+          icon: BadgePercent,
         },
         {
           key: 'loyalty_gift_cards',

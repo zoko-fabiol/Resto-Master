@@ -13,7 +13,6 @@ import {
   BarChart3,
   Printer,
   HelpCircle,
-  Sparkles,
   CheckCircle2,
   Phone,
   ShieldCheck,
@@ -42,7 +41,7 @@ export const UserGuideModal: React.FC<UserGuideModalProps> = ({
       num: 1,
       title: 'Bienvenue',
       roles: ['all', 'manager', 'serveur', 'caisse', 'cuisine'],
-      icon: Sparkles,
+      icon: BookOpen,
       content: (
         <div className="space-y-3 text-slate-700 text-xs sm:text-sm leading-relaxed">
           <p>

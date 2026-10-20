@@ -1,7 +1,7 @@
 import React from 'react';
 import { RestaurantTable, Order, RestaurantSettings } from '../../types/restaurant';
 import { formatCurrency, getMinutesElapsed } from '../../lib/utils';
-import { ShoppingBag, Sparkles, Send, CreditCard, Clock, Utensils } from 'lucide-react';
+import { ShoppingBag, CheckCircle2, Send, CreditCard, Clock, Utensils } from 'lucide-react';
 
 interface ActiveOrdersViewProps {
   tables: RestaurantTable[];
@@ -169,7 +169,7 @@ export const ActiveOrdersView: React.FC<ActiveOrdersViewProps> = ({
                       onClick={() => onMarkOrderServed(ord.id, table.id)}
                       className="py-1.5 px-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold flex items-center gap-1 shadow-xs cursor-pointer transition-colors"
                     >
-                      <Sparkles className="w-3.5 h-3.5" />
+                      <CheckCircle2 className="w-3.5 h-3.5" />
                       <span>Servie</span>
                     </button>
                   )}

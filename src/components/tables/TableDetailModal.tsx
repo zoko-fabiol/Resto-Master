@@ -6,7 +6,7 @@ import {
   ShoppingBag,
   Utensils,
   CreditCard,
-  Sparkles,
+  CheckCircle2,
   Send,
   UserCheck,
   GitMerge,
@@ -423,7 +423,7 @@ export const TableDetailModal: React.FC<TableDetailModalProps> = ({
               }}
               className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs"
             >
-              <Sparkles className="w-4 h-4" />
+              <CheckCircle2 className="w-4 h-4" />
               <span>Marquer Nettoyée & Prête</span>
             </button>
           ) : (

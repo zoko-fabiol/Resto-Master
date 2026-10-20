@@ -21,7 +21,6 @@ import {
   ChevronRight,
   CheckCheck,
   RefreshCw,
-  Sparkles,
   Printer,
   AlertOctagon,
   Ban,

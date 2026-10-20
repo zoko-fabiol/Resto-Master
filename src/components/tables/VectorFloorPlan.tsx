@@ -23,7 +23,6 @@ import {
   CreditCard,
   Utensils,
   CalendarDays,
-  Sparkles,
   Lock,
   Bell,
   GitMerge,

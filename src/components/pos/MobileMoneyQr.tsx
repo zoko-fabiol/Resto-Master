@@ -14,7 +14,7 @@ import {
   Save,
   CheckCircle2,
   Image as ImageIcon,
-  Sparkles,
+  HelpCircle,
   ExternalLink,
   ShieldCheck,
   RefreshCw,
@@ -389,7 +389,7 @@ export const MobileMoneyQr: React.FC<MobileMoneyQrProps> = ({
         <div className="flex-1 space-y-2.5 text-slate-700 w-full">
           {/* Headline */}
           <div className="font-extrabold text-slate-900 text-xs flex items-center gap-1.5">
-            <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+            <HelpCircle className="w-3.5 h-3.5 text-amber-500" />
             <span>Comment le client procède au règlement :</span>
           </div>
 

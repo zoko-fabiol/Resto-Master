@@ -14,7 +14,8 @@ import {
   Landmark,
   FileCheck,
   Printer,
-  Sparkles,
+  FileText,
+  Zap,
   ListOrdered,
   FileSignature,
   Percent,
@@ -358,7 +359,7 @@ export const FiscalBillingPaymentsSection: React.FC<Props> = ({ subTab }) => {
         key: 'bill_custom_templates',
         label: 'Modèles de factures personnalisées',
         description: 'En-tête officiel avec Logo, NIU, RCCM, Ville et Slogan',
-        icon: Sparkles,
+        icon: FileText,
       },
       {
         key: 'bill_auto_numbering',
@@ -817,7 +818,7 @@ export const FiscalBillingPaymentsSection: React.FC<Props> = ({ subTab }) => {
                   className="flex items-center justify-between p-3 rounded-xl border border-slate-200 bg-white hover:border-amber-300 transition-all cursor-pointer"
                 >
                   <div className="flex items-center gap-2.5">
-                    <Sparkles className="w-4 h-4 text-amber-600" />
+                    <Zap className="w-4 h-4 text-amber-600" />
                     <div>
                       <span className="font-bold text-slate-800 block text-xs">Confirmation automatique API</span>
                       <span className="text-[10px] text-slate-500">Validation via MoMo Open Webhook en direct</span>
@@ -933,7 +934,7 @@ export const FiscalBillingPaymentsSection: React.FC<Props> = ({ subTab }) => {
                   className="flex items-center justify-between p-3 rounded-xl border border-slate-200 bg-white hover:border-orange-300 transition-all cursor-pointer"
                 >
                   <div className="flex items-center gap-2.5">
-                    <Sparkles className="w-4 h-4 text-orange-600" />
+                    <Zap className="w-4 h-4 text-orange-600" />
                     <div>
                       <span className="font-bold text-slate-800 block text-xs">Confirmation automatique API</span>
                       <span className="text-[10px] text-slate-500">Validation temps réel Orange Money Web</span>

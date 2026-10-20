@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { RestaurantTable, TableShape, Zone } from '../../types/restaurant';
-import { X, Layers, Grid, Sparkles, Hash, Users, ArrowRight } from 'lucide-react';
+import { X, Layers, Grid, Hash, Users, ArrowRight } from 'lucide-react';
 
 interface BatchAddTablesModalProps {
   zones: Zone[];
@@ -217,7 +217,7 @@ export const BatchAddTablesModal: React.FC<BatchAddTablesModalProps> = ({
           {/* Preview pill */}
           <div className="bg-amber-50 border border-amber-200 rounded-2xl p-3.5 flex items-center justify-between text-xs text-amber-900">
             <div className="flex items-center gap-2">
-              <Sparkles className="w-4 h-4 text-amber-600 shrink-0" />
+              <Grid className="w-4 h-4 text-amber-600 shrink-0" />
               <span className="font-semibold">
                 Génération de <strong className="font-bold">{count} tables</strong> ({prefix}
                 {startNumber} à {prefix}

@@ -20,7 +20,6 @@ import {
   DollarSign,
   Volume2,
   Scissors,
-  Sparkles,
   RefreshCw,
   X,
   Receipt,

@@ -5,7 +5,7 @@ import { SupervisorPinModal } from '../auth/SupervisorPinModal';
 import {
   Tv,
   Clock,
-  Sparkles,
+  Bell,
   CheckCircle2,
   Flame,
   Volume2,
@@ -94,7 +94,7 @@ export const CustomerOrderDisplayView: React.FC<CustomerOrderDisplayViewProps> =
 
         {/* Center: Live instruction */}
         <div className="hidden md:flex items-center space-x-2 bg-slate-800/60 border border-slate-700/60 px-5 py-2.5 rounded-full text-xs font-semibold text-slate-300">
-          <Sparkles className="w-4 h-4 text-amber-400" />
+          <Bell className="w-4 h-4 text-amber-400" />
           <span>Veuillez vous présenter au comptoir dès que votre numéro s'affiche en vert</span>
         </div>
 

@@ -8,7 +8,6 @@ import {
   ShieldCheck,
   Delete,
   Clock,
-  Sparkles,
   UserCheck,
   AlertCircle,
   Building2,

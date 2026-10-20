@@ -18,7 +18,8 @@ import {
   ChevronRight,
   Maximize2,
   Minimize2,
-  Sparkles,
+  Utensils,
+  Info,
   Coffee,
   Flame,
   ShieldCheck,
@@ -429,7 +430,7 @@ export const TableKioskView: React.FC<TableKioskViewProps> = ({
 
           {/* Guest Guidance */}
           <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-200/90 text-xs sm:text-sm mb-6 flex items-center space-x-3">
-            <Sparkles className="w-5 h-5 shrink-0 text-amber-400" />
+            <Info className="w-5 h-5 shrink-0 text-amber-400" />
             <span>
               Chers convives, veuillez vous adresser à notre équipe en salle. La tablette se déverrouillera automatiquement dès la validation du service.
             </span>
@@ -678,7 +679,7 @@ export const TableKioskView: React.FC<TableKioskViewProps> = ({
               : 'bg-slate-800 text-slate-300 hover:text-white border border-slate-700/60'
           }`}
         >
-          <Sparkles className="w-3.5 h-3.5" />
+          <Utensils className="w-3.5 h-3.5" />
           <span>Tout le Menu</span>
         </button>
         {categories.map((cat) => (
@@ -712,7 +713,7 @@ export const TableKioskView: React.FC<TableKioskViewProps> = ({
                   : 'text-slate-300 hover:bg-slate-800/80'
               }`}
             >
-              <Sparkles className="w-4 h-4" />
+              <Utensils className="w-4 h-4" />
               <span>Tout le Menu</span>
             </button>
 

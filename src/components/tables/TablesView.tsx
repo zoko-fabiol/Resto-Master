@@ -38,7 +38,7 @@ import {
   AlertCircle,
   CreditCard,
   CalendarDays,
-  Sparkles,
+  Brush,
   Layers,
   Magnet,
 } from 'lucide-react';
@@ -604,7 +604,7 @@ export const TablesView: React.FC<TablesViewProps> = ({ onOpenOrder, onPayOrder,
           </span>
           {isCleaningAllowed && (
             <span className="flex items-center gap-1.5">
-              <Sparkles className="w-3.5 h-3.5 text-slate-500" />
+              <Brush className="w-3.5 h-3.5 text-slate-500" />
               <span>À nettoyer</span>
             </span>
           )}

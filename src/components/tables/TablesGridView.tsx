@@ -12,7 +12,6 @@ import {
   Lock,
   Bell,
   GitMerge,
-  Sparkles,
 } from 'lucide-react';
 
 interface TablesGridViewProps {

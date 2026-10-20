@@ -6,7 +6,7 @@ import {
   Key,
   Eye,
   EyeOff,
-  Sparkles,
+  KeyRound,
   CheckCircle2,
   AlertCircle,
   X,
@@ -221,7 +221,7 @@ export const ChangeMyPinModal: React.FC<ChangeMyPinModalProps> = ({ isOpen, onCl
                 onClick={handleGeneratePin}
                 className="text-[10px] text-amber-700 hover:text-amber-800 font-bold flex items-center gap-1 hover:underline cursor-pointer"
               >
-                <Sparkles className="w-3 h-3 text-amber-600" />
+                <KeyRound className="w-3 h-3 text-amber-600" />
                 <span>Générer un PIN</span>
               </button>
             </div>

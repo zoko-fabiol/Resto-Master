@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Modal } from '../ui/Modal';
 import { RhEmployee, AttendanceDetail } from '../../types/restaurant';
-import { Check, X, Clock, AlertTriangle, Clock3, FileText, Calendar, Sparkles, AlertCircle, Plus } from 'lucide-react';
+import { Check, X, Clock, AlertTriangle, Clock3, FileText, Calendar, AlertCircle, Plus } from 'lucide-react';
 
 interface AttendanceDetailModalProps {
   isOpen: boolean;
@@ -223,7 +223,7 @@ export const AttendanceDetailModal: React.FC<AttendanceDetailModalProps> = ({
                     onClick={handleSetCurrentTime}
                     className="text-4xs font-bold text-brand hover:underline flex items-center gap-1"
                   >
-                    <Sparkles className="w-2.5 h-2.5" />
+                    <Clock3 className="w-2.5 h-2.5" />
                     Heure actuelle
                   </button>
                 </div>
