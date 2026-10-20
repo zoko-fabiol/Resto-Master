@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useRestaurant } from '../../context/RestaurantContext';
+import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { PaymentMethod, OrderItem } from '../../types/restaurant';
 import { formatCurrency, formatDateTime, numberToFrenchWords, calculateCameroonTaxes } from '../../lib/utils';
@@ -45,7 +46,9 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, onClose }) 
     isRuleEnabled,
     peripherals,
     printerSettings,
+    roleLimits,
   } = useRestaurant();
+  const { currentUser } = useAuth();
   const { showToast } = useToast();
 
   const isMomoEnabled = isFeatureEnabled('mobile_money_momo') && isFeatureEnabled('mobile_money_hub');
@@ -249,6 +252,27 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, onClose }) 
         message: 'La règle opérationnelle de caisse exige le paiement intégral de la note.',
       });
       return;
+    }
+
+    const userRole = currentUser?.role || 'caisse';
+    const userLimits = roleLimits?.[userRole];
+    if (changeDue > 0 && userLimits) {
+      if (changeDue > userLimits.maxRefundAmount && userRole !== 'direction') {
+        showToast({
+          type: 'error',
+          title: 'Monnaie supérieure au plafond',
+          message: `La monnaie (${formatCurrency(changeDue, settings.currency)}) dépasse le plafond autorisé pour votre rôle (${formatCurrency(userLimits.maxRefundAmount, settings.currency)}). Approbation requise.`,
+        });
+        return;
+      }
+      if (userLimits.requiresApprovalForRefund && userRole !== 'direction' && userRole !== 'manager') {
+        showToast({
+          type: 'warning',
+          title: 'Approbation requise',
+          message: 'Le remboursement de monnaie requiert la présence d\'un superviseur.',
+        });
+        return;
+      }
     }
 
     const finalAmount = amountTendered;

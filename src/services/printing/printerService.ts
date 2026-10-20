@@ -203,6 +203,7 @@ export class PrinterService {
 
     const rawData = buildClientReceiptEscPos(order, settings, {
       paperWidth,
+      charactersPerLine: peripheral?.charactersPerLine,
       openDrawer,
       cutPaper: peripheral?.cutPaper ?? true,
       cashGiven: options.cashGiven,

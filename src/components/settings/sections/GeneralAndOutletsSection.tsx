@@ -238,24 +238,47 @@ export const GeneralAndOutletsSection: React.FC<Props> = ({ subTab }) => {
                     </div>
                     <div>
                       <h4 className="font-bold text-xs text-slate-900 line-clamp-1">{outlet.name}</h4>
-                      <span className="text-[10px] text-slate-500 font-medium">{outlet.city}</span>
+                      <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
+                        <span className="text-[10px] text-slate-500 font-medium">{outlet.city}</span>
+                        {(outlet.commercialName || outlet.legalName) && (
+                          <span className="text-[10px] text-slate-600 font-semibold">
+                            • {outlet.commercialName || outlet.legalName} {outlet.legalForm ? `(${outlet.legalForm})` : ''}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
-                  {outlet.isMain && (
-                    <span className="text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-800">
-                      Siège
-                    </span>
-                  )}
+                  <div className="flex items-center gap-1">
+                    {outlet.operationalProfile && (
+                      <span className="text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-slate-100 text-slate-700">
+                        {outlet.operationalProfile.replace('_', ' ')}
+                      </span>
+                    )}
+                    {outlet.isMain && (
+                      <span className="text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-800">
+                        Siège
+                      </span>
+                    )}
+                  </div>
                 </div>
 
                 <div className="mt-3 space-y-1.5 text-xs text-slate-600">
                   <div className="flex items-center gap-1.5">
                     <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                    <span className="truncate">{outlet.address}</span>
+                    <span className="truncate">
+                      {outlet.address} {outlet.postalBox ? `(BP ${outlet.postalBox})` : ''}
+                    </span>
                   </div>
-                  <div className="flex items-center gap-1.5 font-mono text-[11px]">
-                    <Phone className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                    <span>{outlet.phone}</span>
+                  <div className="flex items-center justify-between text-[11px]">
+                    <div className="flex items-center gap-1.5 font-mono">
+                      <Phone className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                      <span>{outlet.phone}</span>
+                    </div>
+                    {outlet.timezone && (
+                      <span className="text-[10px] text-slate-400 font-mono">
+                        {outlet.timezone}
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>

@@ -12,6 +12,31 @@ import {
 } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { staffFirestoreService } from '../services/firestore/staffFirestoreService';
+import { configFirestoreService } from '../services/firestore/configFirestoreService';
+import { DEFAULT_PERMISSIONS } from '../services/permissions/permissionService';
+import { RolePermissionMatrix, PermissionModule, PermissionAction } from '../types/configuration';
+
+const MODULE_TO_PERMISSION: Record<string, PermissionModule> = {
+  pos: 'pos',
+  tables: 'tables',
+  reservations: 'tables',
+  caisse: 'caisse',
+  main_courante: 'caisse',
+  invoices: 'invoices',
+  stock: 'stock',
+  purchases: 'purchases',
+  clients: 'clients',
+  finance: 'finance',
+  fiscal: 'fiscal',
+  staff: 'staff',
+  users: 'staff',
+  audit: 'audit',
+  events: 'events',
+  delivery: 'delivery',
+  settings: 'settings',
+  reports: 'finance',
+  documents: 'staff',
+};
 
 export interface DemoUserOption {
   email: string;
@@ -200,6 +225,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     const unsub = staffFirestoreService.subscribeToUserAccounts((accounts) => {
       setConfiguredUserAccounts(accounts);
+    });
+    return () => unsub();
+  }, []);
+
+  const [rolePermissions, setRolePermissions] = useState<RolePermissionMatrix>(() => {
+    try {
+      const saved = localStorage.getItem('restomaster_rolePermissions');
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return DEFAULT_PERMISSIONS;
+  });
+
+  useEffect(() => {
+    const unsub = configFirestoreService.subscribeToRolePermissions((matrix) => {
+      setRolePermissions(matrix);
+      try {
+        localStorage.setItem('restomaster_rolePermissions', JSON.stringify(matrix));
+      } catch {}
     });
     return () => unsub();
   }, []);
@@ -603,68 +646,57 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  // RBAC permissions matrix avec prise en compte des droits fins et onglets additionnels
+  // RBAC permissions matrix connectée dynamiquement à Firestore (system_config/role_permissions)
   const canAccess = (module: string): boolean => {
     // Si compte inactif ou rôle 'aucun' : accès strictement interdit
     if (!currentUser.active || currentUser.role === 'aucun') {
       return false;
     }
 
-    // 1. Les comptes Tablettes n'ont accès qu'au Kiosk
+    // 1. Direction possède un accès universel absolu
+    if (currentUser.role === 'direction') return true;
+
+    // 2. Les comptes Tablettes n'ont accès qu'au Kiosk
     if (currentUser.role === 'tablette') {
       return module === 'kiosk';
     }
-
-    // 2. Direction et Manager ont accès universel par défaut
-    if (currentUser.role === 'direction' || currentUser.role === 'manager') return true;
 
     // 3. Onglets additionnels explicitement accordés à cet utilisateur
     if (currentUser.additionalTabs && currentUser.additionalTabs.includes(module)) {
       return true;
     }
 
-    // 4. Si permission personnalisée explicite configurée
+    // 4. Si permission personnalisée explicite configurée au niveau utilisateur
     if (currentUser.tabPermissions && currentUser.tabPermissions[module]) {
       return currentUser.tabPermissions[module].view;
     }
 
-    switch (module) {
-      case 'dashboard':
-        return ['direction', 'manager', 'caisse', 'finance'].includes(currentUser.role);
-      case 'tables':
-      case 'pos':
-      case 'reservations':
-        return ['direction', 'manager', 'serveur', 'caisse'].includes(currentUser.role);
-      case 'kitchen_kds':
-        return ['direction', 'manager', 'cuisine'].includes(currentUser.role);
-      case 'bar_kds':
-        return ['direction', 'manager', 'bar'].includes(currentUser.role);
-      case 'caisse':
-      case 'main_courante':
-        return ['direction', 'manager', 'caisse', 'finance'].includes(currentUser.role);
-      case 'menu':
-        return ['direction', 'manager', 'cuisine'].includes(currentUser.role);
-      case 'stock':
-        return ['direction', 'manager', 'stock', 'cuisine', 'bar'].includes(currentUser.role);
-      case 'purchases':
-        return ['direction', 'manager', 'stock', 'finance'].includes(currentUser.role);
-      case 'finance':
-        return ['direction', 'finance'].includes(currentUser.role);
-      case 'clients':
-        return ['direction', 'manager', 'serveur', 'caisse'].includes(currentUser.role);
-      case 'staff':
-      case 'users':
-        return ['direction', 'manager', 'rh'].includes(currentUser.role);
-      case 'documents':
-        return ['direction', 'manager', 'finance', 'stock', 'rh'].includes(currentUser.role);
-      case 'reports':
-        return ['direction', 'manager', 'finance', 'caisse'].includes(currentUser.role);
-      case 'audit':
-      case 'settings':
-        return ['direction'].includes(currentUser.role);
-      default:
-        return true;
+    // 5. Modules opérationnels spécifiques (KDS, Kiosk, Menu, Dashboard)
+    if (module === 'kitchen_kds') {
+      return currentUser.role === 'cuisine' || currentUser.role === 'manager';
     }
+    if (module === 'bar_kds') {
+      return currentUser.role === 'bar' || currentUser.role === 'manager';
+    }
+    if (module === 'menu') {
+      return currentUser.role === 'cuisine' || currentUser.role === 'manager' || currentUser.role === 'stock';
+    }
+    if (module === 'dashboard') {
+      return ['manager', 'caisse', 'finance'].includes(currentUser.role);
+    }
+
+    // 6. Matrice RBAC dynamique synchronisée avec Firestore
+    const permModule = MODULE_TO_PERMISSION[module];
+    if (permModule && rolePermissions[currentUser.role]?.[permModule]) {
+      return Boolean(rolePermissions[currentUser.role][permModule].view);
+    }
+
+    // Manager a accès étendu par défaut si non expressément restreint
+    if (currentUser.role === 'manager' && module !== 'settings' && module !== 'audit') {
+      return true;
+    }
+
+    return false;
   };
 
   const hasPermission = (
@@ -677,7 +709,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return module === 'kiosk' && action !== 'delete';
     }
 
-    // Si permission granulaire explicite
+    // Si permission granulaire explicite sur l'utilisateur
     if (currentUser.tabPermissions && currentUser.tabPermissions[module]) {
       return currentUser.tabPermissions[module][action];
     }
@@ -687,8 +719,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return canAccess(module);
     }
 
+    // Vérification dans la matrice des permissions Firestore
+    const permModule = MODULE_TO_PERMISSION[module];
+    if (permModule && rolePermissions[currentUser.role]?.[permModule]) {
+      const act = action as PermissionAction;
+      if (rolePermissions[currentUser.role][permModule][act] !== undefined) {
+        return Boolean(rolePermissions[currentUser.role][permModule][act]);
+      }
+    }
+
     // Par défaut pour create / edit / delete
-    if (currentUser.role === 'manager') return true;
+    if (currentUser.role === 'manager') {
+      return action !== 'delete' || canAccess(module);
+    }
     if (action === 'delete') return false;
     return canAccess(module);
   };

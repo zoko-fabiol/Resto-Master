@@ -114,7 +114,8 @@ export interface RestaurantSettings {
   // Paramètres Numérotation & Contrôle des Remises
   invoicePrefix: string; // ex: 2026-RESTO-001
   nextInvoiceSequence: number;
-  maxDiscountByRole: Record<UserRole, number>; // ex: serveur: 5, manager: 15, direction: 100
+  /** @deprecated Utiliser roleLimits[role].maxDiscountPercent */
+  maxDiscountByRole?: Record<UserRole, number>;
 
   // Paramètres Mobile Money & QR Code Max-it / MoMo Pay
   orangeMoneyMerchantCode: string; // Code Marchand Orange Money (ex: 789123)

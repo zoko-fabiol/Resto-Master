@@ -87,7 +87,11 @@ const AppContent: React.FC = () => {
     isRuleEnabled,
     currentDeviceProfile,
     unpairCurrentDevice,
+    terminals,
   } = useRestaurant();
+
+  const currentTerminal = terminals.find((t) => t.id === currentDeviceProfile?.terminalId);
+  const isTerminalLocked = isSessionLocked || Boolean(currentTerminal?.isLocked);
 
   // Route URL synchronisée (ex: /pos -> pos, / -> '')
   const rawPath = location.pathname.replace(/^\/+/, '').split('/')[0] || '';
@@ -255,7 +259,7 @@ const AppContent: React.FC = () => {
           />
         </Suspense>
         {/* Tactile PIN Lock Screen Overlay si verrouillage activé */}
-        {isSessionLocked && <PinLockScreen />}
+        {isTerminalLocked && <PinLockScreen />}
       </div>
     );
   }
@@ -404,7 +408,7 @@ const AppContent: React.FC = () => {
       />
 
       {/* Tactile PIN Lock Screen Overlay */}
-      {isSessionLocked && <PinLockScreen />}
+      {isTerminalLocked && <PinLockScreen />}
     </div>
   );
 };

@@ -62,6 +62,7 @@ export const PosView: React.FC<PosViewProps> = ({ initialTableId, onOpenPayment,
     addAuditLog,
     cashSession,
     createProduct,
+    roleLimits,
   } = useRestaurant();
   const { showToast, playAudioChime } = useToast();
 
@@ -213,13 +214,25 @@ export const PosView: React.FC<PosViewProps> = ({ initialTableId, onOpenPayment,
       return;
     }
 
-    if (!isZeroPriceAllowed && product.price <= 0) {
-      showToast({
-        type: 'error',
-        title: 'Prix zéro interdit',
-        message: 'La configuration interdit la vente d\'articles gratuits (0 FCFA).',
-      });
-      return;
+    const userRole = currentUser?.role || 'serveur';
+    const userLimits = roleLimits?.[userRole];
+    if (product.price <= 0) {
+      if (userLimits?.requiresApprovalForNegativePrice && userRole !== 'direction' && userRole !== 'manager') {
+        showToast({
+          type: 'error',
+          title: 'Approbation Requise',
+          message: 'L\'ajout d\'un article à prix nul ou négatif requiert l\'accord d\'un responsable.',
+        });
+        return;
+      }
+      if (!isZeroPriceAllowed) {
+        showToast({
+          type: 'error',
+          title: 'Prix zéro interdit',
+          message: 'La configuration interdit la vente d\'articles gratuits (0 FCFA).',
+        });
+        return;
+      }
     }
 
     setCart((prev) => {
@@ -365,9 +378,31 @@ export const PosView: React.FC<PosViewProps> = ({ initialTableId, onOpenPayment,
   };
 
   const handleApplyDiscount = (pct: number) => {
-    if (pct > 0 && isDiscountApprovalRequired) {
-      const isManagerOrAdmin = currentUser?.role === 'manager' || currentUser?.role === 'direction';
-      if (!isManagerOrAdmin) {
+    if (pct > 0) {
+      if (!isDiscountsAllowed && currentUser?.role !== 'direction') {
+        showToast({
+          type: 'error',
+          title: 'Remises Désactivées',
+          message: 'Les remises commerciales sont désactivées sur ce point de vente.',
+        });
+        return;
+      }
+
+      const userRole = currentUser?.role || 'serveur';
+      const userLimits = roleLimits?.[userRole];
+      const maxDiscount = userLimits?.maxDiscountPercent ?? (userRole === 'direction' ? 100 : 0);
+      const requiresApproval = userLimits?.requiresApprovalForDiscount ?? isDiscountApprovalRequired;
+
+      if (pct > maxDiscount && userRole !== 'direction') {
+        showToast({
+          type: 'error',
+          title: 'Plafond Dépassé',
+          message: `Une remise de ${pct}% dépasse la limite autorisée pour votre rôle (${maxDiscount}%). Approbation superviseur requise.`,
+        });
+        return;
+      }
+
+      if (requiresApproval && userRole !== 'direction' && userRole !== 'manager') {
         showToast({
           type: 'warning',
           title: 'Approbation Requise',
@@ -381,12 +416,15 @@ export const PosView: React.FC<PosViewProps> = ({ initialTableId, onOpenPayment,
 
   const handleCancelCartClick = () => {
     if (cart.length === 0) return;
-    const isManagerOrAdmin = currentUser?.role === 'manager' || currentUser?.role === 'direction';
-    if (!isCancelOrderAllowed && !isManagerOrAdmin) {
+    const userRole = currentUser?.role || 'serveur';
+    const userLimits = roleLimits?.[userRole];
+    const requiresCancelApproval = userLimits?.requiresApprovalForCancel ?? !isCancelOrderAllowed;
+
+    if (requiresCancelApproval && userRole !== 'direction' && userRole !== 'manager') {
       showToast({
         type: 'error',
-        title: 'Annulation Interdite',
-        message: 'L\'annulation de commande est désactivée pour votre profil.',
+        title: 'Approbation Requise',
+        message: 'L\'annulation de commande nécessite l\'approbation d\'un superviseur.',
       });
       return;
     }

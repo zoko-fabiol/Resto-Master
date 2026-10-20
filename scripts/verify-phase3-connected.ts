@@ -33,24 +33,34 @@ async function runPhase3Verification() {
     {
       id: 'lot-1',
       stockItemId: 'item-1',
+      stockItemName: 'Poulet',
       lotNumber: 'LOT-MAY-2026',
-      quantity: 10,
+      supplierId: 'sup-1',
+      supplierName: 'Fournisseur A',
       initialQuantity: 10,
-      unitCost: 1000,
-      receivedAt: '2026-05-01T08:00:00Z',
+      remainingQuantity: 10,
+      unit: 'kg',
+      purchasePrice: 1000,
+      location: 'Chambre Froide',
+      receptionDate: '2026-05-01T08:00:00Z',
       expiryDate: '2026-12-01',
-      active: true,
+      status: 'actif',
     },
     {
       id: 'lot-2',
       stockItemId: 'item-1',
+      stockItemName: 'Poulet',
       lotNumber: 'LOT-JAN-2026',
-      quantity: 10,
+      supplierId: 'sup-1',
+      supplierName: 'Fournisseur A',
       initialQuantity: 10,
-      unitCost: 1100,
-      receivedAt: '2026-01-15T08:00:00Z',
+      remainingQuantity: 10,
+      unit: 'kg',
+      purchasePrice: 1100,
+      location: 'Chambre Froide',
+      receptionDate: '2026-01-15T08:00:00Z',
       expiryDate: '2026-08-01', // Plus tôt que lot-1 -> FEFO doit choisir lot-2 en premier
-      active: true,
+      status: 'actif',
     },
   ];
 
@@ -60,9 +70,9 @@ async function runPhase3Verification() {
   );
   assert(fefoSorted[0].id === 'lot-2', 'FEFO doit prioriser la date de péremption la plus proche');
 
-  // FIFO doit trier par receivedAt asc (lot-2 a été reçu le 15 Janvier, avant le 1er Mai)
+  // FIFO doit trier par receptionDate asc (lot-2 a été reçu le 15 Janvier, avant le 1er Mai)
   const fifoSorted = [...dummyLots].sort((a, b) =>
-    a.receivedAt.localeCompare(b.receivedAt)
+    a.receptionDate.localeCompare(b.receptionDate)
   );
   assert(fifoSorted[0].id === 'lot-2', 'FIFO doit prioriser la date de réception la plus ancienne');
   console.log('  ✓ Algorithmes FEFO et FIFO fonctionnels pour la déduction de lots.');
@@ -93,8 +103,9 @@ async function runPhase3Verification() {
 
   const dummyPeripheral = {
     id: 'pr-1',
+    outletId: 'out-1',
     name: 'Xprinter Test',
-    type: 'imprimante_caisse' as const,
+    type: 'imprimante_ticket' as const,
     role: 'caisse' as const,
     connectionType: 'usb' as const,
     address: 'USB:0416:5011',

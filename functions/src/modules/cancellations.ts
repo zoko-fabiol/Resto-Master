@@ -9,12 +9,45 @@ export async function handleCancelOrder(request: CallableRequest<CancelOrderRequ
   assertRoles(caller, ['direction', 'manager', 'serveur', 'caisse']);
 
   const { orderId, reason, supervisorToken, actionAfterCancel = 'restock' } = request.data;
-  if (!orderId || !reason || !supervisorToken) {
-    throw new HttpsError('invalid-argument', 'orderId, motif et jeton superviseur requis.');
+  if (!orderId || !reason) {
+    throw new HttpsError('invalid-argument', 'orderId et motif requis.');
   }
 
-  // 1. Validation stricte du jeton superviseur
-  const supervisor = await consumeSupervisorToken(supervisorToken, 'cancel_order', orderId);
+  // 1. Contrôle des limites de rôle (requiresApprovalForCancel, maxRefundAmount, requiresApprovalForRefund)
+  let requiresApprovalForCancel = caller.role !== 'direction';
+  let maxRefundAmount = caller.role === 'direction' ? 10000000 : 0;
+  let requiresApprovalForRefund = caller.role !== 'direction';
+
+  try {
+    const limitsDoc = await db.collection('system_config').doc('role_limits').get();
+    if (limitsDoc.exists) {
+      const roleLimit = limitsDoc.data()?.[caller.role];
+      if (roleLimit) {
+        if (typeof roleLimit.requiresApprovalForCancel === 'boolean') {
+          requiresApprovalForCancel = roleLimit.requiresApprovalForCancel;
+        }
+        if (typeof roleLimit.maxRefundAmount === 'number') {
+          maxRefundAmount = roleLimit.maxRefundAmount;
+        }
+        if (typeof roleLimit.requiresApprovalForRefund === 'boolean') {
+          requiresApprovalForRefund = roleLimit.requiresApprovalForRefund;
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('Lecture role_limits pour annulation échouée:', err);
+  }
+
+  let supervisor = { supervisorName: caller.name, supervisorRole: caller.role, supervisorUid: caller.uid };
+  if (requiresApprovalForCancel && caller.role !== 'direction') {
+    if (!supervisorToken) {
+      throw new HttpsError(
+        'permission-denied',
+        `L'annulation de commande pour votre rôle (${caller.role}) requiert l'approbation d'un superviseur.`
+      );
+    }
+    supervisor = await consumeSupervisorToken(supervisorToken, 'cancel_order', orderId);
+  }
 
   const orderRef = db.collection('orders').doc(orderId);
 
@@ -31,6 +64,13 @@ export async function handleCancelOrder(request: CallableRequest<CancelOrderRequ
 
     const wasPaid = (Number(orderData.totalPaid) || 0) > 0;
     const paidAmount = Number(orderData.totalPaid) || 0;
+
+    if (wasPaid && paidAmount > maxRefundAmount && caller.role !== 'direction') {
+      throw new HttpsError(
+        'permission-denied',
+        `Le remboursement de ${paidAmount} FCFA dépasse le plafond autorisé pour votre rôle (${maxRefundAmount} FCFA). Approbation Direction requise.`
+      );
+    }
 
     // 2. Si des paiements en espèces avaient eu lieu : contre-passation en caisse
     const payments = (orderData.payments as Array<{ method: string; amount: number; cashSessionId?: string }>) || [];

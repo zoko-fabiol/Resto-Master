@@ -135,6 +135,9 @@ export const CameroonInvoiceA5: React.FC<CameroonInvoiceA5Props> = ({
                 {settings.activitePrincipale && (
                   <div className="text-[11px] text-slate-600">Activité : {settings.activitePrincipale}</div>
                 )}
+                {settings.activitesSecondaires && (
+                  <div className="text-[11px] text-slate-600">Activités secondaires : {settings.activitesSecondaires}</div>
+                )}
                 <div>Tél : {settings.phone} • Email : {settings.email}</div>
                 <div className="font-bold text-[11px] text-slate-900">
                   NIU : {settings.niu || 'M012012345678A'} • RCCM : {settings.rccm || 'RC/YAO/2024/B/1894'}
@@ -233,6 +236,12 @@ export const CameroonInvoiceA5: React.FC<CameroonInvoiceA5Props> = ({
                 <div className="flex justify-between text-slate-600 text-[11px]">
                   <span>Taxes Fiscales (19,25%) :</span>
                   <span>{formatCurrency(taxes.tvaBase + taxes.cacBase, settings.currency)}</span>
+                </div>
+              )}
+              {settings.serviceChargeRate > 0 && (
+                <div className="flex justify-between text-slate-600 text-[11px]">
+                  <span>Frais de service ({settings.serviceChargeRate}%) :</span>
+                  <span>{formatCurrency(Math.round((taxes.subtotalHt * settings.serviceChargeRate) / 100), settings.currency)}</span>
                 </div>
               )}
               <div className="flex justify-between text-base font-black border-t-2 border-slate-900 pt-1 text-slate-950">

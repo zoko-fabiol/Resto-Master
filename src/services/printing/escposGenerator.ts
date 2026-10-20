@@ -137,6 +137,7 @@ export function buildClientReceiptEscPos(
   settings: RestaurantSettings,
   options: {
     paperWidth?: '58mm' | '80mm';
+    charactersPerLine?: 32 | 42 | 48;
     openDrawer?: boolean;
     cutPaper?: boolean;
     cashGiven?: number;
@@ -144,7 +145,7 @@ export function buildClientReceiptEscPos(
     folio?: number;
   } = {}
 ): Uint8Array {
-  const width = options.paperWidth === '58mm' ? 32 : 48;
+  const width = options.charactersPerLine || (options.paperWidth === '58mm' ? 32 : 48);
   const builder = new EscPosBuilder(width);
 
   // 1. Kick cash drawer if requested

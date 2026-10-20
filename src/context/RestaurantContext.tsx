@@ -2218,12 +2218,18 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     addAuditLog('Nouveau fournisseur enregistré', 'Achats', `Fournisseur ${newSup.company} (${newSup.name})`);
   };
 
-  // 16. Create Expense
+  // 16. Create Expense avec contrôle des limites de dépenses (maxExpenseAmount)
   const createExpense = async (exp: Omit<Expense, 'id' | 'recordedBy'>) => {
+    const userRole = currentUser.role;
+    const roleLimit = roleLimits?.[userRole];
+    const maxAllowed = roleLimit?.maxExpenseAmount ?? (userRole === 'direction' ? 10000000 : 0);
+    const requiresApproval = userRole !== 'direction' && (exp.amount > maxAllowed || maxAllowed === 0);
+
     const newExp: Expense = {
       ...exp,
       id: generateSecureId('exp'),
       recordedBy: currentUser.name,
+      status: requiresApproval ? 'en_attente' : (exp.status || 'validee'),
     };
     setExpenses((prev) => [newExp, ...prev]);
     addAuditLog('Nouvelle dépense enregistrée', 'Finances', `${exp.amount} ${settings.currency} - ${exp.reason} (${exp.category})`);
@@ -2231,10 +2237,10 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     if (newExp.status === 'en_attente') {
       addNotification(
         'Dépense en attente d’approbation',
-        `${newExp.amount} ${settings.currency} demandés pour "${newExp.reason}".`,
+        `${newExp.amount} ${settings.currency} demandés pour "${newExp.reason}" (plafond autorisé: ${maxAllowed} FCFA).`,
         'warning',
         'Finances',
-        'moyenne',
+        'haute',
         'finance'
       );
     }

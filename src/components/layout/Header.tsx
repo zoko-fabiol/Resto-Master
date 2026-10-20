@@ -242,19 +242,39 @@ export const Header: React.FC<HeaderProps> = ({
                             <Building2 className="w-3.5 h-3.5" />
                           </div>
                           <div className="min-w-0">
-                            <div className="flex items-center gap-1.5">
-                              <span className="text-xs font-bold text-slate-900 truncate">{outlet.name}</span>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="text-xs font-bold text-slate-900 truncate">
+                                {outlet.commercialName || outlet.name}
+                              </span>
+                              {(outlet.legalName || outlet.legalForm) && (
+                                <span className="text-[10px] text-slate-500">
+                                  ({outlet.legalName || outlet.name} {outlet.legalForm || ''})
+                                </span>
+                              )}
+                              {outlet.operationalProfile && (
+                                <span className="text-[8px] font-bold uppercase px-1 rounded bg-slate-200 text-slate-700">
+                                  {outlet.operationalProfile}
+                                </span>
+                              )}
                               {outlet.isMain && (
                                 <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-blue-100 text-blue-700">
                                   Siège
                                 </span>
                               )}
                             </div>
-                            <div className="text-[10px] text-slate-500 flex items-center gap-1 mt-0.5">
-                              <MapPin className="w-3 h-3 text-slate-400 shrink-0" />
-                              <span>
-                                {outlet.city} • {outlet.neighborhood || outlet.address}
+                            <div className="text-[10px] text-slate-500 flex items-center gap-1.5 flex-wrap mt-0.5">
+                              <span className="flex items-center gap-1">
+                                <MapPin className="w-3 h-3 text-slate-400 shrink-0" />
+                                <span>
+                                  {outlet.city} • {outlet.neighborhood || outlet.address}
+                                  {outlet.postalBox ? ` (BP ${outlet.postalBox})` : ''}
+                                </span>
                               </span>
+                              {outlet.timezone && (
+                                <span className="text-slate-400 font-mono text-[9px]">
+                                  • {outlet.timezone}
+                                </span>
+                              )}
                             </div>
                           </div>
                         </div>

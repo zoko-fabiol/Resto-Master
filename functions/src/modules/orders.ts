@@ -107,11 +107,38 @@ export async function handleCreateOrder(request: CallableRequest<CreateOrderRequ
   const data = request.data;
   const restaurantId = data.restaurantId || caller.outlets[0] || 'default-restaurant';
 
-  // 1. Validation de la remise demandée
+  // 1. Validation de la remise demandée selon role_limits dynamique
   const discountPercent = Math.min(100, Math.max(0, Number(data.discountPercentRequested) || 0));
-  const maxAllowedDiscount = ROLE_MAX_DISCOUNT[caller.role] || 0;
+  let maxAllowedDiscount = ROLE_MAX_DISCOUNT[caller.role] ?? 0;
+  let requiresApproval = false;
 
-  if (discountPercent > maxAllowedDiscount) {
+  try {
+    const limitsDoc = await db.collection('system_config').doc('role_limits').get();
+    if (limitsDoc.exists) {
+      const limitsData = limitsDoc.data()!;
+      const roleLimit = limitsData[caller.role];
+      if (roleLimit) {
+        if (typeof roleLimit.maxDiscountPercent === 'number') {
+          maxAllowedDiscount = roleLimit.maxDiscountPercent;
+        }
+        if (typeof roleLimit.requiresApprovalForDiscount === 'boolean') {
+          requiresApproval = roleLimit.requiresApprovalForDiscount;
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('Lecture role_limits Firestore échouée, repli sur constantes statiques:', err);
+  }
+
+  if (discountPercent > 0 && requiresApproval && caller.role !== 'direction') {
+    if (!data.supervisorToken) {
+      throw new HttpsError(
+        'permission-denied',
+        `L'application d'une remise pour votre profil (${caller.role}) requiert l'approbation d'un superviseur. Jeton requis.`
+      );
+    }
+    await consumeSupervisorToken(data.supervisorToken, 'apply_discount');
+  } else if (discountPercent > maxAllowedDiscount && caller.role !== 'direction') {
     if (!data.supervisorToken) {
       throw new HttpsError(
         'permission-denied',

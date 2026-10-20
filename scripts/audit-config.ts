@@ -231,7 +231,7 @@ const interfacesToAudit: InterfaceDef[] = [
       'formeJuridique', 'niu', 'rccm', 'taxCenter', 'adresseFiscale', 'city', 'quartier',
       'bp', 'activitePrincipale', 'activitesSecondaires', 'regimeFiscal', 'assujettiTVA',
       'statutContribuable', 'exerciceFiscal', 'lastFiscalCheckDate', 'invoicePrefix',
-      'nextInvoiceSequence', 'maxDiscountByRole', 'orangeMoneyMerchantCode', 'orangeMoneyPhone',
+      'nextInvoiceSequence', 'orangeMoneyMerchantCode', 'orangeMoneyPhone',
       'orangeMaxItQrUrl', 'mtnMoMoMerchantCode', 'mtnMoMoPhone', 'mtnMoMoQrUrl',
       'kitchenOperationMode', 'defaultReceiptWidth', 'stockDeductionTiming', 'priceDisplayMode',
     ],
