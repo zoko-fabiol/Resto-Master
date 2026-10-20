@@ -170,12 +170,6 @@ export const Employees: React.FC = () => {
     } else {
       setShowModal(false);
     }
-    
-    // Broadcast status change for synchronization
-    window.dispatchEvent(new CustomEvent('sync-status-change', { detail: { status: 'syncing' } }));
-    setTimeout(() => {
-      window.dispatchEvent(new CustomEvent('sync-status-change', { detail: { status: 'ok' } }));
-    }, 1500);
   };
 
   const deleteEmployee = async (id: string | number) => {

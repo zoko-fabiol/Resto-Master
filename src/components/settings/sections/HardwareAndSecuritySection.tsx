@@ -476,6 +476,18 @@ export const HardwareAndSecuritySection: React.FC<Props> = ({ subTab }) => {
                       Activer Ici
                     </button>
                   </div>
+
+                  {t.pairingExpiresAt && (
+                    <div className="text-[10px] flex items-center justify-between px-1">
+                      {new Date(t.pairingExpiresAt).getTime() < Date.now() ? (
+                        <span className="text-rose-600 font-bold">Code expiré (cliquez sur Régénérer)</span>
+                      ) : (
+                        <span className="text-slate-500">
+                          Valide jusqu'à {new Date(t.pairingExpiresAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })} (durée 15 min)
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             );

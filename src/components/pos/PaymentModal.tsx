@@ -67,6 +67,18 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, onClose }) 
   const isPayChequeAllowed = isRuleEnabled('pay_cheque', true);
   const isPayCreditAllowed = isRuleEnabled('pay_credit_client', true);
 
+  // Vérification de la configuration effective des comptes marchands
+  const isOrangeConfigured = Boolean(
+    isOrangeEnabled &&
+    isPayOrangeAllowed &&
+    (settings.orangeMoneyMerchantCode || settings.orangeMoneyPhone || settings.orangeMaxItQrUrl)
+  );
+  const isMomoConfigured = Boolean(
+    isMomoEnabled &&
+    isPayMomoAllowed &&
+    (settings.mtnMoMoMerchantCode || settings.mtnMoMoPhone || settings.mtnMoMoQrUrl)
+  );
+
   const targetOrder = orders.find((o) => o.id === orderId);
 
   // Split Modes
@@ -123,9 +135,9 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, onClose }) 
 
   const remainingBalance = selectedFolio === 'all' ? effectiveRemaining : folioTotal;
 
-  const defaultMethod: PaymentMethod = isOrangeEnabled
+  const defaultMethod: PaymentMethod = isOrangeConfigured
     ? 'orange_money'
-    : isMomoEnabled
+    : isMomoConfigured
     ? 'mtn_momo'
     : 'especes';
 
@@ -702,15 +714,24 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, onClose }) 
                   {isOrangeEnabled && isPayOrangeAllowed && (
                     <button
                       type="button"
-                      onClick={() => setPaymentMethod('orange_money')}
-                      className={`p-2.5 rounded-xl border flex items-center gap-2 font-bold text-xs transition-all ${
-                        paymentMethod === 'orange_money'
+                      disabled={!isOrangeConfigured}
+                      onClick={() => isOrangeConfigured && setPaymentMethod('orange_money')}
+                      title={isOrangeConfigured ? 'Paiement Orange Money' : 'Orange Money non configuré dans les paramètres'}
+                      className={`p-2.5 rounded-xl border flex items-center justify-between font-bold text-xs transition-all ${
+                        !isOrangeConfigured
+                          ? 'bg-slate-50 text-slate-400 border-slate-200 cursor-not-allowed opacity-60'
+                          : paymentMethod === 'orange_money'
                           ? 'bg-orange-500 text-white border-orange-600 shadow-sm'
-                          : 'bg-white text-slate-700 border-slate-200 hover:bg-orange-50/50'
+                          : 'bg-white text-slate-700 border-slate-200 hover:bg-orange-50/50 cursor-pointer'
                       }`}
                     >
-                      <Smartphone className="w-4 h-4 text-orange-400" />
-                      <span>Orange Money</span>
+                      <div className="flex items-center gap-2">
+                        <Smartphone className={`w-4 h-4 ${isOrangeConfigured ? 'text-orange-400' : 'text-slate-400'}`} />
+                        <span>Orange Money</span>
+                      </div>
+                      {!isOrangeConfigured && (
+                        <span className="text-[9px] font-normal uppercase bg-slate-200 px-1 py-0.5 rounded text-slate-600">À configurer</span>
+                      )}
                     </button>
                   )}
 
@@ -718,15 +739,24 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, onClose }) 
                   {isMomoEnabled && isPayMomoAllowed && (
                     <button
                       type="button"
-                      onClick={() => setPaymentMethod('mtn_momo')}
-                      className={`p-2.5 rounded-xl border flex items-center gap-2 font-bold text-xs transition-all ${
-                        paymentMethod === 'mtn_momo'
+                      disabled={!isMomoConfigured}
+                      onClick={() => isMomoConfigured && setPaymentMethod('mtn_momo')}
+                      title={isMomoConfigured ? 'Paiement MTN Mobile Money' : 'MTN MoMo non configuré dans les paramètres'}
+                      className={`p-2.5 rounded-xl border flex items-center justify-between font-bold text-xs transition-all ${
+                        !isMomoConfigured
+                          ? 'bg-slate-50 text-slate-400 border-slate-200 cursor-not-allowed opacity-60'
+                          : paymentMethod === 'mtn_momo'
                           ? 'bg-yellow-500 text-slate-950 border-yellow-600 shadow-sm'
-                          : 'bg-white text-slate-700 border-slate-200 hover:bg-yellow-50/50'
+                          : 'bg-white text-slate-700 border-slate-200 hover:bg-yellow-50/50 cursor-pointer'
                       }`}
                     >
-                      <Smartphone className="w-4 h-4 text-yellow-600" />
-                      <span>MTN MoMo</span>
+                      <div className="flex items-center gap-2">
+                        <Smartphone className={`w-4 h-4 ${isMomoConfigured ? 'text-yellow-600' : 'text-slate-400'}`} />
+                        <span>MTN MoMo</span>
+                      </div>
+                      {!isMomoConfigured && (
+                        <span className="text-[9px] font-normal uppercase bg-slate-200 px-1 py-0.5 rounded text-slate-600">À configurer</span>
+                      )}
                     </button>
                   )}
 

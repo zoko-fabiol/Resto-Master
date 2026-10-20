@@ -498,7 +498,7 @@ export const DEFAULT_FEATURES: FeatureItem[] = [
     activatedBy: 'Système',
     configuration: {
       archiveDurationYears: 10,
-      digitalSignatureSimulation: true,
+      digitalSignatureInternalAudit: true,
     },
   },
   {

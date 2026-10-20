@@ -52,20 +52,14 @@ export const MediaUploader: React.FC<MediaUploaderProps> = ({
     setUploadProgress(15);
 
     try {
-      // Simulate progress progression
-      const progressTimer = setInterval(() => {
-        setUploadProgress((prev) => (prev < 85 ? prev + 15 : prev));
-      }, 200);
-
       const asset = await cloudinaryService.upload(file, options);
-
-      clearInterval(progressTimer);
       setUploadProgress(100);
       setIsUploading(false);
       setLastUploadedAsset(asset);
       onUploadSuccess(asset);
     } catch (err: any) {
       setIsUploading(false);
+      setUploadProgress(0);
       const msg = err.message || 'Échec du téléversement du fichier.';
       setErrorMsg(msg);
       if (onUploadError) onUploadError(msg);

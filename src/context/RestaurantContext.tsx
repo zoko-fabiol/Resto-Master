@@ -973,8 +973,8 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       }
     }
 
-    // 2. Repli local (offline ou mode démo)
-    const newOrderNumber = generateOrderNumber();
+    // 2. Repli local (hors-ligne provisoire en attente de certification serveur)
+    const newOrderNumber = generateOrderNumber(undefined, true);
     const newOrder: Order = {
       id: generateSecureId('ord'),
       orderNumber: newOrderNumber,
@@ -1030,9 +1030,9 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     }
 
     addAuditLog(
-      'Création commande POS',
+      'Création commande POS (Provisoire Hors-Ligne)',
       'POS',
-      `Nouvelle commande ${newOrder.orderNumber} pour ${newOrder.tableName || 'À emporter'} (Total: ${newOrder.total} ${settings.currency})`,
+      `Nouvelle commande ${newOrder.orderNumber} enregistrée en local (Total: ${newOrder.total} ${settings.currency})`,
       newOrder.id
     );
 

@@ -55,9 +55,9 @@ class CloudinaryService {
 
   constructor() {
     // Read from client environment without ever exposing API Secret
-    this.cloudName = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME || 'resto-master-cm';
-    this.uploadPreset = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET || 'restomaster_secure_preset';
-    this.apiKey = import.meta.env.VITE_CLOUDINARY_API_KEY || '564883344825';
+    this.cloudName = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME || '';
+    this.uploadPreset = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET || '';
+    this.apiKey = import.meta.env.VITE_CLOUDINARY_API_KEY || '';
   }
 
   /**
@@ -67,7 +67,7 @@ class CloudinaryService {
     return {
       cloudName: this.cloudName,
       uploadPreset: this.uploadPreset,
-      isConfigured: Boolean(this.cloudName && this.cloudName !== 'resto-master-cm'),
+      isConfigured: Boolean(this.cloudName && this.uploadPreset),
     };
   }
 
@@ -172,6 +172,12 @@ class CloudinaryService {
    * Upload File to Cloudinary
    */
   public async upload(file: File, options: CloudinaryUploadOptions): Promise<MediaAsset> {
+    if (!this.cloudName || !this.uploadPreset) {
+      throw new Error(
+        "Stockage Cloudinary non configuré. Veuillez définir VITE_CLOUDINARY_CLOUD_NAME et VITE_CLOUDINARY_UPLOAD_PRESET dans les variables d'environnement (.env)."
+      );
+    }
+
     const validation = this.validateFile(file);
     if (!validation.valid) {
       throw new Error(validation.error);
@@ -184,7 +190,7 @@ class CloudinaryService {
     const publicId = `${folder}/${cleanBaseName}_${timestamp}`;
 
     try {
-      // 1. Direct upload via Cloudinary REST API
+      // Direct upload via Cloudinary REST API
       const formData = new FormData();
       formData.append('file', file);
       formData.append('upload_preset', this.uploadPreset);
@@ -204,7 +210,7 @@ class CloudinaryService {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error?.message || `Erreur Cloudinary HTTP ${response.status}`);
+        throw new Error(errorData.error?.message || `Erreur Cloudinary (HTTP ${response.status})`);
       }
 
       const result = await response.json();
@@ -236,34 +242,8 @@ class CloudinaryService {
 
       return mediaAsset;
     } catch (err: any) {
-      // Fallback for demo/offline resilience:
-      // Convert to local object URL and package as a valid MediaAsset so workflow does not block
-      console.warn('Cloudinary upload warning (using fallback asset):', err.message);
-
-      const localBlobUrl = URL.createObjectURL(file);
-      const mediaAsset: MediaAsset = {
-        id: `media-${timestamp}`,
-        organizationId: options.organizationId,
-        restaurantId: options.restaurantId,
-        uploadedBy: options.uploadedBy || 'Opérateur',
-        fileName: file.name,
-        originalName: file.name,
-        resourceType,
-        mimeType: file.type || 'application/octet-stream',
-        size: file.size,
-        cloudinaryPublicId: publicId,
-        secureUrl: localBlobUrl,
-        folder,
-        category: options.category,
-        entityType: options.entityType,
-        entityId: options.entityId,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        status: 'ready',
-        confidentialityLevel: options.confidentialityLevel || 'interne',
-      };
-
-      return mediaAsset;
+      console.error('[CloudinaryService] Échec du téléversement :', err.message);
+      throw new Error(err.message || 'Échec du téléversement vers le service Cloudinary.');
     }
   }
 

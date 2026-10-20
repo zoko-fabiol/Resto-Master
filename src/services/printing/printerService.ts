@@ -120,22 +120,26 @@ export class PrinterService {
     peripheral: Peripheral,
     data: Uint8Array
   ): Promise<{ success: boolean; message: string }> {
-    // 0. Feature check: if printers_hardware is disabled, simulate virtually
+    // 0. Feature check: if printers_hardware is disabled
     if (!this.hardwareEnabled) {
-      console.info(
-        `[RestoMaster Hardware Printer] Module matériel désactivé (printers_hardware=false). Simulation virtuelle pour [${peripheral.name}] (${data.length} octets).`
-      );
       return {
-        success: true,
-        message: `Simulation d'impression virtuelle (${peripheral.name}) : module matériel désactivé.`,
+        success: false,
+        message: `Module d'impression matérielle désactivé. Veuillez activer l'option dans les paramètres ou utiliser l'impression système du navigateur.`,
       };
     }
 
     // 1. WebUSB Direct Print
-    if (peripheral.connectionType === 'usb' && this.isWebUsbSupported()) {
+    if (peripheral.connectionType === 'usb') {
+      if (!this.isWebUsbSupported()) {
+        return {
+          success: false,
+          message: `L'API WebUSB n'est pas supportée par ce navigateur (utilisez Google Chrome ou Microsoft Edge).`,
+        };
+      }
+
       try {
         const devices = await (navigator as any).usb.getDevices();
-        if (devices.length > 0) {
+        if (devices && devices.length > 0) {
           const device = devices[0];
           await device.open();
           await device.selectConfiguration(1);
@@ -147,43 +151,67 @@ export class PrinterService {
             success: true,
             message: `Données envoyées avec succès à l'imprimante USB [${peripheral.name}].`,
           };
+        } else {
+          return {
+            success: false,
+            message: `Aucune imprimante USB autorisée pour [${peripheral.name}]. Veuillez cliquer sur 'Associer USB' pour autoriser la connexion.`,
+          };
         }
-      } catch (usbErr) {
-        console.warn('WebUSB direct transfer warning:', usbErr);
+      } catch (usbErr: any) {
+        return {
+          success: false,
+          message: `Erreur d'accès à l'imprimante USB [${peripheral.name}] : ${usbErr.message || 'Périphérique inaccessible'}.`,
+        };
       }
     }
 
     // 2. Network IP (Ethernet / Wi-Fi) TCP Port 9100 / Local Print Bridge
     if (peripheral.connectionType === 'reseau_ip') {
+      const bridgeUrl = `http://${peripheral.address}:${peripheral.port || 9100}/print`;
       try {
-        // Attempt sending to local ESC/POS print bridge daemon if running on port 9100 or 8080
-        const bridgeUrl = `http://${peripheral.address}:${peripheral.port || 9100}/print`;
-        await fetch(bridgeUrl, {
+        const res = await fetch(bridgeUrl, {
           method: 'POST',
           body: new Blob([data.buffer as ArrayBuffer]),
           headers: { 'Content-Type': 'application/octet-stream' },
-          mode: 'no-cors',
-        }).catch((err) => {
-          console.warn(`[Imprimante ESC/POS] Pont local inaccessible (${bridgeUrl}) :`, err);
         });
 
+        if (res.ok) {
+          return {
+            success: true,
+            message: `Ticket transmis à l'adresse IP ${peripheral.address}:${peripheral.port || 9100} (${data.length} octets).`,
+          };
+        } else {
+          return {
+            success: false,
+            message: `Le pont d'impression IP (${bridgeUrl}) a retourné une erreur (HTTP ${res.status}).`,
+          };
+        }
+      } catch (err: any) {
         return {
-          success: true,
-          message: `Ticket transmis à l'adresse IP ${peripheral.address}:${peripheral.port || 9100} (${data.length} octets).`,
+          success: false,
+          message: `Impossible de joindre le pont d'impression IP à ${peripheral.address}:${peripheral.port || 9100}. Vérifiez l'adresse IP et le réseau.`,
         };
-      } catch {
-        // Fallback simulation
       }
     }
 
-    // 3. Fallback: Log hardware transmission and notify
-    console.info(
-      `[RestoMaster Hardware Printer] Envoi ESC/POS (${data.length} bytes) vers [${peripheral.name}] (${peripheral.connectionType} - ${peripheral.address})`
-    );
+    // 3. Bluetooth Direct Print
+    if (peripheral.connectionType === 'bluetooth') {
+      if (!this.isWebBluetoothSupported()) {
+        return {
+          success: false,
+          message: `L'API Web Bluetooth n'est pas supportée par ce navigateur (recommandé : Google Chrome / Edge).`,
+        };
+      }
+      return {
+        success: false,
+        message: `L'imprimante Bluetooth [${peripheral.name}] n'a pas de liaison active. Cliquez sur 'Associer Bluetooth'.`,
+      };
+    }
 
+    // 4. Aucune interface valide
     return {
-      success: true,
-      message: `Impression transmise à [${peripheral.name}] (${data.length} octets ESC/POS).`,
+      success: false,
+      message: `Aucune liaison physique active vers [${peripheral.name}] (${peripheral.connectionType}). Pour imprimer, raccordez l'imprimante ou utilisez l'impression système (Ctrl+P).`,
     };
   }
 
@@ -215,10 +243,9 @@ export class PrinterService {
       return this.sendRawToPrinter(peripheral, rawData);
     }
 
-    // Default system print trigger
     return {
-      success: true,
-      message: 'Ticket thermique préparé pour impression.',
+      success: false,
+      message: 'Aucune imprimante thermique matérielle associée. Utilisez l\'impression système (Ctrl+P).',
     };
   }
 
@@ -244,8 +271,8 @@ export class PrinterService {
     }
 
     return {
-      success: true,
-      message: `Note Pré-Addition Couvert ${seatNumber} transmise à l'impression.`,
+      success: false,
+      message: `Aucune imprimante matérielle associée pour la note du couvert ${seatNumber}.`,
     };
   }
 
@@ -290,8 +317,8 @@ export class PrinterService {
     }
 
     return {
-      success: true,
-      message: `Bon ${destination} préparé (${items.length} articles).`,
+      success: false,
+      message: `Aucune imprimante matérielle configurée pour le poste ${destination}.`,
     };
   }
 
@@ -331,8 +358,8 @@ export class PrinterService {
     }
 
     return {
-      success: true,
-      message: 'Impulsion tiroir-caisse envoyée.',
+      success: false,
+      message: 'Aucune imprimante configurée pour commander l\'ouverture du tiroir-caisse (RJ11/RJ12).',
     };
   }
 }

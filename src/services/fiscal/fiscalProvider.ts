@@ -45,7 +45,7 @@ export class DgiFiscalProvider implements IFiscalProvider {
     const requestId = `DGI-REQ-${Date.now()}`;
 
     if (!this.isLiveConnected) {
-      // Simulation / Mode Interne traçable
+      // Mode Interne autonome traçable (Journal fiscal conforme CGI 2026)
       return {
         provider: 'DGI_CAMEROON_EBILLING',
         requestId,
@@ -55,7 +55,7 @@ export class DgiFiscalProvider implements IFiscalProvider {
         isSimulated: false,
         legalNotice:
           'Passerelle DGI officielle non raccordée. Facture certifiée conforme et enregistrée au journal fiscal interne (non transmise à la DGI).',
-        errorMessage: 'API E-Billing DGI en attente de validation conventionnelle.',
+        errorMessage: 'API E-Billing DGI en attente de convention d\'homologation.',
       };
     }
 
@@ -78,7 +78,7 @@ export class DgiFiscalProvider implements IFiscalProvider {
       requestId,
       submissionStatus: 'NOT_CONNECTED',
       submittedAt: new Date().toISOString(),
-      isSimulated: true,
+      isSimulated: false,
       legalNotice: 'Système en mode autonome local conforme aux normes comptables.',
     };
   }

@@ -135,30 +135,37 @@ export const MenuView: React.FC = () => {
     }
 
     setIsUploadingImage(true);
-    setUploadProgress(20);
-
-    const progressTimer = setInterval(() => {
-      setUploadProgress((prev) => (prev < 85 ? prev + 15 : prev));
-    }, 200);
+    setUploadProgress(50);
 
     try {
-      const asset = await cloudinaryService.upload(file, {
-        organizationId: activeRestaurant?.organizationId || '',
-        restaurantId: activeRestaurant?.id || '',
-        category: 'food',
-        entityType: 'product',
-        confidentialityLevel: 'public',
-        tags: ['menu', 'plat', 'restomaster'],
-      });
+      if (cloudinaryService.getConfig().isConfigured) {
+        const asset = await cloudinaryService.upload(file, {
+          organizationId: activeRestaurant?.organizationId || '',
+          restaurantId: activeRestaurant?.id || '',
+          category: 'food',
+          entityType: 'product',
+          confidentialityLevel: 'public',
+          tags: ['menu', 'plat', 'restomaster'],
+        });
 
-      clearInterval(progressTimer);
-      setUploadProgress(100);
-      setImage(asset.secureUrl);
-      setImagePublicId(asset.cloudinaryPublicId);
-      showToast('Photo hébergée sur Cloudinary avec succès !', 'success');
+        setUploadProgress(100);
+        setImage(asset.secureUrl);
+        setImagePublicId(asset.cloudinaryPublicId);
+        showToast('Photo hébergée sur Cloudinary avec succès !', 'success');
+      } else {
+        // Mode local direct sans prétendre utiliser Cloudinary
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const dataUrl = e.target?.result as string;
+          setImage(dataUrl);
+          setImagePublicId('');
+          setUploadProgress(100);
+          showToast('Image chargée en local (Cloudinary non configuré dans le fichier .env).', 'info');
+        };
+        reader.readAsDataURL(file);
+      }
     } catch (err: any) {
-      clearInterval(progressTimer);
-      showToast(err.message || 'Erreur lors du téléversement Cloudinary', 'error');
+      showToast(err.message || 'Erreur lors du téléversement d\'image', 'error');
     } finally {
       setIsUploadingImage(false);
     }

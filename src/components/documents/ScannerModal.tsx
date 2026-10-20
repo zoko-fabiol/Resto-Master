@@ -8,10 +8,8 @@ import {
   Upload,
   Scan,
   CheckCircle2,
-  Sparkles,
   FileText,
   X,
-  RefreshCw,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
@@ -24,11 +22,13 @@ export const ScannerModal: React.FC<ScannerModalProps> = ({ isOpen, onClose }) =
   const { addDocument, suppliers, settings } = useRestaurant();
   const { showToast } = useToast();
 
-  const [step, setStep] = useState<'capture' | 'preview_ocr' | 'confirm'>('capture');
+  const [step, setStep] = useState<'capture' | 'preview_confirm'>('capture');
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
-  const [isProcessingOcr, setIsProcessingOcr] = useState(false);
+  const [capturedFileName, setCapturedFileName] = useState<string>('');
+  const [capturedFileSize, setCapturedFileSize] = useState<string>('0 KB');
+  const [capturedMimeType, setCapturedMimeType] = useState<string>('image/jpeg');
 
-  // Extracted metadata fields (modifiable)
+  // Metadata fields
   const [docTitle, setDocTitle] = useState('');
   const [docCategory, setDocCategory] = useState<DocumentItem['category']>('facture_fournisseur');
   const [supplierName, setSupplierName] = useState(suppliers[0]?.company || '');
@@ -37,75 +37,75 @@ export const ScannerModal: React.FC<ScannerModalProps> = ({ isOpen, onClose }) =
   const [amount, setAmount] = useState<number>(0);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
 
   if (!isOpen) return null;
+
+  const handleFileSelected = (file: File) => {
+    const sizeKb = Math.round(file.size / 1024);
+    setCapturedFileName(file.name);
+    setCapturedFileSize(sizeKb > 1024 ? `${(sizeKb / 1024).toFixed(1)} MB` : `${sizeKb} KB`);
+    setCapturedMimeType(file.type || 'image/jpeg');
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const result = event.target?.result as string;
+      setCapturedImage(result);
+      if (!docTitle) {
+        const cleanName = file.name.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ');
+        setDocTitle(cleanName.charAt(0).toUpperCase() + cleanName.slice(1));
+      }
+      setStep('preview_confirm');
+    };
+    reader.readAsDataURL(file);
+  };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        const result = event.target?.result as string;
-        setCapturedImage(result);
-        simulateOcrExtraction(result, file.name);
-      };
-      reader.readAsDataURL(file);
+      handleFileSelected(file);
     }
-  };
-
-  const simulateCameraCapture = () => {
-    // Document modèle SVG local
-    const sampleDoc = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="600" height="800" viewBox="0 0 600 800"><rect width="600" height="800" fill="%23f8fafc"/><rect x="40" y="40" width="520" height="720" rx="8" fill="%23ffffff" stroke="%23cbd5e1" stroke-width="2"/><text x="60" y="100" font-family="sans-serif" font-size="20" font-weight="bold" fill="%23334155">DOCUMENT NUMERISE</text><line x1="60" y1="120" x2="540" y2="120" stroke="%23e2e8f0" stroke-width="2"/></svg>';
-    setCapturedImage(sampleDoc);
-    simulateOcrExtraction(sampleDoc, 'capture_camera_document.svg');
-  };
-
-  const simulateOcrExtraction = (imgUrl: string, fileName: string) => {
-    setIsProcessingOcr(true);
-    setStep('preview_ocr');
-
-    setTimeout(() => {
-      setDocTitle(`Document numérisé`);
-      setSupplierName(suppliers[0]?.company || '');
-      setInvoiceNumber('');
-      setAmount(0);
-      setIsProcessingOcr(false);
-    }, 600);
   };
 
   const handleSaveDocument = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!docTitle) {
+    if (!docTitle.trim()) {
       showToast({
         type: 'warning',
         title: 'Titre manquant',
-        message: 'Veuillez renseigner un titre pour le document numérisé.',
+        message: 'Veuillez renseigner un titre pour le document.',
       });
       return;
     }
 
     await addDocument({
-      title: docTitle,
+      title: docTitle.trim(),
       category: docCategory,
       fileUrl: capturedImage || '',
-      fileName: `${docTitle.toLowerCase().replace(/\s+/g, '_')}.pdf`,
-      fileType: 'application/pdf',
-      fileSize: '680 KB',
+      fileName: capturedFileName || `${docTitle.toLowerCase().replace(/\s+/g, '_')}.pdf`,
+      fileType: capturedMimeType,
+      fileSize: capturedFileSize,
       supplierName: docCategory === 'facture_fournisseur' ? supplierName : undefined,
       date: invoiceDate,
       amount: amount > 0 ? amount : undefined,
-      ocrExtractedData: {
-        invoiceNumber,
+      ocrExtractedData: invoiceNumber || amount > 0 ? {
+        invoiceNumber: invoiceNumber || undefined,
         date: invoiceDate,
-        amount: `${amount} ${settings.currency}`,
-        supplier: supplierName,
-      },
+        amount: amount > 0 ? `${amount} ${settings.currency}` : undefined,
+        supplier: supplierName || undefined,
+      } : undefined,
     });
 
     confetti({
       particleCount: 50,
       spread: 60,
       origin: { y: 0.7 },
+    });
+
+    showToast({
+      type: 'success',
+      title: 'Document archivé',
+      message: `"${docTitle}" a été enregistré dans la GED comptable.`,
     });
 
     onClose();
@@ -122,10 +122,10 @@ export const ScannerModal: React.FC<ScannerModalProps> = ({ isOpen, onClose }) =
             </div>
             <div>
               <h3 className="font-bold text-sm text-slate-900">
-                Numériseur & Scanner de Factures / Pièces
+                Numériseur de Pièces Justificatives & Factures
               </h3>
               <p className="text-[11px] text-slate-500">
-                Capture caméra, amélioration du contraste et reconnaissance OCR automatique
+                Attachement direct et archivage qualifié dans la GED comptable
               </p>
             </div>
           </div>
@@ -143,28 +143,39 @@ export const ScannerModal: React.FC<ScannerModalProps> = ({ isOpen, onClose }) =
                   <Camera className="w-8 h-8" />
                 </div>
                 <div>
-                  <h4 className="font-bold text-sm text-slate-900">Prendre une photo ou importer un fichier</h4>
+                  <h4 className="font-bold text-sm text-slate-900">Photographier ou importer une pièce justificative</h4>
                   <p className="text-xs text-slate-500 mt-1 max-w-sm">
-                    Positionnez le document bien à plat avec un bon éclairage. Les bords seront recadrés automatiquement.
+                    Prenez une photo nette avec votre appareil ou importez un document existant (JPG, PNG ou PDF).
                   </p>
                 </div>
 
                 <div className="flex flex-wrap items-center justify-center gap-3 mt-2">
                   <button
-                    onClick={simulateCameraCapture}
-                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold shadow-xs transition-all"
+                    type="button"
+                    onClick={() => cameraInputRef.current?.click()}
+                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold shadow-xs transition-all cursor-pointer"
                   >
                     <Camera className="w-4 h-4" />
-                    <span>Capturer avec la Caméra</span>
+                    <span>Prendre une photo (Caméra)</span>
                   </button>
 
                   <button
+                    type="button"
                     onClick={() => fileInputRef.current?.click()}
-                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 text-xs font-semibold shadow-xs transition-all"
+                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 text-xs font-semibold shadow-xs transition-all cursor-pointer"
                   >
                     <Upload className="w-4 h-4" />
                     <span>Importer un document / PDF</span>
                   </button>
+
+                  <input
+                    ref={cameraInputRef}
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    className="hidden"
+                    onChange={handleFileUpload}
+                  />
 
                   <input
                     ref={fileInputRef}
@@ -178,34 +189,23 @@ export const ScannerModal: React.FC<ScannerModalProps> = ({ isOpen, onClose }) =
             </div>
           )}
 
-          {step === 'preview_ocr' && (
+          {step === 'preview_confirm' && (
             <div className="space-y-4">
-              {isProcessingOcr ? (
-                <div className="py-16 text-center space-y-3">
-                  <RefreshCw className="w-10 h-10 text-amber-600 animate-spin mx-auto" />
-                  <div className="font-bold text-sm text-slate-800">
-                    Analyse OCR du document en cours...
+              <form onSubmit={handleSaveDocument} className="space-y-4">
+                {/* Document Information Banner */}
+                <div className="flex items-center justify-between bg-slate-100 border border-slate-200 p-3 rounded-xl">
+                  <div className="flex items-center gap-2 text-xs font-bold text-slate-800">
+                    <FileText className="w-4 h-4 text-amber-600" />
+                    <span>Pièce chargée : {capturedFileName || 'Document'} ({capturedFileSize})</span>
                   </div>
-                  <p className="text-xs text-slate-500">
-                    Détection automatique du fournisseur, date, montant et numéro de facture
-                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setStep('capture')}
+                    className="text-xs text-amber-700 hover:text-amber-800 font-semibold underline cursor-pointer"
+                  >
+                    Changer de document
+                  </button>
                 </div>
-              ) : (
-                <form onSubmit={handleSaveDocument} className="space-y-4">
-                  {/* Document preview & OCR Badge */}
-                  <div className="flex items-center justify-between bg-emerald-50 border border-emerald-200 p-3 rounded-xl">
-                    <div className="flex items-center gap-2 text-xs font-bold text-emerald-800">
-                      <Sparkles className="w-4 h-4 text-emerald-600" />
-                      <span>Données extraites par OCR (vérifiez et ajustez si besoin)</span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setStep('capture')}
-                      className="text-xs text-slate-500 hover:text-slate-800 underline"
-                    >
-                      Reprendre photo
-                    </button>
-                  </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {/* Left: Document image preview */}
@@ -307,7 +307,6 @@ export const ScannerModal: React.FC<ScannerModalProps> = ({ isOpen, onClose }) =
                     </button>
                   </div>
                 </form>
-              )}
             </div>
           )}
         </div>

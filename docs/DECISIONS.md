@@ -81,3 +81,19 @@ Ce document consigne les décisions d'architecture prises pour la livraison d'un
   - Implémentation du script de pré-validation `scripts/check-no-demo.ts` exécuté à chaque build pour garantir le respect strict du critère "Zéro Donnée Fictive".
 - **Conséquences** : La plateforme livrée est garantie 100% vierge, prête à être configurée pour un nouveau restaurant client sans aucun résidu de données fictives.
 
+---
+
+### ADR-008 : Élimination des Simulations et Transparence des Statuts Matériels et Fiscaux (Phase D)
+- **Date** : 2026-10-20
+- **Statut** : Accepté & Implémenté
+- **Contexte** : Plusieurs composants et services feignaient des fonctionnalités inexistantes ou simulaient des succès fictifs : simulation OCR automatique avec faux document SVG dans `ScannerModal.tsx`, retours `success: true` systématiques dans `printerService.ts` même sans imprimante matérielle branchée, faux intervalles de progression de téléversement dans `MediaUploader.tsx` et `MenuView.tsx`, `isSimulated: true` dans `fiscalProvider.ts`, attribution automatique de moyens de paiement Mobile Money non configurés, et numérotation locale aléatoire pouvant masquer l'absence de certification serveur.
+- **Décision** :
+  - **D1 (Scanner GED)** : Suppression de toute promesse d'OCR simulé. Acquisition par caméra réelle (`capture="environment"`) ou fichier (PDF/image) avec saisie explicite et qualification des métadonnées (titre, fournisseur, date, montant).
+  - **D2 (Fiscalité DGI)** : Fixation de `isSimulated: false` et clarification légale que le système opère en mode autonome conforme au journal fiscal interne CGI 2026 en l'attente d'une clé d'API et convention d'homologation officielle DGI.
+  - **D3 (Impression)** : Élimination des retours `success: true` sans périphérique. `printerService.ts` retourne désormais des échecs explicites et informatifs lorsque l'API WebUSB, le pont IP ou le Bluetooth ne sont pas connectés. Les composants UI (`PrintingHardwareSection.tsx`, `ThermalReceiptModal.tsx`) orientent vers l'impression système (Ctrl+P).
+  - **D4 & D5 (Médias & Progression)** : Suppression des `setInterval` feignant une progression de téléversement. Si Cloudinary n'est pas configuré, le système alerte clairement l'utilisateur sans générer de faux blob silencieux persistant.
+  - **D6 (Appairage de terminaux)** : Affichage transparent de l'expiration du jeton d'appairage éphémère (15 minutes) et blocage clair des codes expirés avec invitation à régénérer.
+  - **D7 (Mobile Money)** : Les boutons Orange Money et MTN MoMo sont conditionnellement désactivés avec le libellé "(À configurer)" si aucun compte marchand (code, téléphone ou QR officiel) n'est configuré dans les paramètres de l'établissement. La méthode par défaut bascule automatiquement sur les espèces FCFA.
+  - **D8 (Numérotation séquentielle)** : Formalisation de la séquence continue certifiée serveur `CMD-YYYYMMDD-XXXX` via Cloud Functions atomiques transactionnelles, et étiquetage transparent des commandes locales hors-ligne avec le préfixe provisoire `PROV-YYYYMMDD-XXXX`.
+- **Conséquences** : Honnêteté technique absolue de la plateforme. Zéro simulation, zéro faux succès matériel ou fiscal, traçabilité intègre.
+

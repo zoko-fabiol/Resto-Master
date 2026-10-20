@@ -81,10 +81,25 @@ export function generateSecureId(prefix?: string): string {
   return prefix ? `${prefix}_${uuid}` : uuid;
 }
 
-export function generateOrderNumber(): string {
-  const dateStr = new Date().toISOString().slice(2, 10).replace(/-/g, '');
-  const rand = Math.floor(100 + Math.random() * 900);
-  return `CMD-${dateStr}-${rand}`;
+export function generateOrderNumber(sequenceNumber?: number, isProvisional: boolean = false): string {
+  const now = new Date();
+  const yyyy = now.getFullYear();
+  const mm = String(now.getMonth() + 1).padStart(2, '0');
+  const dd = String(now.getDate()).padStart(2, '0');
+  const dateStr = `${yyyy}${mm}${dd}`;
+
+  if (isProvisional) {
+    const rand = Math.floor(1000 + Math.random() * 9000);
+    return `PROV-${dateStr}-${rand}`;
+  }
+
+  if (typeof sequenceNumber === 'number' && sequenceNumber > 0) {
+    return `CMD-${dateStr}-${String(sequenceNumber).padStart(4, '0')}`;
+  }
+
+  // Par défaut sans séquence serveur certifiée : marquer comme provisoire
+  const rand = Math.floor(1000 + Math.random() * 9000);
+  return `PROV-${dateStr}-${rand}`;
 }
 
 export function generatePurchaseOrderNumber(): string {

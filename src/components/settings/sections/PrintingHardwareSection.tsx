@@ -274,12 +274,20 @@ export const PrintingHardwareSection: React.FC = () => {
 
     try {
       const res = await printerService.printTestTicket(p, settings);
-      playAudioChime('kitchen');
-      showToast({
-        type: 'success',
-        title: 'Ticket Test Imprimé !',
-        message: res.message,
-      });
+      if (res.success) {
+        playAudioChime('kitchen');
+        showToast({
+          type: 'success',
+          title: 'Ticket Test Imprimé !',
+          message: res.message,
+        });
+      } else {
+        showToast({
+          type: 'warning',
+          title: 'Périphérique non joignable',
+          message: res.message,
+        });
+      }
     } catch (err: any) {
       showToast({
         type: 'error',
@@ -296,11 +304,19 @@ export const PrintingHardwareSection: React.FC = () => {
     playAudioChime();
     try {
       const res = await printerService.openCashDrawer(p);
-      showToast({
-        type: 'info',
-        title: 'Impulsion Tiroir-Caisse',
-        message: res.message,
-      });
+      if (res.success) {
+        showToast({
+          type: 'info',
+          title: 'Impulsion Tiroir-Caisse',
+          message: res.message,
+        });
+      } else {
+        showToast({
+          type: 'warning',
+          title: 'Échec impulsion tiroir',
+          message: res.message,
+        });
+      }
     } catch (err: any) {
       showToast({
         type: 'error',

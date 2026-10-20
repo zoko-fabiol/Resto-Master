@@ -102,7 +102,7 @@ export const ThermalReceiptModal: React.FC<ThermalReceiptModalProps> = ({
 
     try {
       const copies = Math.max(1, printerSettings?.receiptCopiesCount || 1);
-      let lastRes = { message: 'Impression effectuée avec succès' };
+      let lastRes = { success: false, message: 'Impression effectuée avec succès' };
       for (let c = 0; c < copies; c++) {
         lastRes = await printerService.printCustomerReceipt(
           order,
@@ -110,14 +110,23 @@ export const ThermalReceiptModal: React.FC<ThermalReceiptModalProps> = ({
           activeCashPrinter,
           { cashGiven, changeDue, folio }
         );
+        if (!lastRes.success) break;
       }
 
-      playAudioChime('kitchen');
-      showToast({
-        type: 'success',
-        title: copies > 1 ? `Impression Matérielle (${copies} exemplaires)` : 'Impression Matérielle POS',
-        message: lastRes.message,
-      });
+      if (lastRes.success) {
+        playAudioChime('kitchen');
+        showToast({
+          type: 'success',
+          title: copies > 1 ? `Impression Matérielle (${copies} exemplaires)` : 'Impression Matérielle POS',
+          message: lastRes.message,
+        });
+      } else {
+        showToast({
+          type: 'warning',
+          title: 'Imprimante non disponible',
+          message: lastRes.message,
+        });
+      }
     } catch (err: any) {
       showToast({
         type: 'error',
