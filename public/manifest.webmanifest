@@ -1,0 +1,22 @@
+{
+  "name": "RestoMaster OS — Système de Gestion Intégrée",
+  "short_name": "RestoMaster",
+  "description": "Plateforme centralisée tout-en-un pour la gestion de restaurant : POS, tables, KDS cuisine & bar, stocks, achats fournisseurs, caisse et rapports.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0f172a",
+  "theme_color": "#0f172a",
+  "lang": "fr",
+  "dir": "ltr",
+  "categories": ["business", "food", "productivity"],
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
