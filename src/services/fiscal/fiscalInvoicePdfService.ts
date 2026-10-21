@@ -8,6 +8,7 @@ import autoTable from 'jspdf-autotable';
 import { Invoice, RestaurantSettings, Order } from '../../types/restaurant';
 import { formatCurrency, formatDateTime } from '../../lib/utils';
 import { DgiFiscalHelper } from './dgiQrCodeHelper';
+import { platform } from '../../platform';
 
 export class FiscalInvoicePdfService {
   /**
@@ -310,8 +311,13 @@ export class FiscalInvoicePdfService {
       { align: 'center' }
     );
 
-    // Téléchargement du fichier PDF
+    // Sauvegarde via l'adaptateur de plateforme
     const filename = `facture_dgi_${invoice.invoiceNumber.replace(/[^a-zA-Z0-9_-]/g, '_')}.pdf`;
-    doc.save(filename);
+    const pdfBuffer = doc.output('arraybuffer');
+    await platform.files.save({
+      filename,
+      mimeType: 'application/pdf',
+      data: new Uint8Array(pdfBuffer),
+    });
   }
 }
