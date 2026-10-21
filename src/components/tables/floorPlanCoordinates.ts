@@ -28,17 +28,17 @@ export function normalizeCoordinateY(val: number | undefined | null, fallback = 
 
 /**
  * Migration réversible des anciennes tables ayant des coordonnées en pourcentages (version 1)
- * vers les unités logiques absolues (coordVersion = 2).
+ * vers les unités logiques absolues (layoutVersion = 2).
  */
 export function migrateTableCoordinates(table: RestaurantTable): {
   migratedTable: RestaurantTable;
   wasMigrated: boolean;
 } {
-  if (table.coordVersion === 2) {
+  if (table.layoutVersion === 2 || table.coordVersion === 2) {
     return { migratedTable: table, wasMigrated: false };
   }
 
-  // Ancienne convention : si x ou y <= 100 sans coordVersion, c'était un pourcentage
+  // Ancienne convention : si x ou y <= 100 sans layoutVersion, c'était un pourcentage
   let newX = table.x ?? 200;
   let newY = table.y ?? 200;
   let changed = false;
@@ -62,10 +62,11 @@ export function migrateTableCoordinates(table: RestaurantTable): {
       x: newX,
       y: newY,
       coordVersion: 2,
+      layoutVersion: 2,
       // Trace réversible
       ...(changed ? { _legacyCoords: legacyCoords } : {}),
     },
-    wasMigrated: changed || table.coordVersion !== 2,
+    wasMigrated: changed || table.layoutVersion !== 2,
   };
 }
 
@@ -93,7 +94,7 @@ export function migrateDecorCoordinates(decor: DecorElement): {
   migratedDecor: DecorElement;
   wasMigrated: boolean;
 } {
-  if (decor.coordVersion === 2) {
+  if (decor.layoutVersion === 2 || decor.coordVersion === 2) {
     return { migratedDecor: decor, wasMigrated: false };
   }
 
@@ -116,7 +117,8 @@ export function migrateDecorCoordinates(decor: DecorElement): {
       x: newX,
       y: newY,
       coordVersion: 2,
+      layoutVersion: 2,
     },
-    wasMigrated: changed || decor.coordVersion !== 2,
+    wasMigrated: changed || decor.layoutVersion !== 2,
   };
 }

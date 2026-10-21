@@ -34,6 +34,7 @@ export const tablesFirestoreService = {
         ...table,
         restaurantId: table.restaurantId || restaurantId || '',
         coordVersion: 2,
+        layoutVersion: 2,
         status: table.status || 'libre',
         createdAt: table.createdAt || now,
         updatedAt: now,
@@ -47,6 +48,7 @@ export const tablesFirestoreService = {
       const payload = {
         ...layout,
         coordVersion: 2,
+        layoutVersion: 2,
         updatedAt: now,
       };
       batch.update(docRef, JSON.parse(JSON.stringify(payload)));
@@ -65,6 +67,7 @@ export const tablesFirestoreService = {
         ...decor,
         restaurantId: decor.restaurantId || restaurantId || '',
         coordVersion: 2,
+        layoutVersion: 2,
         updatedAt: now,
       };
       batch.set(docRef, JSON.parse(JSON.stringify(payload)), { merge: true });

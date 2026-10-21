@@ -234,6 +234,7 @@ export interface RestaurantTable {
   status: TableStatus;
   shape?: TableShape;
   coordVersion?: number; // Version des coordonnées (2 = unités logiques absolues 1200x800)
+  layoutVersion?: number; // Version de disposition (2 = unités logiques absolues 1200x800)
   x?: number; // Logical X coordinate (0 - 1200)
   y?: number; // Logical Y coordinate (0 - 800)
   width?: number; // Logical width in px (default 100)
@@ -280,6 +281,7 @@ export interface DecorElement {
   zoneId: string;
   type: DecorType;
   coordVersion?: number; // Version des coordonnées (2 = unités logiques 1200x800)
+  layoutVersion?: number; // Version de disposition (2 = unités logiques 1200x800)
   name?: string;
   x: number; // Coordonnée logique X (0 - 1200)
   y: number; // Coordonnée logique Y (0 - 800)

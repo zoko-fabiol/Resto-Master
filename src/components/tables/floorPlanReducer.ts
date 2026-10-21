@@ -22,6 +22,8 @@ export function cloneSnapshot(snapshot: LayoutSnapshot): LayoutSnapshot {
   };
 }
 
+import { alignObjects, distributeObjects, autoSeparateTables, AlignmentType, DistributionAxis } from '../../lib/floorPlanGeometry';
+
 export type FloorPlanAction =
   | { type: 'INIT'; payload: { tables: RestaurantTable[]; decor: DecorElement[] } }
   | { type: 'SET_TABLES_TRANSIENT'; payload: RestaurantTable[] }
@@ -34,6 +36,10 @@ export type FloorPlanAction =
   | { type: 'ADD_TABLE'; payload: RestaurantTable }
   | { type: 'ADD_TABLES_BATCH'; payload: RestaurantTable[] }
   | { type: 'UPDATE_SINGLE_TABLE'; payload: { id: string; updates: Partial<RestaurantTable> } }
+  | { type: 'MOVE_TABLES_GROUP'; payload: { tableIds: string[]; dx: number; dy: number } }
+  | { type: 'ALIGN_TABLES'; payload: { tableIds: string[]; alignment: AlignmentType } }
+  | { type: 'DISTRIBUTE_TABLES'; payload: { tableIds: string[]; axis: DistributionAxis } }
+  | { type: 'AUTO_SEPARATE_TABLES' }
   | { type: 'REMOVE_TABLE'; payload: { id: string; isPersisted: boolean } }
   | { type: 'SAVE_DECOR_ELEMENT'; payload: DecorElement }
   | { type: 'REMOVE_DECOR'; payload: { id: string; isPersisted: boolean } }
@@ -154,6 +160,74 @@ export function floorPlanReducer(
         present: {
           ...state.present,
           tables: nextTables,
+        },
+        future: [],
+      };
+    }
+
+    case 'MOVE_TABLES_GROUP': {
+      const idSet = new Set(action.payload.tableIds);
+      const nextTables = state.present.tables.map((t) => {
+        if (!idSet.has(t.id)) return t;
+        const newX = Math.max(40, Math.min(1160, (t.x ?? 200) + action.payload.dx));
+        const newY = Math.max(40, Math.min(760, (t.y ?? 200) + action.payload.dy));
+        return { ...t, x: newX, y: newY };
+      });
+      return {
+        past: [...state.past, cloneSnapshot(state.present)],
+        present: {
+          ...state.present,
+          tables: nextTables,
+        },
+        future: [],
+      };
+    }
+
+    case 'ALIGN_TABLES': {
+      const idSet = new Set(action.payload.tableIds);
+      const selected = state.present.tables.filter((t) => idSet.has(t.id));
+      if (selected.length <= 1) return state;
+
+      const aligned = alignObjects(selected, action.payload.alignment);
+      const alignedMap = new Map(aligned.map((t) => [t.id, t]));
+
+      const nextTables = state.present.tables.map((t) => alignedMap.get(t.id) || t);
+      return {
+        past: [...state.past, cloneSnapshot(state.present)],
+        present: {
+          ...state.present,
+          tables: nextTables,
+        },
+        future: [],
+      };
+    }
+
+    case 'DISTRIBUTE_TABLES': {
+      const idSet = new Set(action.payload.tableIds);
+      const selected = state.present.tables.filter((t) => idSet.has(t.id));
+      if (selected.length <= 2) return state;
+
+      const distributed = distributeObjects(selected, action.payload.axis);
+      const distMap = new Map(distributed.map((t) => [t.id, t]));
+
+      const nextTables = state.present.tables.map((t) => distMap.get(t.id) || t);
+      return {
+        past: [...state.past, cloneSnapshot(state.present)],
+        present: {
+          ...state.present,
+          tables: nextTables,
+        },
+        future: [],
+      };
+    }
+
+    case 'AUTO_SEPARATE_TABLES': {
+      const separated = autoSeparateTables(state.present.tables);
+      return {
+        past: [...state.past, cloneSnapshot(state.present)],
+        present: {
+          ...state.present,
+          tables: separated,
         },
         future: [],
       };

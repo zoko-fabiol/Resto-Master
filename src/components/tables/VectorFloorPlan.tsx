@@ -31,20 +31,53 @@ import {
   Box,
   Maximize2,
   Magnet,
+  Trash2,
+  Copy,
+  Pencil,
+  AlignLeft,
+  AlignCenter,
+  AlignRight,
+  AlignVerticalJustifyStart,
+  AlignVerticalJustifyCenter,
+  AlignVerticalJustifyEnd,
+  Split,
+  Sparkles,
+  MousePointer,
+  Hand,
+  X,
 } from 'lucide-react';
+import {
+  screenToLogicalPoint,
+  compute8Handles,
+  computeResizedBox,
+  computeRotationAngle,
+  computeUnifiedSnapping,
+  findTableCollisions,
+  autoSeparateTables,
+  alignObjects,
+  distributeObjects,
+  HandleType,
+  Point,
+  SnapGuide,
+  CollisionPair,
+  AlignmentType,
+  DistributionAxis,
+  LOGICAL_WIDTH,
+  LOGICAL_HEIGHT,
+} from '../../lib/floorPlanGeometry';
 import {
   normalizeCoordinateX,
   normalizeCoordinateY,
-  LOGICAL_WIDTH,
-  LOGICAL_HEIGHT,
 } from './floorPlanCoordinates';
 
 export { normalizeCoordinateX, normalizeCoordinateY, LOGICAL_WIDTH, LOGICAL_HEIGHT };
 
+const ZOOM_MIN = 0.5;
+const ZOOM_MAX = 3.0;
 const SNAP_GRID = 10;
 const DRAG_THRESHOLD = 4;
 
-interface VectorFloorPlanProps {
+export interface VectorFloorPlanProps {
   tables: RestaurantTable[];
   decorElements: DecorElement[];
   ordersMap: Map<string, Order>;
@@ -55,7 +88,8 @@ interface VectorFloorPlanProps {
   snapToMagnet?: boolean;
   selectedTableId: string | null;
   selectedDecorId: string | null;
-  onSelectTable: (table: RestaurantTable) => void;
+  selectedTableIds?: Set<string>;
+  onSelectTable: (table: RestaurantTable, isMultiSelect?: boolean) => void;
   onTableAction: (table: RestaurantTable) => void;
   onSelectDecor: (decor: DecorElement) => void;
   onEditTableProps?: (table: RestaurantTable) => void;
@@ -66,6 +100,10 @@ interface VectorFloorPlanProps {
   onPushHistory: () => void;
   onAddTableClick: () => void;
   onBatchAddClick: () => void;
+  onAlignSelected?: (alignment: AlignmentType) => void;
+  onDistributeSelected?: (axis: DistributionAxis) => void;
+  onAutoSeparate?: () => void;
+  onCollisionsChange?: (collidingIds: Set<string>, pairs: CollisionPair[]) => void;
 }
 
 export const VectorFloorPlan: React.FC<VectorFloorPlanProps> = ({
@@ -79,6 +117,7 @@ export const VectorFloorPlan: React.FC<VectorFloorPlanProps> = ({
   snapToMagnet = true,
   selectedTableId,
   selectedDecorId,
+  selectedTableIds,
   onSelectTable,
   onTableAction,
   onSelectDecor,
@@ -90,38 +129,120 @@ export const VectorFloorPlan: React.FC<VectorFloorPlanProps> = ({
   onPushHistory,
   onAddTableClick,
   onBatchAddClick,
+  onAlignSelected,
+  onDistributeSelected,
+  onAutoSeparate,
+  onCollisionsChange,
 }) => {
   const svgRef = useRef<SVGSVGElement>(null);
   const contentGroupRef = useRef<SVGGElement>(null);
 
-  // Zoom & Pan state (bornes unifiées 0.5 à 3.0)
+  // Zoom & Pan state (bornes strictes unifiées 0.5 à 3.0)
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState(false);
+  const [activeTool, setActiveTool] = useState<'select' | 'hand'>('select');
+  const [isSpacePressed, setIsSpacePressed] = useState(false);
   const panStartRef = useRef({ x: 0, y: 0 });
 
-  // Multi-touch tracking (pincement et déplacement à 2 doigts)
+  // Multi-touch tracking (pincement et déplacement à 2 doigts sur tablette)
   const activePointersRef = useRef<Map<number, { clientX: number; clientY: number }>>(new Map());
   const pinchStartRef = useRef<{
     dist: number;
     zoom: number;
-    midLogical: { x: number; y: number };
+    midLogical: Point;
+  } | null>(null);
+
+  // Internal multi-selection set if not passed from parent
+  const [internalSelectedIds, setInternalSelectedIds] = useState<Set<string>>(new Set());
+  const activeSelectedTableIds = useMemo(() => {
+    if (selectedTableIds && selectedTableIds.size > 0) return selectedTableIds;
+    if (selectedTableId) return new Set([selectedTableId, ...Array.from(internalSelectedIds)]);
+    return internalSelectedIds;
+  }, [selectedTableIds, selectedTableId, internalSelectedIds]);
+
+  // Rectangle de sélection lasso
+  const [lassoBox, setLassoBox] = useState<{
+    startX: number;
+    startY: number;
+    currentX: number;
+    currentY: number;
   } | null>(null);
 
   // Dragging state
   const [draggingEntity, setDraggingEntity] = useState<{
-    type: 'table' | 'decor' | 'resize' | 'rotate';
-    id: string;
-    handle?: string;
+    type: 'table' | 'group' | 'decor' | 'resize' | 'rotate' | 'lasso';
+    id?: string;
+    handle?: HandleType;
   } | null>(null);
 
   const dragStartClientRef = useRef({ x: 0, y: 0 });
-  const dragEntityStartPosRef = useRef({ x: 0, y: 0, width: 0, height: 0, rotation: 0 });
+  const dragEntityStartPosRef = useRef<{
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    rotation: number;
+    groupPositions?: Map<string, { x: number; y: number }>;
+  }>({ x: 0, y: 0, width: 0, height: 0, rotation: 0 });
+
   const grabOffsetRef = useRef({ x: 0, y: 0 });
   const dragHasExceededThresholdRef = useRef(false);
 
   // Alignment guide lines
-  const [guideLines, setGuideLines] = useState<{ x?: number; y?: number }>({});
+  const [activeGuides, setActiveGuides] = useState<SnapGuide[]>([]);
+
+  // Écoute de la barre d'espace pour basculer en outil Main
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const targetTag = (e.target as HTMLElement)?.tagName?.toLowerCase();
+      if (targetTag === 'input' || targetTag === 'textarea' || targetTag === 'select') return;
+
+      if (e.code === 'Space' && !e.repeat) {
+        setIsSpacePressed(true);
+      }
+    };
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.code === 'Space') {
+        setIsSpacePressed(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+    };
+  }, []);
+
+  // Conversion directe via utilitaire pur CTM inverse (1.1)
+  const toLogical = useCallback(
+    (clientX: number, clientY: number): Point => {
+      return screenToLogicalPoint(clientX, clientY, svgRef.current, contentGroupRef.current);
+    },
+    []
+  );
+
+  // Collision detection between tables via Separating Axis Theorem (1.8)
+  const { collidingTableIds, pairs: collisionPairs } = useMemo(() => {
+    return findTableCollisions(tables);
+  }, [tables]);
+
+  useEffect(() => {
+    onCollisionsChange?.(collidingTableIds, collisionPairs);
+  }, [collidingTableIds, collisionPairs, onCollisionsChange]);
+
+  // Selected table object
+  const primarySelectedTable = useMemo(() => {
+    if (!selectedTableId) return null;
+    return tables.find((t) => t.id === selectedTableId) || null;
+  }, [tables, selectedTableId]);
+
+  // Selected decor object
+  const primarySelectedDecor = useMemo(() => {
+    if (!selectedDecorId) return null;
+    return decorElements.find((d) => d.id === selectedDecorId) || null;
+  }, [decorElements, selectedDecorId]);
 
   // Reset zoom & pan à 100%
   const handleResetZoomPan = () => {
@@ -129,7 +250,7 @@ export const VectorFloorPlan: React.FC<VectorFloorPlanProps> = ({
     setPan({ x: 0, y: 0 });
   };
 
-  // Ajuster à l'écran (calcul d'échelle optimal pour le conteneur)
+  // Ajuster à l'écran (calcul d'échelle optimal pour le conteneur) (1.2)
   const handleFitToScreen = () => {
     if (!svgRef.current) {
       setZoom(1);
@@ -140,425 +261,15 @@ export const VectorFloorPlan: React.FC<VectorFloorPlanProps> = ({
     const padding = 24;
     const availW = Math.max(100, rect.width - padding * 2);
     const availH = Math.max(100, rect.height - padding * 2);
-    const scale = Math.min(3.0, Math.max(0.5, Math.min(availW / LOGICAL_WIDTH, availH / LOGICAL_HEIGHT) * (LOGICAL_WIDTH / rect.width)));
+    const scale = Math.min(
+      ZOOM_MAX,
+      Math.max(ZOOM_MIN, Math.min(availW / LOGICAL_WIDTH, availH / LOGICAL_HEIGHT) * (LOGICAL_WIDTH / rect.width))
+    );
     setZoom(scale || 1);
     setPan({ x: 0, y: 0 });
   };
 
-  // P-01 : Conversion universelle et exacte par matrice SVG CTM inverse
-  const clientToLogical = useCallback(
-    (clientX: number, clientY: number): { x: number; y: number } => {
-      if (!contentGroupRef.current || !svgRef.current) return { x: 0, y: 0 };
-      const ctm = contentGroupRef.current.getScreenCTM();
-      if (!ctm) return { x: 0, y: 0 };
-      const pt = svgRef.current.createSVGPoint();
-      pt.x = clientX;
-      pt.y = clientY;
-      const transformed = pt.matrixTransform(ctm.inverse());
-      return { x: transformed.x, y: transformed.y };
-    },
-    []
-  );
-
-  // Collision detection between tables
-  const collidingTableIds = useMemo(() => {
-    const colliding = new Set<string>();
-    for (let i = 0; i < tables.length; i++) {
-      const t1 = tables[i];
-      const x1 = normalizeCoordinateX(t1.x);
-      const y1 = normalizeCoordinateY(t1.y);
-      const w1 = t1.width || 100;
-      const h1 = t1.height || 100;
-
-      for (let j = i + 1; j < tables.length; j++) {
-        const t2 = tables[j];
-        const x2 = normalizeCoordinateX(t2.x);
-        const y2 = normalizeCoordinateY(t2.y);
-        const w2 = t2.width || 100;
-        const h2 = t2.height || 100;
-
-        // Skip tables merged together
-        if (t1.mergedWithTableId === t2.id || t2.mergedWithTableId === t1.id) continue;
-        if (t1.mergedTableIds?.includes(t2.id) || t2.mergedTableIds?.includes(t1.id)) continue;
-
-        const overlapX = Math.abs(x1 - x2) < (w1 + w2) / 2 - 10;
-        const overlapY = Math.abs(y1 - y2) < (h1 + h2) / 2 - 10;
-
-        if (overlapX && overlapY) {
-          colliding.add(t1.id);
-          colliding.add(t2.id);
-        }
-      }
-    }
-    return colliding;
-  }, [tables]);
-
-  // Pointer Down sur Table
-  const handleTablePointerDown = (e: React.PointerEvent, table: RestaurantTable) => {
-    e.stopPropagation();
-    activePointersRef.current.set(e.pointerId, { clientX: e.clientX, clientY: e.clientY });
-
-    const p = clientToLogical(e.clientX, e.clientY);
-    const tblX = normalizeCoordinateX(table.x);
-    const tblY = normalizeCoordinateY(table.y);
-
-    dragStartClientRef.current = { x: e.clientX, y: e.clientY };
-    dragEntityStartPosRef.current = {
-      x: tblX,
-      y: tblY,
-      width: table.width || 100,
-      height: table.height || 100,
-      rotation: table.rotation || 0,
-    };
-    grabOffsetRef.current = {
-      x: p.x - tblX,
-      y: p.y - tblY,
-    };
-    dragHasExceededThresholdRef.current = false;
-
-    if (isEditMode) {
-      try {
-        (e.currentTarget as Element).setPointerCapture(e.pointerId);
-      } catch {}
-      setDraggingEntity({ type: 'table', id: table.id });
-      onSelectTable(table);
-    }
-  };
-
-  // Pointer Down sur Élément de Décor
-  const handleDecorPointerDown = (e: React.PointerEvent, decor: DecorElement) => {
-    if (!isEditMode) return;
-    e.stopPropagation();
-    activePointersRef.current.set(e.pointerId, { clientX: e.clientX, clientY: e.clientY });
-
-    const p = clientToLogical(e.clientX, e.clientY);
-    dragStartClientRef.current = { x: e.clientX, y: e.clientY };
-    dragEntityStartPosRef.current = {
-      x: decor.x,
-      y: decor.y,
-      width: decor.width,
-      height: decor.height,
-      rotation: decor.rotation || 0,
-    };
-    grabOffsetRef.current = {
-      x: p.x - decor.x,
-      y: p.y - decor.y,
-    };
-    dragHasExceededThresholdRef.current = false;
-
-    try {
-      (e.currentTarget as Element).setPointerCapture(e.pointerId);
-    } catch {}
-    setDraggingEntity({ type: 'decor', id: decor.id });
-    onSelectDecor(decor);
-  };
-
-  // Pointer Down sur Poignée de Redimensionnement (4 coins)
-  const handleResizePointerDown = (e: React.PointerEvent, tableId: string, handle: string) => {
-    e.stopPropagation();
-    const table = tables.find((t) => t.id === tableId);
-    if (!table) return;
-    activePointersRef.current.set(e.pointerId, { clientX: e.clientX, clientY: e.clientY });
-
-    dragStartClientRef.current = { x: e.clientX, y: e.clientY };
-    dragEntityStartPosRef.current = {
-      x: normalizeCoordinateX(table.x),
-      y: normalizeCoordinateY(table.y),
-      width: table.width || 100,
-      height: table.height || 100,
-      rotation: table.rotation || 0,
-    };
-    dragHasExceededThresholdRef.current = true;
-    try {
-      (e.currentTarget as Element).setPointerCapture(e.pointerId);
-    } catch {}
-
-    setDraggingEntity({ type: 'resize', id: tableId, handle });
-  };
-
-  // Pointer Down sur Poignée de Rotation Libre
-  const handleRotatePointerDown = (e: React.PointerEvent, tableId: string) => {
-    e.stopPropagation();
-    const table = tables.find((t) => t.id === tableId);
-    if (!table) return;
-    activePointersRef.current.set(e.pointerId, { clientX: e.clientX, clientY: e.clientY });
-
-    dragStartClientRef.current = { x: e.clientX, y: e.clientY };
-    dragEntityStartPosRef.current = {
-      x: normalizeCoordinateX(table.x),
-      y: normalizeCoordinateY(table.y),
-      width: table.width || 100,
-      height: table.height || 100,
-      rotation: table.rotation || 0,
-    };
-    dragHasExceededThresholdRef.current = true;
-    try {
-      (e.currentTarget as Element).setPointerCapture(e.pointerId);
-    } catch {}
-
-    setDraggingEntity({ type: 'rotate', id: tableId });
-  };
-
-  // Pointer Down sur Canvas SVG (Panoramique ou sélection)
-  const handleCanvasPointerDown = (e: React.PointerEvent) => {
-    activePointersRef.current.set(e.pointerId, { clientX: e.clientX, clientY: e.clientY });
-
-    // Clic milieu, Shift+clic, ou clic direct sur le fond du plan
-    if (e.button === 1 || (e.button === 0 && e.shiftKey) || e.target === svgRef.current) {
-      if (isEditMode && e.target === svgRef.current) {
-        onDeselect?.();
-      }
-      setIsPanning(true);
-      panStartRef.current = { x: e.clientX - pan.x, y: e.clientY - pan.y };
-      try {
-        (e.currentTarget as Element).setPointerCapture(e.pointerId);
-      } catch {}
-    }
-  };
-
-  // Pointer Move sur le Canvas SVG
-  const handleCanvasPointerMove = (e: React.PointerEvent) => {
-    activePointersRef.current.set(e.pointerId, { clientX: e.clientX, clientY: e.clientY });
-
-    // 1. Support multi-touch tactile : Pincement pour zoomer & Panoramique à deux doigts (P-02)
-    if (activePointersRef.current.size >= 2) {
-      const pointers = Array.from(activePointersRef.current.values());
-      const p1 = pointers[0];
-      const p2 = pointers[1];
-      const dist = Math.hypot(p1.clientX - p2.clientX, p1.clientY - p2.clientY);
-      const midX = (p1.clientX + p2.clientX) / 2;
-      const midY = (p1.clientY + p2.clientY) / 2;
-
-      if (!pinchStartRef.current) {
-        pinchStartRef.current = {
-          dist,
-          zoom,
-          midLogical: clientToLogical(midX, midY),
-        };
-      } else {
-        const scaleFactor = dist / pinchStartRef.current.dist;
-        const newZoom = Math.min(3.0, Math.max(0.5, pinchStartRef.current.zoom * scaleFactor));
-        setZoom(newZoom);
-
-        const midLogical = pinchStartRef.current.midLogical;
-        if (svgRef.current) {
-          const rect = svgRef.current.getBoundingClientRect();
-          const scaleToSvg = LOGICAL_WIDTH / rect.width;
-          const svgMidX = (midX - rect.left) * scaleToSvg;
-          const svgMidY = (midY - rect.top) * scaleToSvg;
-          setPan({
-            x: svgMidX - midLogical.x * newZoom,
-            y: svgMidY - midLogical.y * newZoom,
-          });
-        }
-      }
-      return;
-    }
-
-    // 2. Panoramique mono-doigt ou souris
-    if (isPanning) {
-      setPan({
-        x: e.clientX - panStartRef.current.x,
-        y: e.clientY - panStartRef.current.y,
-      });
-      return;
-    }
-
-    if (!draggingEntity || !isEditMode) return;
-
-    const dx = e.clientX - dragStartClientRef.current.x;
-    const dy = e.clientY - dragStartClientRef.current.y;
-
-    // Seuil de déclenchement (4px) pour éviter les clics parasites
-    if (!dragHasExceededThresholdRef.current) {
-      if (Math.hypot(dx, dy) >= DRAG_THRESHOLD) {
-        dragHasExceededThresholdRef.current = true;
-      } else {
-        return;
-      }
-    }
-
-    // P-01 : Conversion directe exacte du pointeur vers le repère logique
-    const p = clientToLogical(e.clientX, e.clientY);
-
-    if (draggingEntity.type === 'table') {
-      let targetX = p.x - grabOffsetRef.current.x;
-      let targetY = p.y - grabOffsetRef.current.y;
-
-      // Alignement grille si activé
-      if (snapToGrid) {
-        targetX = Math.round(targetX / SNAP_GRID) * SNAP_GRID;
-        targetY = Math.round(targetY / SNAP_GRID) * SNAP_GRID;
-      }
-
-      // Bornes du plan (marge de sécurité)
-      const halfW = (dragEntityStartPosRef.current.width || 100) / 2;
-      const halfH = (dragEntityStartPosRef.current.height || 100) / 2;
-      targetX = Math.max(halfW + 10, Math.min(LOGICAL_WIDTH - halfW - 10, targetX));
-      targetY = Math.max(halfH + 10, Math.min(LOGICAL_HEIGHT - halfH - 10, targetY));
-
-      // P-04 : Aimant optionnel avec détection du plus proche voisin
-      let guideX: number | undefined = undefined;
-      let guideY: number | undefined = undefined;
-
-      if (snapToMagnet) {
-        let closestDiffX = Infinity;
-        let closestX: number | undefined;
-        let closestDiffY = Infinity;
-        let closestY: number | undefined;
-        const threshold = Math.max(6, 12 / zoom);
-
-        for (const other of tables) {
-          if (other.id === draggingEntity.id) continue;
-          const otherX = normalizeCoordinateX(other.x);
-          const otherY = normalizeCoordinateY(other.y);
-
-          const diffX = Math.abs(targetX - otherX);
-          if (diffX <= threshold && diffX < closestDiffX) {
-            closestDiffX = diffX;
-            closestX = otherX;
-          }
-
-          const diffY = Math.abs(targetY - otherY);
-          if (diffY <= threshold && diffY < closestDiffY) {
-            closestDiffY = diffY;
-            closestY = otherY;
-          }
-        }
-
-        if (closestX !== undefined) {
-          targetX = closestX;
-          guideX = closestX;
-        }
-        if (closestY !== undefined) {
-          targetY = closestY;
-          guideY = closestY;
-        }
-      }
-
-      setGuideLines({ x: guideX, y: guideY });
-
-      // Mise à jour locale du brouillon
-      onUpdateDraftTables(
-        tables.map((t) => (t.id === draggingEntity.id ? { ...t, x: targetX, y: targetY } : t))
-      );
-    } else if (draggingEntity.type === 'decor') {
-      let targetX = p.x - grabOffsetRef.current.x;
-      let targetY = p.y - grabOffsetRef.current.y;
-
-      if (snapToGrid) {
-        targetX = Math.round(targetX / SNAP_GRID) * SNAP_GRID;
-        targetY = Math.round(targetY / SNAP_GRID) * SNAP_GRID;
-      }
-
-      targetX = Math.max(30, Math.min(LOGICAL_WIDTH - 30, targetX));
-      targetY = Math.max(30, Math.min(LOGICAL_HEIGHT - 30, targetY));
-
-      onUpdateDraftDecor(
-        decorElements.map((d) => (d.id === draggingEntity.id ? { ...d, x: targetX, y: targetY } : d))
-      );
-    } else if (draggingEntity.type === 'resize') {
-      const centerX = dragEntityStartPosRef.current.x;
-      const centerY = dragEntityStartPosRef.current.y;
-
-      let newW = Math.max(60, Math.min(400, Math.round(2 * Math.abs(p.x - centerX))));
-      let newH = Math.max(60, Math.min(400, Math.round(2 * Math.abs(p.y - centerY))));
-
-      if (snapToGrid) {
-        newW = Math.round(newW / SNAP_GRID) * SNAP_GRID;
-        newH = Math.round(newH / SNAP_GRID) * SNAP_GRID;
-      }
-
-      onUpdateDraftTables(
-        tables.map((t) => (t.id === draggingEntity.id ? { ...t, width: newW, height: newH } : t))
-      );
-    } else if (draggingEntity.type === 'rotate') {
-      const centerX = dragEntityStartPosRef.current.x;
-      const centerY = dragEntityStartPosRef.current.y;
-
-      const angleRad = Math.atan2(p.y - centerY, p.x - centerX);
-      let angleDeg = Math.round((angleRad * 180) / Math.PI) + 90;
-      angleDeg = ((angleDeg % 360) + 360) % 360;
-
-      if (snapToGrid) {
-        angleDeg = Math.round(angleDeg / 15) * 15;
-      }
-
-      onUpdateDraftTables(
-        tables.map((t) => (t.id === draggingEntity.id ? { ...t, rotation: angleDeg } : t))
-      );
-    }
-  };
-
-  // Pointer Up
-  const handleCanvasPointerUp = (e: React.PointerEvent) => {
-    activePointersRef.current.delete(e.pointerId);
-    if (activePointersRef.current.size < 2) {
-      pinchStartRef.current = null;
-    }
-
-    if (isPanning) {
-      setIsPanning(false);
-      try {
-        (e.currentTarget as Element).releasePointerCapture(e.pointerId);
-      } catch {}
-      return;
-    }
-
-    if (draggingEntity) {
-      if (dragHasExceededThresholdRef.current) {
-        onPushHistory();
-      } else {
-        // Clic propre sans dépassement de seuil
-        if (draggingEntity.type === 'table') {
-          const table = tables.find((t) => t.id === draggingEntity.id);
-          if (table) {
-            if (!isEditMode) {
-              onTableAction(table);
-            } else {
-              onSelectTable(table);
-            }
-          }
-        }
-      }
-
-      try {
-        (e.currentTarget as Element).releasePointerCapture(e.pointerId);
-      } catch {}
-      setDraggingEntity(null);
-      setGuideLines({});
-    }
-  };
-
-  // P-03 : Nettoyage propre sur PointerCancel ou LostPointerCapture
-  const handlePointerCancel = (e: React.PointerEvent) => {
-    activePointersRef.current.delete(e.pointerId);
-    if (activePointersRef.current.size < 2) {
-      pinchStartRef.current = null;
-    }
-    if (isPanning) {
-      setIsPanning(false);
-    }
-    if (draggingEntity) {
-      setDraggingEntity(null);
-      setGuideLines({});
-    }
-    try {
-      (e.currentTarget as Element).releasePointerCapture(e.pointerId);
-    } catch {}
-  };
-
-  // Rotation rapide par pas de 45°
-  const handleRotateTable = (table: RestaurantTable, e: React.MouseEvent) => {
-    e.stopPropagation();
-    const nextRot = ((table.rotation || 0) + 45) % 360;
-    onUpdateDraftTables(
-      tables.map((t) => (t.id === table.id ? { ...t, rotation: nextRot } : t))
-    );
-    onPushHistory();
-  };
-
-  // P-02 : Écouteur de molette natif avec { passive: false } centré sur le curseur
+  // P-02: Zoom centré à la molette SANS besoin de Ctrl (passive: false)
   useEffect(() => {
     const svgEl = svgRef.current;
     if (!svgEl) return;
@@ -573,7 +284,7 @@ export const VectorFloorPlan: React.FC<VectorFloorPlanProps> = ({
       const cursorY = e.clientY;
 
       setZoom((prevZoom) => {
-        const nextZoom = Math.min(3.0, Math.max(0.5, prevZoom * zoomFactor));
+        const nextZoom = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, prevZoom * zoomFactor));
         if (nextZoom === prevZoom) return prevZoom;
 
         const scaleToSvg = LOGICAL_WIDTH / rect.width;
@@ -593,7 +304,514 @@ export const VectorFloorPlan: React.FC<VectorFloorPlanProps> = ({
     return () => svgEl.removeEventListener('wheel', onWheelNative);
   }, [pan]);
 
-  // Group merged tables for unified contour rendering (G10)
+  // Pointer Down sur Table (1.1, 1.6)
+  const handleTablePointerDown = (e: React.PointerEvent, table: RestaurantTable) => {
+    // Si l'outil main ou barre d'espace est actif, laisser le canevas gérer le pan
+    if (activeTool === 'hand' || isSpacePressed) {
+      return;
+    }
+
+    e.stopPropagation();
+    activePointersRef.current.set(e.pointerId, { clientX: e.clientX, clientY: e.clientY });
+
+    const p = toLogical(e.clientX, e.clientY);
+    const tblX = normalizeCoordinateX(table.x);
+    const tblY = normalizeCoordinateY(table.y);
+
+    dragStartClientRef.current = { x: e.clientX, y: e.clientY };
+    dragHasExceededThresholdRef.current = false;
+
+    if (!isEditMode) {
+      // En mode service, clic simple géré au pointer up
+      return;
+    }
+
+    // Capture du pointeur
+    try {
+      (e.currentTarget as Element).setPointerCapture(e.pointerId);
+    } catch {
+      // ignore
+    }
+
+    // Gestion de la sélection multiple (Maj + clic)
+    if (e.shiftKey) {
+      const next = new Set(activeSelectedTableIds);
+      if (next.has(table.id)) {
+        next.delete(table.id);
+      } else {
+        next.add(table.id);
+      }
+      setInternalSelectedIds(next);
+      onSelectTable(table, true);
+      return;
+    }
+
+    // Si la table n'est pas déjà dans le groupe de sélection, remplacer la sélection
+    let groupIds = activeSelectedTableIds;
+    if (!groupIds.has(table.id)) {
+      groupIds = new Set([table.id]);
+      setInternalSelectedIds(groupIds);
+      onSelectTable(table, false);
+    }
+
+    // Enregistrer les positions initiales pour déplacement de groupe
+    const groupPositions = new Map<string, { x: number; y: number }>();
+    for (const id of groupIds) {
+      const t = tables.find((item) => item.id === id);
+      if (t) {
+        groupPositions.set(id, {
+          x: normalizeCoordinateX(t.x),
+          y: normalizeCoordinateY(t.y),
+        });
+      }
+    }
+
+    dragEntityStartPosRef.current = {
+      x: tblX,
+      y: tblY,
+      width: table.width || 100,
+      height: table.height || 100,
+      rotation: table.rotation || 0,
+      groupPositions,
+    };
+
+    grabOffsetRef.current = {
+      x: p.x - tblX,
+      y: p.y - tblY,
+    };
+
+    if (groupIds.size > 1) {
+      setDraggingEntity({ type: 'group' });
+    } else {
+      setDraggingEntity({ type: 'table', id: table.id });
+    }
+  };
+
+  // Pointer Down sur Élément de Décor (1.1)
+  const handleDecorPointerDown = (e: React.PointerEvent, decor: DecorElement) => {
+    if (!isEditMode || activeTool === 'hand' || isSpacePressed) return;
+    e.stopPropagation();
+    activePointersRef.current.set(e.pointerId, { clientX: e.clientX, clientY: e.clientY });
+
+    const p = toLogical(e.clientX, e.clientY);
+    dragStartClientRef.current = { x: e.clientX, y: e.clientY };
+    dragEntityStartPosRef.current = {
+      x: decor.x,
+      y: decor.y,
+      width: decor.width,
+      height: decor.height,
+      rotation: decor.rotation || 0,
+    };
+    grabOffsetRef.current = {
+      x: p.x - decor.x,
+      y: p.y - decor.y,
+    };
+    dragHasExceededThresholdRef.current = false;
+
+    try {
+      (e.currentTarget as Element).setPointerCapture(e.pointerId);
+    } catch {
+      // ignore
+    }
+    setDraggingEntity({ type: 'decor', id: decor.id });
+    setInternalSelectedIds(new Set());
+    onSelectDecor(decor);
+  };
+
+  // Pointer Down sur Poignée de Redimensionnement (1.5)
+  const handleResizePointerDown = (e: React.PointerEvent, tableId: string, handle: HandleType) => {
+    e.stopPropagation();
+    const table = tables.find((t) => t.id === tableId);
+    if (!table) return;
+    activePointersRef.current.set(e.pointerId, { clientX: e.clientX, clientY: e.clientY });
+
+    dragStartClientRef.current = { x: e.clientX, y: e.clientY };
+    dragEntityStartPosRef.current = {
+      x: normalizeCoordinateX(table.x),
+      y: normalizeCoordinateY(table.y),
+      width: table.width || 100,
+      height: table.height || 100,
+      rotation: table.rotation || 0,
+    };
+    dragHasExceededThresholdRef.current = true;
+    try {
+      (e.currentTarget as Element).setPointerCapture(e.pointerId);
+    } catch {
+      // ignore
+    }
+
+    setDraggingEntity({ type: 'resize', id: tableId, handle });
+  };
+
+  // Pointer Down sur Poignée de Rotation (1.4)
+  const handleRotatePointerDown = (e: React.PointerEvent, tableId: string) => {
+    e.stopPropagation();
+    const table = tables.find((t) => t.id === tableId);
+    if (!table) return;
+    activePointersRef.current.set(e.pointerId, { clientX: e.clientX, clientY: e.clientY });
+
+    dragStartClientRef.current = { x: e.clientX, y: e.clientY };
+    dragEntityStartPosRef.current = {
+      x: normalizeCoordinateX(table.x),
+      y: normalizeCoordinateY(table.y),
+      width: table.width || 100,
+      height: table.height || 100,
+      rotation: table.rotation || 0,
+    };
+    dragHasExceededThresholdRef.current = true;
+    try {
+      (e.currentTarget as Element).setPointerCapture(e.pointerId);
+    } catch {
+      // ignore
+    }
+
+    setDraggingEntity({ type: 'rotate', id: tableId });
+  };
+
+  // Pointer Down sur Canvas SVG (1.2, 1.6)
+  const handleCanvasPointerDown = (e: React.PointerEvent) => {
+    activePointersRef.current.set(e.pointerId, { clientX: e.clientX, clientY: e.clientY });
+
+    // Mode Main, barre d'espace ou clic milieu : panoramique
+    const isPanAction =
+      activeTool === 'hand' ||
+      isSpacePressed ||
+      e.button === 1 ||
+      (!isEditMode && e.target === svgRef.current);
+
+    if (isPanAction) {
+      setIsPanning(true);
+      panStartRef.current = { x: e.clientX - pan.x, y: e.clientY - pan.y };
+      try {
+        (e.currentTarget as Element).setPointerCapture(e.pointerId);
+      } catch {
+        // ignore
+      }
+      return;
+    }
+
+    // En mode édition sur fond vide : démarrer sélection lasso ou désélectionner
+    if (isEditMode && e.target === svgRef.current) {
+      const p = toLogical(e.clientX, e.clientY);
+      if (!e.shiftKey) {
+        onDeselect?.();
+        setInternalSelectedIds(new Set());
+      }
+      setLassoBox({
+        startX: p.x,
+        startY: p.y,
+        currentX: p.x,
+        currentY: p.y,
+      });
+      setDraggingEntity({ type: 'lasso' });
+      try {
+        (e.currentTarget as Element).setPointerCapture(e.pointerId);
+      } catch {
+        // ignore
+      }
+    }
+  };
+
+  // Pointer Move sur Canvas SVG (1.1, 1.2, 1.4, 1.5, 1.6, 1.7)
+  const handleCanvasPointerMove = (e: React.PointerEvent) => {
+    activePointersRef.current.set(e.pointerId, { clientX: e.clientX, clientY: e.clientY });
+
+    // 1. Support multi-touch tablette : Pincement pour zoomer & Panoramique à deux doigts (1.2)
+    if (activePointersRef.current.size >= 2) {
+      const pointers = Array.from(activePointersRef.current.values());
+      const p1 = pointers[0];
+      const p2 = pointers[1];
+      const dist = Math.hypot(p1.clientX - p2.clientX, p1.clientY - p2.clientY);
+      const midX = (p1.clientX + p2.clientX) / 2;
+      const midY = (p1.clientY + p2.clientY) / 2;
+
+      if (!pinchStartRef.current) {
+        pinchStartRef.current = {
+          dist,
+          zoom,
+          midLogical: toLogical(midX, midY),
+        };
+      } else {
+        const scaleFactor = dist / pinchStartRef.current.dist;
+        const newZoom = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, pinchStartRef.current.zoom * scaleFactor));
+        setZoom(newZoom);
+
+        const midLogical = pinchStartRef.current.midLogical;
+        if (svgRef.current) {
+          const rect = svgRef.current.getBoundingClientRect();
+          const scaleToSvg = LOGICAL_WIDTH / rect.width;
+          const svgMidX = (midX - rect.left) * scaleToSvg;
+          const svgMidY = (midY - rect.top) * scaleToSvg;
+          setPan({
+            x: svgMidX - midLogical.x * newZoom,
+            y: svgMidY - midLogical.y * newZoom,
+          });
+        }
+      }
+      return;
+    }
+
+    // 2. Panoramique
+    if (isPanning) {
+      setPan({
+        x: e.clientX - panStartRef.current.x,
+        y: e.clientY - panStartRef.current.y,
+      });
+      return;
+    }
+
+    // 3. Lasso de sélection multiple (1.6)
+    if (draggingEntity?.type === 'lasso' && lassoBox) {
+      const p = toLogical(e.clientX, e.clientY);
+      setLassoBox((prev) => (prev ? { ...prev, currentX: p.x, currentY: p.y } : null));
+
+      const minX = Math.min(lassoBox.startX, p.x);
+      const maxX = Math.max(lassoBox.startX, p.x);
+      const minY = Math.min(lassoBox.startY, p.y);
+      const maxY = Math.max(lassoBox.startY, p.y);
+
+      const enclosedIds = new Set<string>();
+      for (const t of tables) {
+        const tx = normalizeCoordinateX(t.x);
+        const ty = normalizeCoordinateY(t.y);
+        const tw = t.width || 100;
+        const th = t.height || 100;
+        // Intersection entre boîte lasso et table
+        if (tx + tw / 2 >= minX && tx - tw / 2 <= maxX && ty + th / 2 >= minY && ty - th / 2 <= maxY) {
+          enclosedIds.add(t.id);
+        }
+      }
+      setInternalSelectedIds(enclosedIds);
+      return;
+    }
+
+    if (!draggingEntity || !isEditMode) return;
+
+    const dxClient = e.clientX - dragStartClientRef.current.x;
+    const dyClient = e.clientY - dragStartClientRef.current.y;
+
+    // Seuil de déclenchement (4px) pour distinguer un clic d'un glissement
+    if (!dragHasExceededThresholdRef.current) {
+      if (Math.hypot(dxClient, dyClient) >= DRAG_THRESHOLD) {
+        dragHasExceededThresholdRef.current = true;
+      } else {
+        return;
+      }
+    }
+
+    const p = toLogical(e.clientX, e.clientY);
+
+    // 4. Déplacement d'une table unique (1.1, 1.7)
+    if (draggingEntity.type === 'table' && draggingEntity.id) {
+      const rawTargetX = p.x - grabOffsetRef.current.x;
+      const rawTargetY = p.y - grabOffsetRef.current.y;
+
+      const snapResult = computeUnifiedSnapping({
+        targetX: rawTargetX,
+        targetY: rawTargetY,
+        targetWidth: dragEntityStartPosRef.current.width || 100,
+        targetHeight: dragEntityStartPosRef.current.height || 100,
+        targetId: draggingEntity.id,
+        otherObjects: tables.map((t) => ({
+          id: t.id,
+          x: normalizeCoordinateX(t.x),
+          y: normalizeCoordinateY(t.y),
+          width: t.width || 100,
+          height: t.height || 100,
+        })),
+        snapToGrid,
+        snapToMagnet,
+      });
+
+      setActiveGuides(snapResult.guides);
+
+      onUpdateDraftTables(
+        tables.map((t) => (t.id === draggingEntity.id ? { ...t, x: snapResult.x, y: snapResult.y } : t))
+      );
+    }
+    // 5. Déplacement de groupe (1.6)
+    else if (draggingEntity.type === 'group' && dragEntityStartPosRef.current.groupPositions) {
+      const rawDeltaX = p.x - (dragEntityStartPosRef.current.x + grabOffsetRef.current.x);
+      const rawDeltaY = p.y - (dragEntityStartPosRef.current.y + grabOffsetRef.current.y);
+
+      let deltaX = rawDeltaX;
+      let deltaY = rawDeltaY;
+
+      if (snapToGrid) {
+        deltaX = Math.round(deltaX / SNAP_GRID) * SNAP_GRID;
+        deltaY = Math.round(deltaY / SNAP_GRID) * SNAP_GRID;
+      }
+
+      const initialPositions = dragEntityStartPosRef.current.groupPositions;
+      onUpdateDraftTables(
+        tables.map((t) => {
+          const initPos = initialPositions.get(t.id);
+          if (!initPos) return t;
+          const nextX = Math.max(40, Math.min(LOGICAL_WIDTH - 40, initPos.x + deltaX));
+          const nextY = Math.max(40, Math.min(LOGICAL_HEIGHT - 40, initPos.y + deltaY));
+          return { ...t, x: nextX, y: nextY };
+        })
+      );
+    }
+    // 6. Déplacement d'un élément de décor (1.1)
+    else if (draggingEntity.type === 'decor' && draggingEntity.id) {
+      let targetX = p.x - grabOffsetRef.current.x;
+      let targetY = p.y - grabOffsetRef.current.y;
+
+      if (snapToGrid) {
+        targetX = Math.round(targetX / SNAP_GRID) * SNAP_GRID;
+        targetY = Math.round(targetY / SNAP_GRID) * SNAP_GRID;
+      }
+
+      targetX = Math.max(30, Math.min(LOGICAL_WIDTH - 30, targetX));
+      targetY = Math.max(30, Math.min(LOGICAL_HEIGHT - 30, targetY));
+
+      onUpdateDraftDecor(
+        decorElements.map((d) => (d.id === draggingEntity.id ? { ...d, x: targetX, y: targetY } : d))
+      );
+    }
+    // 7. Redimensionnement avec les 8 poignées dans les axes locaux (1.5)
+    else if (draggingEntity.type === 'resize' && draggingEntity.id && draggingEntity.handle) {
+      const resized = computeResizedBox({
+        handle: draggingEntity.handle,
+        startBox: dragEntityStartPosRef.current,
+        pointerLogical: p,
+        preserveRatio: e.shiftKey,
+        minWidth: 50,
+        minHeight: 50,
+        maxWidth: 400,
+        maxHeight: 400,
+      });
+
+      onUpdateDraftTables(
+        tables.map((t) =>
+          t.id === draggingEntity.id
+            ? { ...t, x: resized.x, y: resized.y, width: resized.width, height: resized.height }
+            : t
+        )
+      );
+    }
+    // 8. Rotation précise (pas de 15°, libre avec Maj) (1.4)
+    else if (draggingEntity.type === 'rotate' && draggingEntity.id) {
+      const deg = computeRotationAngle(
+        dragEntityStartPosRef.current.x,
+        dragEntityStartPosRef.current.y,
+        p,
+        e.shiftKey,
+        15
+      );
+
+      onUpdateDraftTables(
+        tables.map((t) => (t.id === draggingEntity.id ? { ...t, rotation: deg } : t))
+      );
+    }
+  };
+
+  // Pointer Up
+  const handleCanvasPointerUp = (e: React.PointerEvent) => {
+    activePointersRef.current.delete(e.pointerId);
+    if (activePointersRef.current.size < 2) {
+      pinchStartRef.current = null;
+    }
+
+    if (isPanning) {
+      setIsPanning(false);
+      try {
+        (e.currentTarget as Element).releasePointerCapture(e.pointerId);
+      } catch {
+        // ignore
+      }
+      return;
+    }
+
+    if (lassoBox) {
+      setLassoBox(null);
+    }
+
+    if (draggingEntity) {
+      if (dragHasExceededThresholdRef.current) {
+        onPushHistory();
+      } else {
+        // Clic sans déplacement significatif
+        if (draggingEntity.type === 'table' && draggingEntity.id) {
+          const table = tables.find((t) => t.id === draggingEntity.id);
+          if (table) {
+            if (!isEditMode) {
+              onTableAction(table);
+            } else {
+              onSelectTable(table, e.shiftKey);
+            }
+          }
+        }
+      }
+
+      try {
+        (e.currentTarget as Element).releasePointerCapture(e.pointerId);
+      } catch {
+        // ignore
+      }
+      setDraggingEntity(null);
+      setActiveGuides([]);
+    }
+  };
+
+  // Pointer Cancel / LostPointerCapture (P-03)
+  const handlePointerCancel = (e: React.PointerEvent) => {
+    activePointersRef.current.delete(e.pointerId);
+    if (activePointersRef.current.size < 2) {
+      pinchStartRef.current = null;
+    }
+    if (isPanning) setIsPanning(false);
+    if (lassoBox) setLassoBox(null);
+    if (draggingEntity) {
+      setDraggingEntity(null);
+      setActiveGuides([]);
+    }
+    try {
+      (e.currentTarget as Element).releasePointerCapture(e.pointerId);
+    } catch {
+      // ignore
+    }
+  };
+
+  // Rotation rapide par pas de 45°
+  const handleRotateTableStep = (table: RestaurantTable, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const nextRot = ((table.rotation || 0) + 45) % 360;
+    onUpdateDraftTables(
+      tables.map((t) => (t.id === table.id ? { ...t, rotation: nextRot } : t))
+    );
+    onPushHistory();
+  };
+
+  // Écarter automatiquement les tables en collision (1.8)
+  const handleAutoSeparate = () => {
+    if (onAutoSeparate) {
+      onAutoSeparate();
+    } else {
+      const separated = autoSeparateTables(tables);
+      onUpdateDraftTables(separated);
+      onPushHistory();
+    }
+  };
+
+  // Raccourci Ctrl+A pour sélectionner toutes les tables en mode édition (1.6)
+  useEffect(() => {
+    if (!isEditMode) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const targetTag = (e.target as HTMLElement)?.tagName?.toLowerCase();
+      if (targetTag === 'input' || targetTag === 'textarea' || targetTag === 'select') return;
+
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a') {
+        e.preventDefault();
+        setInternalSelectedIds(new Set(tables.map((t) => t.id)));
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isEditMode, tables]);
+
+  // Group clusters for merged tables
   const mergedClusters = useMemo(() => {
     const clusters: Array<{ primary: RestaurantTable; secondaries: RestaurantTable[] }> = [];
     const handled = new Set<string>();
@@ -614,26 +832,47 @@ export const VectorFloorPlan: React.FC<VectorFloorPlanProps> = ({
 
   return (
     <div className="relative w-full rounded-3xl bg-slate-950 border-4 border-slate-900 overflow-hidden shadow-2xl select-none">
-      {/* Top Floating Control Bar (Zoom, Pan, Info) */}
-      <div className="absolute top-4 right-4 z-20 flex items-center gap-1.5 p-1.5 rounded-2xl bg-slate-900/80 backdrop-blur-md border border-slate-800 text-white shadow-lg">
+      {/* Top Floating Control Bar (Zoom, Pan, Fit, Snapping) */}
+      <div className="absolute top-4 right-4 z-20 flex items-center gap-1.5 p-1.5 rounded-2xl bg-slate-900/85 backdrop-blur-md border border-slate-800 text-white shadow-xl">
+        {isEditMode && (
+          <>
+            <button
+              onClick={() => setActiveTool((t) => (t === 'select' ? 'hand' : 'select'))}
+              className={`p-2 rounded-xl transition-colors ${
+                activeTool === 'hand' || isSpacePressed
+                  ? 'bg-amber-500 text-slate-950'
+                  : 'hover:bg-slate-800 text-slate-300 hover:text-white'
+              }`}
+              title={activeTool === 'hand' ? 'Outil Sélection' : 'Outil Main / Pan (Espace)'}
+            >
+              {activeTool === 'hand' || isSpacePressed ? (
+                <Hand className="w-4 h-4" />
+              ) : (
+                <MousePointer className="w-4 h-4" />
+              )}
+            </button>
+            <div className="w-px h-4 bg-slate-700 mx-0.5" />
+          </>
+        )}
+
         <button
-          onClick={() => setZoom((z) => Math.min(3.0, Math.round((z + 0.15) * 100) / 100))}
+          onClick={() => setZoom((z) => Math.min(ZOOM_MAX, Math.round((z + 0.15) * 100) / 100))}
           className="p-2 rounded-xl hover:bg-slate-800 text-slate-300 hover:text-white transition-colors"
           title="Zoom avant (+)"
         >
           <ZoomIn className="w-4 h-4" />
         </button>
-        <span className="text-xs font-mono font-bold px-2 tabular-nums text-slate-400">
+        <span className="text-xs font-mono font-bold px-1.5 tabular-nums text-slate-300">
           {Math.round(zoom * 100)}%
         </span>
         <button
-          onClick={() => setZoom((z) => Math.max(0.5, Math.round((z - 0.15) * 100) / 100))}
+          onClick={() => setZoom((z) => Math.max(ZOOM_MIN, Math.round((z - 0.15) * 100) / 100))}
           className="p-2 rounded-xl hover:bg-slate-800 text-slate-300 hover:text-white transition-colors"
           title="Zoom arrière (-)"
         >
           <ZoomOut className="w-4 h-4" />
         </button>
-        <div className="w-px h-4 bg-slate-700 mx-1" />
+        <div className="w-px h-4 bg-slate-700 mx-0.5" />
         <button
           onClick={handleFitToScreen}
           className="p-2 rounded-xl hover:bg-slate-800 text-slate-300 hover:text-white transition-colors"
@@ -650,36 +889,260 @@ export const VectorFloorPlan: React.FC<VectorFloorPlanProps> = ({
         </button>
       </div>
 
-      {/* Collision Alert Pill */}
+      {/* Collision Alert Banner with Auto-Separate Option (1.8) */}
       {isEditMode && collidingTableIds.size > 0 && (
-        <div className="absolute top-4 left-4 z-20 flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-rose-500/90 text-white text-xs font-bold shadow-lg animate-pulse">
-          <AlertCircle className="w-4 h-4" />
-          <span>{collidingTableIds.size} tables en collision sur le plan</span>
+        <div className="absolute top-4 left-4 z-20 flex items-center gap-3 px-3.5 py-2 rounded-2xl bg-rose-500/95 text-white text-xs font-bold shadow-xl border border-rose-400">
+          <AlertCircle className="w-4 h-4 animate-bounce" />
+          <span>
+            {collidingTableIds.size} tables en collision (
+            {Array.from(collidingTableIds)
+              .map((id) => tables.find((t) => t.id === id)?.number || '?')
+              .slice(0, 4)
+              .join(', ')}
+            {collidingTableIds.size > 4 ? '...' : ''})
+          </span>
+          <button
+            onClick={handleAutoSeparate}
+            className="flex items-center gap-1.5 px-3 py-1 bg-white text-rose-700 hover:bg-rose-50 rounded-xl text-xs font-black shadow-xs transition-colors"
+          >
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>Écarter automatiquement</span>
+          </button>
+        </div>
+      )}
+
+      {/* Multi-Selection Action Toolbar (1.6: Align & Distribute) */}
+      {isEditMode && activeSelectedTableIds.size >= 2 && (
+        <div className="absolute top-16 left-4 z-20 flex items-center gap-1 p-1.5 rounded-2xl bg-slate-900/90 backdrop-blur-md border border-slate-700 text-white shadow-2xl">
+          <span className="text-xs font-bold text-amber-400 px-2 tabular-nums">
+            {activeSelectedTableIds.size} tables sélectionnées
+          </span>
+          <div className="w-px h-4 bg-slate-700 mx-1" />
+          <button
+            onClick={() => onAlignSelected?.('left')}
+            className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-300 hover:text-white"
+            title="Aligner à gauche"
+          >
+            <AlignLeft className="w-4 h-4" />
+          </button>
+          <button
+            onClick={() => onAlignSelected?.('center')}
+            className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-300 hover:text-white"
+            title="Aligner au centre vertical"
+          >
+            <AlignCenter className="w-4 h-4" />
+          </button>
+          <button
+            onClick={() => onAlignSelected?.('right')}
+            className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-300 hover:text-white"
+            title="Aligner à droite"
+          >
+            <AlignRight className="w-4 h-4" />
+          </button>
+          <div className="w-px h-4 bg-slate-700 mx-1" />
+          <button
+            onClick={() => onAlignSelected?.('top')}
+            className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-300 hover:text-white"
+            title="Aligner en haut"
+          >
+            <AlignVerticalJustifyStart className="w-4 h-4" />
+          </button>
+          <button
+            onClick={() => onAlignSelected?.('middle')}
+            className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-300 hover:text-white"
+            title="Aligner au milieu horizontal"
+          >
+            <AlignVerticalJustifyCenter className="w-4 h-4" />
+          </button>
+          <button
+            onClick={() => onAlignSelected?.('bottom')}
+            className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-300 hover:text-white"
+            title="Aligner en bas"
+          >
+            <AlignVerticalJustifyEnd className="w-4 h-4" />
+          </button>
+          <div className="w-px h-4 bg-slate-700 mx-1" />
+          <button
+            onClick={() => onDistributeSelected?.('horizontal')}
+            className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-300 hover:text-white"
+            title="Répartir horizontalement"
+          >
+            <Split className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
+      {/* Floating Properties Panel for Single Selected Table (1.4) */}
+      {isEditMode && primarySelectedTable && activeSelectedTableIds.size <= 1 && (
+        <div className="absolute bottom-4 right-4 z-20 w-80 p-3.5 rounded-2xl bg-slate-900/90 backdrop-blur-md border border-slate-700/80 text-white shadow-2xl text-xs space-y-2.5">
+          <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+            <span className="font-black text-amber-400 uppercase tracking-wider text-xs">
+              Table {primarySelectedTable.number} • Propriétés
+            </span>
+            <button
+              onClick={() => onDeselect?.()}
+              className="text-slate-400 hover:text-white p-1 rounded-lg"
+              title="Fermer le panneau"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="text-[11px] text-slate-400 font-semibold block mb-0.5">Numéro</label>
+              <input
+                type="text"
+                value={primarySelectedTable.number}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  onUpdateDraftTables(
+                    tables.map((t) => (t.id === primarySelectedTable.id ? { ...t, number: val } : t))
+                  );
+                }}
+                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-2 py-1 text-white font-bold"
+              />
+            </div>
+            <div>
+              <label className="text-[11px] text-slate-400 font-semibold block mb-0.5">Forme</label>
+              <select
+                value={primarySelectedTable.shape || 'rectangulaire'}
+                onChange={(e) => {
+                  const val = e.target.value as TableShape;
+                  onUpdateDraftTables(
+                    tables.map((t) => (t.id === primarySelectedTable.id ? { ...t, shape: val } : t))
+                  );
+                }}
+                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-2 py-1 text-white font-bold"
+              >
+                <option value="rectangulaire">Rectangulaire</option>
+                <option value="ronde">Ronde</option>
+                <option value="carree">Carrée</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-4 gap-1.5 font-mono">
+            <div>
+              <label className="text-[10px] text-slate-400 font-semibold block mb-0.5">X</label>
+              <input
+                type="number"
+                min="40"
+                max="1160"
+                value={primarySelectedTable.x ?? 200}
+                onChange={(e) => {
+                  const val = Number(e.target.value);
+                  onUpdateDraftTables(
+                    tables.map((t) => (t.id === primarySelectedTable.id ? { ...t, x: val } : t))
+                  );
+                }}
+                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-1.5 py-1 text-white tabular-nums"
+              />
+            </div>
+            <div>
+              <label className="text-[10px] text-slate-400 font-semibold block mb-0.5">Y</label>
+              <input
+                type="number"
+                min="40"
+                max="760"
+                value={primarySelectedTable.y ?? 200}
+                onChange={(e) => {
+                  const val = Number(e.target.value);
+                  onUpdateDraftTables(
+                    tables.map((t) => (t.id === primarySelectedTable.id ? { ...t, y: val } : t))
+                  );
+                }}
+                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-1.5 py-1 text-white tabular-nums"
+              />
+            </div>
+            <div>
+              <label className="text-[10px] text-slate-400 font-semibold block mb-0.5">Larg.</label>
+              <input
+                type="number"
+                min="50"
+                max="400"
+                value={primarySelectedTable.width || 100}
+                onChange={(e) => {
+                  const val = Number(e.target.value);
+                  onUpdateDraftTables(
+                    tables.map((t) => (t.id === primarySelectedTable.id ? { ...t, width: val } : t))
+                  );
+                }}
+                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-1.5 py-1 text-white tabular-nums"
+              />
+            </div>
+            <div>
+              <label className="text-[10px] text-slate-400 font-semibold block mb-0.5">Haut.</label>
+              <input
+                type="number"
+                min="50"
+                max="400"
+                value={primarySelectedTable.height || 100}
+                onChange={(e) => {
+                  const val = Number(e.target.value);
+                  onUpdateDraftTables(
+                    tables.map((t) => (t.id === primarySelectedTable.id ? { ...t, height: val } : t))
+                  );
+                }}
+                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-1.5 py-1 text-white tabular-nums"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2 items-center">
+            <div>
+              <label className="text-[11px] text-slate-400 font-semibold block mb-0.5">
+                Capacité ({primarySelectedTable.capacity || 4}p)
+              </label>
+              <input
+                type="number"
+                min="1"
+                max="50"
+                value={primarySelectedTable.capacity || 4}
+                onChange={(e) => {
+                  const val = Number(e.target.value);
+                  onUpdateDraftTables(
+                    tables.map((t) => (t.id === primarySelectedTable.id ? { ...t, capacity: val } : t))
+                  );
+                }}
+                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-2 py-1 text-white font-bold"
+              />
+            </div>
+            <div>
+              <label className="text-[11px] text-slate-400 font-semibold block mb-0.5">
+                Angle ({primarySelectedTable.rotation || 0}°)
+              </label>
+              <input
+                type="range"
+                min="0"
+                max="360"
+                step="15"
+                value={primarySelectedTable.rotation || 0}
+                onChange={(e) => {
+                  const val = Number(e.target.value);
+                  onUpdateDraftTables(
+                    tables.map((t) => (t.id === primarySelectedTable.id ? { ...t, rotation: val } : t))
+                  );
+                }}
+                className="w-full accent-amber-500"
+              />
+            </div>
+          </div>
         </div>
       )}
 
       {/* Architectural Watermark */}
-      <div className="absolute bottom-4 right-4 pointer-events-none opacity-20 text-white flex items-center gap-3 font-mono text-xs z-10">
+      <div className="absolute bottom-4 left-4 pointer-events-none opacity-20 text-white flex items-center gap-3 font-mono text-xs z-10">
         <Compass className="w-8 h-8" />
         <div>
-          <div className="font-bold tracking-widest">REPERE VECTORIEL 1200 x 800</div>
-          <div className="text-xs uppercase opacity-75 font-semibold">{activeZone?.name || 'SALLE PRINCIPALE'}</div>
+          <div className="font-bold tracking-widest">REPÈRE VECTORIEL 1200 x 800</div>
+          <div className="text-xs uppercase opacity-75 font-semibold">
+            {activeZone?.name || 'SALLE PRINCIPALE'}
+          </div>
         </div>
       </div>
 
-      {/* Keyboard Shortcuts Pill in Edit Mode (Section 2.3) */}
-      {isEditMode && (
-        <div className="absolute bottom-4 left-4 z-20 hidden md:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-900/80 backdrop-blur-xs text-slate-300 text-xs border border-slate-700/60 shadow-lg pointer-events-none select-none">
-          <span className="font-semibold text-amber-400">Raccourcis :</span>
-          <span>Flèches = Déplacer (Maj = ×10)</span>
-          <span className="opacity-40">|</span>
-          <span>Ctrl+D = Dupliquer</span>
-          <span className="opacity-40">|</span>
-          <span>Suppr = Supprimer</span>
-        </div>
-      )}
-
-      {/* Welcoming Empty State (G13) */}
+      {/* Welcoming Empty State */}
       {tables.length === 0 && (
         <div className="absolute inset-0 z-30 flex flex-col items-center justify-center p-8 bg-slate-900/90 text-center">
           <div className="w-16 h-16 rounded-3xl bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center justify-center mb-4">
@@ -689,8 +1152,8 @@ export const VectorFloorPlan: React.FC<VectorFloorPlanProps> = ({
             Aucune table dans {activeZone?.name || 'cette salle'}
           </h3>
           <p className="text-xs text-slate-400 max-w-md mb-6 leading-relaxed">
-            Commencez par concevoir l'agencement de votre salle en ajoutant une première table ou en générant
-            instantanément un ensemble complet de tables.
+            Concevez l'agencement de votre salle en ajoutant une première table ou en générant
+            automatiquement un ensemble complet de tables.
           </p>
           <div className="flex flex-wrap items-center gap-3">
             <button
@@ -716,7 +1179,11 @@ export const VectorFloorPlan: React.FC<VectorFloorPlanProps> = ({
         ref={svgRef}
         viewBox={`0 0 ${LOGICAL_WIDTH} ${LOGICAL_HEIGHT}`}
         className={`w-full aspect-[3/2] max-h-[740px] block transition-colors ${
-          isEditMode ? 'cursor-crosshair' : 'cursor-default'
+          activeTool === 'hand' || isSpacePressed
+            ? 'cursor-grab active:cursor-grabbing'
+            : isEditMode
+            ? 'cursor-crosshair'
+            : 'cursor-default'
         }`}
         onPointerDown={handleCanvasPointerDown}
         onPointerMove={handleCanvasPointerMove}
@@ -738,7 +1205,13 @@ export const VectorFloorPlan: React.FC<VectorFloorPlanProps> = ({
           </pattern>
 
           {/* Wall Hatch Pattern */}
-          <pattern id="wallHatch" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+          <pattern
+            id="wallHatch"
+            width="8"
+            height="8"
+            patternUnits="userSpaceOnUse"
+            patternTransform="rotate(45)"
+          >
             <rect width="8" height="8" fill="#334155" />
             <line x1="0" y1="0" x2="0" y2="8" stroke="#475569" strokeWidth="2" />
           </pattern>
@@ -756,7 +1229,7 @@ export const VectorFloorPlan: React.FC<VectorFloorPlanProps> = ({
           </linearGradient>
         </defs>
 
-        {/* Global Pan & Zoom SVG Group with contentGroupRef */}
+        {/* Global Pan & Zoom SVG Group with contentGroupRef (1.1, 1.2) */}
         <g ref={contentGroupRef} transform={`translate(${pan.x}, ${pan.y}) scale(${zoom})`}>
           {/* Background Grid */}
           <rect
@@ -764,7 +1237,10 @@ export const VectorFloorPlan: React.FC<VectorFloorPlanProps> = ({
             height={LOGICAL_HEIGHT}
             fill="#090d16"
             onClick={() => {
-              if (isEditMode) onDeselect?.();
+              if (isEditMode) {
+                onDeselect?.();
+                setInternalSelectedIds(new Set());
+              }
             }}
           />
           <rect
@@ -772,7 +1248,10 @@ export const VectorFloorPlan: React.FC<VectorFloorPlanProps> = ({
             height={LOGICAL_HEIGHT}
             fill="url(#majorGrid)"
             onClick={() => {
-              if (isEditMode) onDeselect?.();
+              if (isEditMode) {
+                onDeselect?.();
+                setInternalSelectedIds(new Set());
+              }
             }}
           />
 
@@ -788,31 +1267,34 @@ export const VectorFloorPlan: React.FC<VectorFloorPlanProps> = ({
             rx="16"
           />
 
-          {/* Alignment Guide Lines */}
-          {guideLines.x !== undefined && (
-            <line
-              x1={guideLines.x}
-              y1="0"
-              x2={guideLines.x}
-              y2={LOGICAL_HEIGHT}
-              stroke="#f59e0b"
-              strokeWidth="1.5"
-              strokeDasharray="4 4"
-            />
-          )}
-          {guideLines.y !== undefined && (
-            <line
-              x1="0"
-              y1={guideLines.y}
-              x2={LOGICAL_WIDTH}
-              y2={guideLines.y}
-              stroke="#f59e0b"
-              strokeWidth="1.5"
-              strokeDasharray="4 4"
-            />
+          {/* Snap Alignment Guides (1.7) */}
+          {activeGuides.map((g, idx) =>
+            g.type === 'x' ? (
+              <line
+                key={`guide_x_${idx}`}
+                x1={g.position}
+                y1="0"
+                x2={g.position}
+                y2={LOGICAL_HEIGHT}
+                stroke="#f59e0b"
+                strokeWidth="1.5"
+                strokeDasharray="4 4"
+              />
+            ) : (
+              <line
+                key={`guide_y_${idx}`}
+                x1="0"
+                y1={g.position}
+                x2={LOGICAL_WIDTH}
+                y2={g.position}
+                stroke="#f59e0b"
+                strokeWidth="1.5"
+                strokeDasharray="4 4"
+              />
+            )
           )}
 
-          {/* ARCHITECTURAL DECOR ELEMENTS (G9) */}
+          {/* ARCHITECTURAL DECOR ELEMENTS */}
           {decorElements.map((decor) => {
             const isSelected = isEditMode && selectedDecorId === decor.id;
             return (
@@ -828,7 +1310,6 @@ export const VectorFloorPlan: React.FC<VectorFloorPlanProps> = ({
                 }}
                 className={isEditMode ? 'cursor-move' : ''}
               >
-                {/* Visual shape by type */}
                 {decor.type === 'mur' && (
                   <rect
                     x={-decor.width / 2}
@@ -841,7 +1322,6 @@ export const VectorFloorPlan: React.FC<VectorFloorPlanProps> = ({
                     rx="2"
                   />
                 )}
-
                 {decor.type === 'bar' && (
                   <g>
                     <rect
@@ -854,7 +1334,6 @@ export const VectorFloorPlan: React.FC<VectorFloorPlanProps> = ({
                       strokeWidth="2"
                       rx="12"
                     />
-                    {/* Stool indicators */}
                     {Array.from({ length: Math.max(2, Math.floor(decor.width / 45)) }).map((_, i, arr) => {
                       const stoolX = -decor.width / 2 + 25 + (i * (decor.width - 50)) / (arr.length - 1 || 1);
                       return (
@@ -871,7 +1350,6 @@ export const VectorFloorPlan: React.FC<VectorFloorPlanProps> = ({
                     })}
                   </g>
                 )}
-
                 {decor.type === 'comptoir' && (
                   <rect
                     x={-decor.width / 2}
@@ -884,7 +1362,6 @@ export const VectorFloorPlan: React.FC<VectorFloorPlanProps> = ({
                     rx="8"
                   />
                 )}
-
                 {decor.type === 'colonne' && (
                   <circle
                     cx="0"
@@ -895,38 +1372,28 @@ export const VectorFloorPlan: React.FC<VectorFloorPlanProps> = ({
                     strokeWidth="2.5"
                   />
                 )}
-
                 {decor.type === 'porte' && (
                   <g>
-                    {/* Door frame */}
-                    <line
-                      x1={-decor.width / 2}
-                      y1="0"
-                      x2={decor.width / 2}
-                      y2="0"
-                      stroke="#64748b"
-                      strokeWidth="3"
-                    />
-                    {/* 90-degree swing arc */}
-                    <path
-                      d={`M ${-decor.width / 2} 0 A ${decor.width} ${decor.width} 0 0 1 ${decor.width / 2} ${decor.width}`}
+                    <rect
+                      x={-decor.width / 2}
+                      y={-decor.height / 2}
+                      width={decor.width}
+                      height={decor.height}
                       fill="none"
-                      stroke="#64748b"
-                      strokeWidth="1.5"
-                      strokeDasharray="3 3"
+                      stroke="#10b981"
+                      strokeWidth="2"
+                      strokeDasharray="4 2"
                     />
-                    {/* Door leaf */}
-                    <line
-                      x1={-decor.width / 2}
-                      y1="0"
-                      x2={-decor.width / 2}
-                      y2={decor.width}
-                      stroke="#f59e0b"
-                      strokeWidth="3"
+                    <path
+                      d={`M ${-decor.width / 2} ${decor.height / 2} A ${decor.width} ${decor.width} 0 0 1 ${
+                        decor.width / 2
+                      } ${-decor.height / 2}`}
+                      fill="none"
+                      stroke="#10b981"
+                      strokeWidth="1.5"
                     />
                   </g>
                 )}
-
                 {decor.type === 'entree' && (
                   <g>
                     <rect
@@ -937,7 +1404,6 @@ export const VectorFloorPlan: React.FC<VectorFloorPlanProps> = ({
                       fill="rgba(16, 185, 129, 0.15)"
                       stroke="#10b981"
                       strokeWidth="2"
-                      strokeDasharray="4 4"
                       rx="4"
                     />
                     <text
@@ -953,7 +1419,6 @@ export const VectorFloorPlan: React.FC<VectorFloorPlanProps> = ({
                     </text>
                   </g>
                 )}
-
                 {decor.type === 'escalier' && (
                   <g>
                     <rect
@@ -981,7 +1446,6 @@ export const VectorFloorPlan: React.FC<VectorFloorPlanProps> = ({
                     })}
                   </g>
                 )}
-
                 {decor.type === 'fenetre' && (
                   <g>
                     <rect
@@ -1004,7 +1468,6 @@ export const VectorFloorPlan: React.FC<VectorFloorPlanProps> = ({
                     />
                   </g>
                 )}
-
                 {decor.type === 'plante' && (
                   <circle
                     cx="0"
@@ -1016,7 +1479,6 @@ export const VectorFloorPlan: React.FC<VectorFloorPlanProps> = ({
                   />
                 )}
 
-                {/* Optional Decor Label */}
                 {decor.label && (
                   <text
                     x="0"
@@ -1032,7 +1494,6 @@ export const VectorFloorPlan: React.FC<VectorFloorPlanProps> = ({
                   </text>
                 )}
 
-                {/* Selection halo in Edit Mode */}
                 {isSelected && (
                   <rect
                     x={-decor.width / 2 - 4}
@@ -1050,7 +1511,7 @@ export const VectorFloorPlan: React.FC<VectorFloorPlanProps> = ({
             );
           })}
 
-          {/* UNIFIED CONTOUR FOR MERGED TABLES (G10) */}
+          {/* MERGED TABLES OUTLINES */}
           {mergedClusters.map((cluster) => {
             const allInCluster = [cluster.primary, ...cluster.secondaries];
             const xs = allInCluster.map((t) => normalizeCoordinateX(t.x));
@@ -1074,7 +1535,6 @@ export const VectorFloorPlan: React.FC<VectorFloorPlanProps> = ({
                   strokeDasharray="6 6"
                   rx="24"
                 />
-                {/* Bridge tag */}
                 <rect
                   x={(minX + maxX) / 2 - 45}
                   y={minY - 12}
@@ -1098,7 +1558,7 @@ export const VectorFloorPlan: React.FC<VectorFloorPlanProps> = ({
             );
           })}
 
-          {/* RESTAURANT TABLES (G1, G2, G3, G4, G5, G7, G12) */}
+          {/* RESTAURANT TABLES */}
           {tables.map((table) => {
             const posX = normalizeCoordinateX(table.x);
             const posY = normalizeCoordinateY(table.y);
@@ -1106,33 +1566,49 @@ export const VectorFloorPlan: React.FC<VectorFloorPlanProps> = ({
             const height = table.height || 100;
             const rotation = table.rotation || 0;
 
-            const isSelected = isEditMode && selectedTableId === table.id;
+            const isSelected = isEditMode && activeSelectedTableIds.has(table.id);
             const isColliding = collidingTableIds.has(table.id);
             const order = table.currentOrderId ? ordersMap.get(table.currentOrderId) : null;
             const elapsed = table.timeOccupied ? getMinutesElapsed(table.timeOccupied) : 0;
             const statusConfig = TABLE_STATUS_MAP[table.status] || TABLE_STATUS_MAP.libre;
 
-            // Palette colors according to TableStatus
             let fillColor = '#1e293b';
             let strokeColor = '#10b981'; // libre: emerald
-            let textColor = '#ffffff';
+            let statusIcon = '✓';
 
-            if (table.status === 'occupee' || table.status === 'en_service' || table.status === 'attente_commande') {
+            if (
+              table.status === 'occupee' ||
+              table.status === 'en_service' ||
+              table.status === 'attente_commande'
+            ) {
               fillColor = '#451a03';
-              strokeColor = '#f59e0b'; // amber
+              strokeColor = '#f59e0b';
+              statusIcon = '🍽️';
             } else if (table.status === 'attente_paiement') {
               fillColor = '#4c0519';
-              strokeColor = '#f43f5e'; // rose
+              strokeColor = '#f43f5e';
+              statusIcon = '💳';
             } else if (table.status === 'reservee') {
               fillColor = '#172554';
-              strokeColor = '#3b82f6'; // blue
+              strokeColor = '#3b82f6';
+              statusIcon = '📅';
             } else if (table.status === 'a_nettoyer') {
               fillColor = '#334155';
-              strokeColor = '#94a3b8'; // slate
+              strokeColor = '#94a3b8';
+              statusIcon = '🧹';
             } else if (table.status === 'hors_service') {
               fillColor = '#1e1e1e';
-              strokeColor = '#ef4444'; // red
+              strokeColor = '#ef4444';
+              statusIcon = '⚠️';
             }
+
+            // Alerte collision prioritaire (1.8)
+            if (isColliding && isEditMode) {
+              strokeColor = '#f43f5e';
+            }
+
+            // Calcul des 8 poignées pour la table sélectionnée (1.5)
+            const handles = isSelected ? compute8Handles(0, 0, width, height, 0, 6) : [];
 
             return (
               <g
@@ -1149,30 +1625,57 @@ export const VectorFloorPlan: React.FC<VectorFloorPlanProps> = ({
               >
                 {/* ROTATED SHAPE CONTAINER */}
                 <g transform={`rotate(${rotation})`}>
-                  {/* Outer table shadow */}
-                  <rect
-                    x={-width / 2}
-                    y={-height / 2}
-                    width={width}
-                    height={height}
-                    rx={table.shape === 'ronde' ? width / 2 : table.shape === 'ovale' ? 40 : 20}
-                    fill={fillColor}
-                    stroke={isColliding ? '#ef4444' : strokeColor}
-                    strokeWidth={isSelected ? '3.5' : isColliding ? '3' : '2'}
-                  />
+                  {/* Outer glow on collision or selection */}
+                  {isColliding && isEditMode && (
+                    <rect
+                      x={-width / 2 - 8}
+                      y={-height / 2 - 8}
+                      width={width + 16}
+                      height={height + 16}
+                      fill="none"
+                      stroke="#f43f5e"
+                      strokeWidth="3"
+                      strokeDasharray="6 4"
+                      rx={table.shape === 'ronde' ? width : 18}
+                      className="animate-pulse"
+                    />
+                  )}
 
-                  {/* Chairs around table */}
-                  {Array.from({ length: Math.min(8, table.capacity) }).map((_, cIdx, cArr) => {
-                    const angle = (cIdx * 360) / cArr.length;
-                    const rad = (angle * Math.PI) / 180;
-                    const chairDistX = (width / 2 + 10) * Math.cos(rad);
-                    const chairDistY = (height / 2 + 10) * Math.sin(rad);
+                  {table.shape === 'ronde' ? (
+                    <circle
+                      cx="0"
+                      cy="0"
+                      r={Math.min(width, height) / 2}
+                      fill={fillColor}
+                      stroke={strokeColor}
+                      strokeWidth={isSelected ? 3 : 2}
+                      className="transition-colors"
+                    />
+                  ) : (
+                    <rect
+                      x={-width / 2}
+                      y={-height / 2}
+                      width={width}
+                      height={height}
+                      fill={fillColor}
+                      stroke={strokeColor}
+                      strokeWidth={isSelected ? 3 : 2}
+                      rx={table.shape === 'carree' ? 14 : 18}
+                      className="transition-colors"
+                    />
+                  )}
 
+                  {/* Chairs (Visual indicators around table) */}
+                  {Array.from({ length: Math.min(table.capacity || 4, 12) }).map((_, i, arr) => {
+                    const angle = (i * 2 * Math.PI) / arr.length;
+                    const dist = Math.max(width, height) / 2 + 12;
+                    const cx = Math.cos(angle) * dist;
+                    const cy = Math.sin(angle) * dist;
                     return (
                       <circle
-                        key={cIdx}
-                        cx={chairDistX}
-                        cy={chairDistY}
+                        key={i}
+                        cx={cx}
+                        cy={cy}
                         r="6"
                         fill="#334155"
                         stroke="#64748b"
@@ -1180,55 +1683,53 @@ export const VectorFloorPlan: React.FC<VectorFloorPlanProps> = ({
                       />
                     );
                   })}
-                </g>
 
-                {/* G4: COUNTER-ROTATED LABELS (ALWAYS HORIZONTAL!) */}
-                <g className="counter-rotated-content" pointerEvents="none">
-                  {/* Table Number */}
+                  {/* Table Label / Number (Text >= 12px obligatoire 1.14) */}
                   <text
                     x="0"
-                    y={order ? '-14' : '-2'}
+                    y={order ? -12 : -4}
                     textAnchor="middle"
-                    fill={textColor}
+                    fill="#ffffff"
                     fontSize="18"
                     fontWeight="900"
                     fontFamily="sans-serif"
-                    className="select-none tracking-tight"
+                    className="select-none tracking-tight pointer-events-none"
                   >
                     {table.number}
                   </text>
 
-                  {/* Capacity & Server */}
-                  <text
-                    x="0"
-                    y={order ? '4' : '16'}
-                    textAnchor="middle"
-                    fill="#94a3b8"
-                    fontSize="12"
-                    fontWeight="bold"
-                    fontFamily="sans-serif"
-                    className="tabular-nums"
-                  >
-                    {table.capacity}p
-                    {table.assignedServerName ? ` • ${table.assignedServerName.split(' ')[0]}` : ''}
-                  </text>
+                  {/* Capacity & Timer Pill */}
+                  <g transform={`translate(0, ${order ? 6 : 14})`}>
+                    <text
+                      x="0"
+                      y="0"
+                      textAnchor="middle"
+                      fill="#94a3b8"
+                      fontSize="12"
+                      fontWeight="bold"
+                      fontFamily="sans-serif"
+                      className="tabular-nums"
+                    >
+                      {table.capacity || 4}p {elapsed > 0 ? `• ${elapsed}m` : ''}
+                    </text>
+                  </g>
 
-                  {/* Order Total / Status / Elapsed Timer */}
+                  {/* Active Order Pill or Status label with Icon (1.14) */}
                   {order ? (
                     <g transform="translate(0, 24)">
                       <rect
-                        x="-45"
+                        x="-48"
                         y="-10"
-                        width="90"
-                        height="18"
+                        width="96"
+                        height="20"
                         rx="6"
-                        fill="rgba(0, 0, 0, 0.65)"
-                        stroke="rgba(255, 255, 255, 0.2)"
+                        fill="rgba(0, 0, 0, 0.75)"
+                        stroke="rgba(255, 255, 255, 0.25)"
                         strokeWidth="1"
                       />
                       <text
                         x="0"
-                        y="3"
+                        y="4"
                         textAnchor="middle"
                         fill="#fde047"
                         fontSize="12"
@@ -1240,24 +1741,26 @@ export const VectorFloorPlan: React.FC<VectorFloorPlanProps> = ({
                       </text>
                     </g>
                   ) : (
-                    <text
-                      x="0"
-                      y="32"
-                      textAnchor="middle"
-                      fill={strokeColor}
-                      fontSize="12"
-                      fontWeight="bold"
-                      fontFamily="sans-serif"
-                    >
-                      {statusConfig.label}
-                    </text>
+                    <g transform="translate(0, 32)">
+                      <text
+                        x="0"
+                        y="0"
+                        textAnchor="middle"
+                        fill={strokeColor}
+                        fontSize="12"
+                        fontWeight="bold"
+                        fontFamily="sans-serif"
+                      >
+                        {statusIcon} {statusConfig.label}
+                      </text>
+                    </g>
                   )}
 
-                  {/* Badges: Kiosk Lock, Waiter Call */}
+                  {/* Kiosk Lock & Waiter Call Badges */}
                   {table.tabletLocked && (
                     <g transform={`translate(${width / 2 - 14}, ${-height / 2 + 14})`}>
-                      <circle cx="0" cy="0" r="10" fill="#e11d48" />
-                      <text x="0" y="3.5" textAnchor="middle" fill="#ffffff" fontSize="10" fontWeight="bold">
+                      <circle cx="0" cy="0" r="11" fill="#e11d48" />
+                      <text x="0" y="4" textAnchor="middle" fill="#ffffff" fontSize="11" fontWeight="bold">
                         🔒
                       </text>
                     </g>
@@ -1265,136 +1768,128 @@ export const VectorFloorPlan: React.FC<VectorFloorPlanProps> = ({
 
                   {table.tabletCallWaiterPending && (
                     <g transform={`translate(${-width / 2 + 14}, ${-height / 2 + 14})`}>
-                      <circle cx="0" cy="0" r="11" fill="#f59e0b" />
-                      <text x="0" y="4" textAnchor="middle" fill="#000000" fontSize="10" fontWeight="bold">
+                      <circle cx="0" cy="0" r="12" fill="#f59e0b" />
+                      <text x="0" y="4.5" textAnchor="middle" fill="#000000" fontSize="11" fontWeight="bold">
                         🔔
                       </text>
                     </g>
                   )}
+
+                  {/* 8 RESIZE HANDLES & ROTATION HANDLE IN LOCAL AXES (1.4, 1.5, 1.14) */}
+                  {isEditMode && isSelected && (
+                    <g>
+                      {/* Bounding box outline */}
+                      <rect
+                        x={-width / 2 - 6}
+                        y={-height / 2 - 6}
+                        width={width + 12}
+                        height={height + 12}
+                        fill="none"
+                        stroke="#f59e0b"
+                        strokeWidth="2"
+                        strokeDasharray="4 4"
+                        rx="14"
+                      />
+
+                      {/* 8 Resize Handles with 44px touch target (1.5, 1.14) */}
+                      {handles.map((h) => (
+                        <g
+                          key={h.type}
+                          transform={`translate(${h.x}, ${h.y})`}
+                          className={h.cursor}
+                          onPointerDown={(e) => handleResizePointerDown(e, table.id, h.type)}
+                        >
+                          {/* Invisible 44x44px touch target */}
+                          <circle cx="0" cy="0" r="22" fill="transparent" />
+                          {/* Visible 16px handle dot */}
+                          <circle
+                            cx="0"
+                            cy="0"
+                            r="8"
+                            fill="#f59e0b"
+                            stroke="#ffffff"
+                            strokeWidth="2.5"
+                            className="shadow-md"
+                          />
+                        </g>
+                      ))}
+
+                      {/* Free / Step Rotation Handle with stem line (1.4) */}
+                      <line
+                        x1="0"
+                        y1={-height / 2 - 6}
+                        x2="0"
+                        y2={-height / 2 - 28}
+                        stroke="#f59e0b"
+                        strokeWidth="2"
+                        strokeDasharray="2 2"
+                      />
+                      <g
+                        transform={`translate(0, ${-height / 2 - 28})`}
+                        className="cursor-grab active:cursor-grabbing"
+                        onPointerDown={(e) => handleRotatePointerDown(e, table.id)}
+                      >
+                        {/* 44x44px touch target */}
+                        <circle cx="0" cy="0" r="22" fill="transparent" />
+                        <circle
+                          cx="0"
+                          cy="0"
+                          r="10"
+                          fill="#f59e0b"
+                          stroke="#ffffff"
+                          strokeWidth="2.5"
+                          className="shadow-md"
+                        />
+                        <text
+                          x="0"
+                          y="3.5"
+                          textAnchor="middle"
+                          fill="#000000"
+                          fontSize="9"
+                          fontWeight="900"
+                        >
+                          ↻
+                        </text>
+                      </g>
+
+                      {/* Quick +45° Step Rotation Button */}
+                      <g
+                        transform={`translate(${width / 2 + 22}, ${-height / 2 - 10})`}
+                        onClick={(e) => handleRotateTableStep(table, e)}
+                        className="cursor-pointer"
+                      >
+                        <circle cx="0" cy="0" r="11" fill="#f59e0b" stroke="#ffffff" strokeWidth="2" />
+                        <text
+                          x="0"
+                          y="4"
+                          textAnchor="middle"
+                          fill="#ffffff"
+                          fontSize="11"
+                          fontWeight="bold"
+                        >
+                          +45°
+                        </text>
+                      </g>
+                    </g>
+                  )}
                 </g>
-
-                {/* EDIT MODE HANDLES & CONTROLS */}
-                {isEditMode && isSelected && (
-                  <g>
-                    {/* Bounding box outline */}
-                    <rect
-                      x={-width / 2 - 6}
-                      y={-height / 2 - 6}
-                      width={width + 12}
-                      height={height + 12}
-                      fill="none"
-                      stroke="#f59e0b"
-                      strokeWidth="2"
-                      strokeDasharray="4 4"
-                      rx="14"
-                    />
-
-                    {/* 4 Corner Resize Handles (SE, SW, NE, NW) */}
-                    <circle
-                      cx={width / 2 + 6}
-                      cy={height / 2 + 6}
-                      r="8"
-                      fill="#f59e0b"
-                      stroke="#ffffff"
-                      strokeWidth="2"
-                      className="cursor-nwse-resize"
-                      onPointerDown={(e) => handleResizePointerDown(e, table.id, 'se')}
-                    >
-                      <title>Redimensionner coin bas-droit</title>
-                    </circle>
-                    <circle
-                      cx={-width / 2 - 6}
-                      cy={height / 2 + 6}
-                      r="8"
-                      fill="#f59e0b"
-                      stroke="#ffffff"
-                      strokeWidth="2"
-                      className="cursor-nesw-resize"
-                      onPointerDown={(e) => handleResizePointerDown(e, table.id, 'sw')}
-                    >
-                      <title>Redimensionner coin bas-gauche</title>
-                    </circle>
-                    <circle
-                      cx={width / 2 + 6}
-                      cy={-height / 2 - 6}
-                      r="8"
-                      fill="#f59e0b"
-                      stroke="#ffffff"
-                      strokeWidth="2"
-                      className="cursor-nesw-resize"
-                      onPointerDown={(e) => handleResizePointerDown(e, table.id, 'ne')}
-                    >
-                      <title>Redimensionner coin haut-droit</title>
-                    </circle>
-                    <circle
-                      cx={-width / 2 - 6}
-                      cy={-height / 2 - 6}
-                      r="8"
-                      fill="#f59e0b"
-                      stroke="#ffffff"
-                      strokeWidth="2"
-                      className="cursor-nwse-resize"
-                      onPointerDown={(e) => handleResizePointerDown(e, table.id, 'nw')}
-                    >
-                      <title>Redimensionner coin haut-gauche</title>
-                    </circle>
-
-                    {/* Free Rotation Handle with stem line */}
-                    <line
-                      x1="0"
-                      y1={-height / 2 - 6}
-                      x2="0"
-                      y2={-height / 2 - 26}
-                      stroke="#f59e0b"
-                      strokeWidth="2"
-                      strokeDasharray="2 2"
-                    />
-                    <circle
-                      cx={0}
-                      cy={-height / 2 - 26}
-                      r="9"
-                      fill="#f59e0b"
-                      stroke="#ffffff"
-                      strokeWidth="2"
-                      className="cursor-grab active:cursor-grabbing"
-                      onPointerDown={(e) => handleRotatePointerDown(e, table.id)}
-                    >
-                      <title>Rotation libre (glisser pour orienter)</title>
-                    </circle>
-
-                    {/* Quick +45° Step Rotation Button */}
-                    <g
-                      transform={`translate(${width / 2 + 20}, ${-height / 2 - 10})`}
-                      onClick={(e) => handleRotateTable(table, e)}
-                      className="cursor-pointer"
-                    >
-                      <title>Rotation rapide +45°</title>
-                      <circle cx="0" cy="0" r="10" fill="#f59e0b" stroke="#ffffff" strokeWidth="2" />
-                      <text x="0" y="3.5" textAnchor="middle" fill="#ffffff" fontSize="11" fontWeight="bold">
-                        ↻
-                      </text>
-                    </g>
-
-                    {/* Quick Edit Properties Button (X, Y, Nom, Capacité) */}
-                    <g
-                      transform={`translate(${width / 2 + 20}, ${-height / 2 + 18})`}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onEditTableProps?.(table);
-                      }}
-                      className="cursor-pointer"
-                    >
-                      <title>Propriétés de la table (Double-clic)</title>
-                      <circle cx="0" cy="0" r="10" fill="#3b82f6" stroke="#ffffff" strokeWidth="2" />
-                      <text x="0" y="3.5" textAnchor="middle" fill="#ffffff" fontSize="10" fontWeight="bold">
-                        ✎
-                      </text>
-                    </g>
-                  </g>
-                )}
               </g>
             );
           })}
+
+          {/* LASSO SELECTION RECTANGLE (1.6) */}
+          {lassoBox && (
+            <rect
+              x={Math.min(lassoBox.startX, lassoBox.currentX)}
+              y={Math.min(lassoBox.startY, lassoBox.currentY)}
+              width={Math.abs(lassoBox.currentX - lassoBox.startX)}
+              height={Math.abs(lassoBox.currentY - lassoBox.startY)}
+              fill="rgba(245, 158, 11, 0.15)"
+              stroke="#f59e0b"
+              strokeWidth="1.5"
+              strokeDasharray="4 4"
+            />
+          )}
         </g>
       </svg>
     </div>

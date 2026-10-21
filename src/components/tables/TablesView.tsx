@@ -21,6 +21,7 @@ import { AddZoneModal } from './AddZoneModal';
 import { floorPlanReducer, cloneSnapshot, LayoutSnapshot } from './floorPlanReducer';
 import { computeFloorPlanDiff } from './floorPlanDiff';
 import { findOccupiedTablesInZone } from './floorPlanLock';
+import { findTableCollisions, AlignmentType, DistributionAxis } from '../../lib/floorPlanGeometry';
 import { generateSecureId } from '../../lib/utils';
 import {
   Utensils,
@@ -121,7 +122,7 @@ export const TablesView: React.FC<TablesViewProps> = ({ onOpenOrder, onPayOrder,
     return 'plan';
   });
   const [selectedZoneId, setSelectedZoneId] = useState<string | 'all'>(() => {
-    return zones[0]?.id || 'all';
+    return zones[0]?.id || '';
   });
 
   // Mode Édition du plan vs Mode Service (G1)
@@ -129,9 +130,9 @@ export const TablesView: React.FC<TablesViewProps> = ({ onOpenOrder, onPayOrder,
   const [snapToGrid, setSnapToGrid] = useState(true);
   const [snapToMagnet, setSnapToMagnet] = useState(true);
 
-  // Synchroniser sur la 1ère salle disponible si initialisé avant chargement des zones (P-07)
+  // Synchroniser sur la 1ère salle disponible si initialisé avant chargement des zones (1.9)
   useEffect(() => {
-    if (selectedZoneId === 'all' && zones.length > 0) {
+    if ((!selectedZoneId || selectedZoneId === 'all') && zones.length > 0) {
       setSelectedZoneId(zones[0].id);
     }
   }, [zones, selectedZoneId]);
@@ -154,6 +155,17 @@ export const TablesView: React.FC<TablesViewProps> = ({ onOpenOrder, onPayOrder,
   const canUndo = historyState.past.length > 0;
   const canRedo = historyState.future.length > 0;
 
+  // Avertissement avant de quitter avec des modifications non enregistrées (1.13)
+  useEffect(() => {
+    if (!isEditMode || !isDirty) return;
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [isEditMode, isDirty]);
+
   // Snapshot capturé avant une interaction continue (drag/resize/rotate)
   const dragStartSnapshotRef = useRef<LayoutSnapshot | null>(null);
 
@@ -167,8 +179,9 @@ export const TablesView: React.FC<TablesViewProps> = ({ onOpenOrder, onPayOrder,
     }
   }, [tables, decorElements, isEditMode]);
 
-  // Selection states
+  // Selection states (multi-selection support 1.6)
   const [selectedTableId, setSelectedTableId] = useState<string | null>(null);
+  const [selectedTableIds, setSelectedTableIds] = useState<Set<string>>(new Set());
   const [selectedDecorId, setSelectedDecorId] = useState<string | null>(null);
 
   const selectedTable = useMemo(
@@ -282,19 +295,42 @@ export const TablesView: React.FC<TablesViewProps> = ({ onOpenOrder, onPayOrder,
     });
   }, [selectedTableId, draftTables, showToast]);
 
-  // Suppression rapide d'un élément sélectionné (Suppr / Backspace)
+  // Suppression sécurisée d'un ou plusieurs éléments sélectionnés (1.6, 1.12)
   const handleDeleteSelected = useCallback(() => {
-    if (selectedTableId) {
-      const isPersisted = tables.some((t) => t.id === selectedTableId);
-      dispatchFloorPlan({
-        type: 'REMOVE_TABLE',
-        payload: { id: selectedTableId, isPersisted },
-      });
+    const idsToDelete =
+      selectedTableIds.size > 0
+        ? Array.from(selectedTableIds)
+        : selectedTableId
+        ? [selectedTableId]
+        : [];
+
+    if (idsToDelete.length > 0) {
+      // 1. Refus strict de suppression d'une table avec commande ouverte (1.12)
+      for (const id of idsToDelete) {
+        const table = tables.find((t) => t.id === id);
+        if (table?.currentOrderId) {
+          showToast({
+            type: 'error',
+            title: 'Suppression impossible',
+            message: `La table ${table.number} a une commande en cours. Clôturez la commande avant de supprimer la table.`,
+          });
+          return;
+        }
+      }
+
+      for (const id of idsToDelete) {
+        const isPersisted = tables.some((t) => t.id === id);
+        dispatchFloorPlan({
+          type: 'REMOVE_TABLE',
+          payload: { id, isPersisted },
+        });
+      }
       setSelectedTableId(null);
+      setSelectedTableIds(new Set());
       showToast({
         type: 'info',
-        title: 'Table retirée',
-        message: 'La table sélectionnée a été retirée du plan.',
+        title: idsToDelete.length > 1 ? 'Tables retirées' : 'Table retirée',
+        message: `${idsToDelete.length} table(s) retirée(s) du plan de salle.`,
       });
     } else if (selectedDecorId) {
       const isPersisted = decorElements.some((d) => d.id === selectedDecorId);
@@ -309,7 +345,7 @@ export const TablesView: React.FC<TablesViewProps> = ({ onOpenOrder, onPayOrder,
         message: 'L\'élément architectural sélectionné a été retiré.',
       });
     }
-  }, [selectedTableId, selectedDecorId, tables, decorElements, showToast]);
+  }, [selectedTableId, selectedTableIds, selectedDecorId, tables, decorElements, showToast]);
 
   // Écouteur de raccourcis clavier en mode édition (Ctrl+Z, Ctrl+Y, Ctrl+D, Suppr, Flèches)
   useEffect(() => {
@@ -437,9 +473,23 @@ export const TablesView: React.FC<TablesViewProps> = ({ onOpenOrder, onPayOrder,
     setIsEditMode(true);
   };
 
-  // Exit / Save Edit Mode (Diff-based Batch Save D-01, D-02 + Libération du verrou D-06)
+  // Exit / Save Edit Mode (Diff-based Batch Save 1.8, 1.12 + Libération du verrou)
   const handleSaveEditMode = async () => {
     try {
+      // 1. Bloquer l'enregistrement en cas de collision (1.8)
+      const { collidingTableIds } = findTableCollisions(draftTables);
+      if (collidingTableIds.size > 0) {
+        const collidingNumbers = Array.from(collidingTableIds)
+          .map((id) => draftTables.find((t) => t.id === id)?.number || '?')
+          .join(', ');
+        showToast({
+          type: 'error',
+          title: 'Enregistrement bloqué : collisions détectées',
+          message: `${collidingTableIds.size} tables se chevauchent (${collidingNumbers}). Utilisez l'option « Écarter automatiquement » ou repositionnez-les.`,
+        });
+        return;
+      }
+
       const diff = computeFloorPlanDiff(
         tables,
         draftTables,
@@ -448,6 +498,32 @@ export const TablesView: React.FC<TablesViewProps> = ({ onOpenOrder, onPayOrder,
         draftDecor,
         historyState.present.removedDecorIds
       );
+
+      // 2. Refuser de supprimer une table ayant une commande ouverte (1.12)
+      for (const tableId of diff.tablesToDelete) {
+        const original = tables.find((t) => t.id === tableId);
+        if (original?.currentOrderId) {
+          showToast({
+            type: 'error',
+            title: 'Enregistrement refusé',
+            message: `La table ${original.number} a une commande en cours. Impossible de la supprimer.`,
+          });
+          return;
+        }
+      }
+
+      // 3. Refuser de déplacer vers une autre zone une table ayant une commande ouverte (1.12)
+      for (const update of diff.tablesToUpdate) {
+        const original = tables.find((t) => t.id === update.id);
+        if (original?.currentOrderId && update.zoneId && update.zoneId !== original.zoneId) {
+          showToast({
+            type: 'error',
+            title: 'Enregistrement refusé',
+            message: `La table ${original.number} a une commande ouverte. Impossible de la déplacer vers une autre zone.`,
+          });
+          return;
+        }
+      }
 
       if (diff.hasChanges) {
         await saveFloorPlanDiff(diff);
@@ -459,6 +535,7 @@ export const TablesView: React.FC<TablesViewProps> = ({ onOpenOrder, onPayOrder,
 
       setIsEditMode(false);
       setSelectedTableId(null);
+      setSelectedTableIds(new Set());
       setSelectedDecorId(null);
       showToast({
         type: 'success',
@@ -470,9 +547,39 @@ export const TablesView: React.FC<TablesViewProps> = ({ onOpenOrder, onPayOrder,
       showToast({
         type: 'error',
         title: 'Erreur d\'enregistrement',
-        message: 'Une erreur est survenue lors de la sauvegarde du plan.',
+        message: 'Une erreur est survenue lors de la synchronisation. Votre brouillon a été conservé.',
       });
     }
+  };
+
+  // Changement de salle protégé contre la perte de données (1.13)
+  const handleZoneSelect = async (newZoneId: string | 'all') => {
+    if (newZoneId === selectedZoneId) return;
+
+    if (isEditMode && isDirty) {
+      const ok = await confirm({
+        title: 'Modifications non enregistrées',
+        message: 'Vous avez des modifications en cours sur cette salle. Si vous changez de salle sans enregistrer, vos modifications seront perdues.',
+        confirmLabel: 'Quitter sans enregistrer',
+        cancelLabel: 'Rester sur cette salle',
+        variant: 'danger',
+      });
+      if (!ok) return;
+
+      dispatchFloorPlan({
+        type: 'DISCARD_CHANGES',
+        payload: { tables, decor: decorElements },
+      });
+      if (currentUser?.id) {
+        await releaseLayoutLock(selectedZoneId, currentUser.id);
+      }
+      setIsEditMode(false);
+      setSelectedTableId(null);
+      setSelectedTableIds(new Set());
+      setSelectedDecorId(null);
+    }
+
+    setSelectedZoneId(newZoneId);
   };
 
   // Cancel Edit Mode - Abandon complet sans fuite Firestore (D-05) + Libération verrou (D-06)
@@ -510,6 +617,7 @@ export const TablesView: React.FC<TablesViewProps> = ({ onOpenOrder, onPayOrder,
         id: generateSecureId('tbl'),
         status: data.status || 'libre',
         coordVersion: 2,
+        layoutVersion: 2,
       })) as RestaurantTable[];
       dispatchFloorPlan({ type: 'ADD_TABLES_BATCH', payload: created });
       showToast({
@@ -570,21 +678,23 @@ export const TablesView: React.FC<TablesViewProps> = ({ onOpenOrder, onPayOrder,
             </div>
           )}
 
-          {/* Zones Tabs (G6) */}
+          {/* Zones Tabs (1.9, 1.13) */}
           {isZonesAllowed && (
             <>
               <div className="h-6 w-px bg-slate-200 hidden sm:block" />
               <div className="flex items-center gap-1.5 overflow-x-auto max-w-full py-0.5">
-                <button
-                  onClick={() => setSelectedZoneId('all')}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all ${
-                    selectedZoneId === 'all'
-                      ? 'bg-slate-900 text-white shadow-xs'
-                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                  }`}
-                >
-                  Toutes les zones ({tables.length})
-                </button>
+                {viewMode === 'grille' && (
+                  <button
+                    onClick={() => handleZoneSelect('all')}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all ${
+                      selectedZoneId === 'all'
+                        ? 'bg-slate-900 text-white shadow-xs'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    }`}
+                  >
+                    Toutes les zones ({tables.length})
+                  </button>
+                )}
                 {zones.map((zone) => {
                   const count = tables.filter(
                     (t) => t.zoneId === zone.id || t.zone === zone.name
@@ -592,7 +702,7 @@ export const TablesView: React.FC<TablesViewProps> = ({ onOpenOrder, onPayOrder,
                   return (
                     <button
                       key={zone.id}
-                      onClick={() => setSelectedZoneId(zone.id)}
+                      onClick={() => handleZoneSelect(zone.id)}
                       className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all ${
                         selectedZoneId === zone.id
                           ? 'bg-amber-600 text-white shadow-xs'
@@ -928,10 +1038,21 @@ export const TablesView: React.FC<TablesViewProps> = ({ onOpenOrder, onPayOrder,
           snapToGrid={snapToGrid}
           snapToMagnet={snapToMagnet}
           selectedTableId={selectedTableId}
+          selectedTableIds={selectedTableIds}
           selectedDecorId={selectedDecorId}
-          onSelectTable={(table) => {
-            setSelectedTableId(table.id);
-            setSelectedDecorId(null);
+          onSelectTable={(table, isMultiSelect) => {
+            if (isMultiSelect) {
+              setSelectedTableIds((prev) => {
+                const next = new Set(prev);
+                if (next.has(table.id)) next.delete(table.id);
+                else next.add(table.id);
+                return next;
+              });
+            } else {
+              setSelectedTableId(table.id);
+              setSelectedTableIds(new Set([table.id]));
+              setSelectedDecorId(null);
+            }
           }}
           onEditTableProps={(table) => {
             setEditTableModal(table);
@@ -942,6 +1063,7 @@ export const TablesView: React.FC<TablesViewProps> = ({ onOpenOrder, onPayOrder,
           onSelectDecor={(decor) => {
             setSelectedDecorId(decor.id);
             setSelectedTableId(null);
+            setSelectedTableIds(new Set());
           }}
           onEditDecorProps={(decor) => {
             setEditingDecorElement(decor);
@@ -950,6 +1072,41 @@ export const TablesView: React.FC<TablesViewProps> = ({ onOpenOrder, onPayOrder,
           onDeselect={() => {
             setSelectedTableId(null);
             setSelectedDecorId(null);
+            setSelectedTableIds(new Set());
+          }}
+          onAlignSelected={(alignment) => {
+            if (selectedTableIds.size > 1) {
+              dispatchFloorPlan({
+                type: 'ALIGN_TABLES',
+                payload: { tableIds: Array.from(selectedTableIds), alignment },
+              });
+              showToast({
+                type: 'info',
+                title: 'Alignement appliqué',
+                message: `${selectedTableIds.size} tables alignées avec succès.`,
+              });
+            }
+          }}
+          onDistributeSelected={(axis) => {
+            if (selectedTableIds.size > 2) {
+              dispatchFloorPlan({
+                type: 'DISTRIBUTE_TABLES',
+                payload: { tableIds: Array.from(selectedTableIds), axis },
+              });
+              showToast({
+                type: 'info',
+                title: 'Répartition appliquée',
+                message: `${selectedTableIds.size} tables réparties uniformément.`,
+              });
+            }
+          }}
+          onAutoSeparate={() => {
+            dispatchFloorPlan({ type: 'AUTO_SEPARATE_TABLES' });
+            showToast({
+              type: 'info',
+              title: 'Écartement automatique',
+              message: 'Les tables en collision ont été repositionnées pour éliminer les chevauchements.',
+            });
           }}
           onUpdateDraftTables={(updated) => {
             if (!dragStartSnapshotRef.current) {
@@ -1171,6 +1328,7 @@ export const TablesView: React.FC<TablesViewProps> = ({ onOpenOrder, onPayOrder,
                 id: generateSecureId('tbl'),
                 status: newTableData.status || 'libre',
                 coordVersion: 2,
+                layoutVersion: 2,
               } as RestaurantTable;
               dispatchFloorPlan({ type: 'ADD_TABLE', payload: newTable });
             } else {
