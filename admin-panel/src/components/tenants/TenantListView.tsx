@@ -112,7 +112,7 @@ export const TenantListView: React.FC<TenantListViewProps> = ({
 
         <button
           onClick={onOpenCreateTenantModal}
-          className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 text-xs font-bold shadow-lg shadow-amber-500/20 transition-all flex items-center gap-2 cursor-pointer self-start sm:self-auto"
+          className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 text-xs font-bold shadow-lg shadow-amber-500/20 transition-all flex items-center justify-center gap-2 cursor-pointer w-full sm:w-auto self-start sm:self-auto"
         >
           <Plus className="w-4 h-4" />
           <span>Inscrire un Restaurant</span>
@@ -135,12 +135,12 @@ export const TenantListView: React.FC<TenantListViewProps> = ({
           />
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full md:w-auto">
           {/* Filtre Statut */}
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="px-3 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-300 focus:outline-hidden focus:border-amber-500"
+            className="px-3 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-300 focus:outline-hidden focus:border-amber-500 w-full"
           >
             <option value="all">Tous les statuts</option>
             <option value="actif">Actif</option>
@@ -154,7 +154,7 @@ export const TenantListView: React.FC<TenantListViewProps> = ({
           <select
             value={planFilter}
             onChange={(e) => setPlanFilter(e.target.value)}
-            className="px-3 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-300 focus:outline-hidden focus:border-amber-500"
+            className="px-3 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-300 focus:outline-hidden focus:border-amber-500 w-full"
           >
             <option value="all">Toutes les formules</option>
             <option value="plan_starter">Starter (25 000 FCFA)</option>
@@ -164,10 +164,107 @@ export const TenantListView: React.FC<TenantListViewProps> = ({
         </div>
       </div>
 
-      {/* Tableau des Restaurants */}
-      <div className="rounded-2xl bg-slate-900/60 border border-slate-800 backdrop-blur-sm overflow-hidden">
+      {/* Vue Cartes Tactiles pour Mobile (< md) */}
+      <div className="block md:hidden space-y-3">
+        {filteredTenants.map((tenant) => {
+          const plan = DEFAULT_PLANS.find((p: Plan) => p.id === tenant.planId);
+          const statusBadge: Record<string, { label: string; color: string }> = {
+            actif: { label: 'Actif', color: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30' },
+            essai: { label: 'En Essai', color: 'bg-amber-500/15 text-amber-400 border-amber-500/30' },
+            impaye: { label: 'Impayé', color: 'bg-orange-500/15 text-orange-400 border-orange-500/30' },
+            suspendu: { label: 'Suspendu', color: 'bg-rose-500/15 text-rose-400 border-rose-500/30' },
+            resilie: { label: 'Résilié', color: 'bg-slate-800 text-slate-400 border-slate-700' },
+          };
+          const badge = statusBadge[tenant.status] || { label: tenant.status, color: 'bg-slate-800 text-slate-400' };
+
+          return (
+            <div
+              key={tenant.id}
+              className="p-4 rounded-2xl bg-slate-900/70 border border-slate-800 space-y-3 shadow-md"
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <div className="font-bold text-white text-sm truncate">{tenant.company?.name || tenant.id}</div>
+                  <div className="text-[11px] text-slate-400 font-mono flex items-center gap-1.5 mt-0.5">
+                    <span>{tenant.id}</span>
+                    {tenant.channel === 'beta' && (
+                      <span className="text-[9px] px-1 py-0.2 rounded bg-purple-500/20 text-purple-400 font-bold">
+                        BETA
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex flex-col items-end gap-1 shrink-0">
+                  <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border ${badge.color}`}>
+                    {badge.label}
+                  </span>
+                  {tenant.status === 'suspendu' && tenant.suspensionMode && (
+                    <span className="text-[9px] font-mono text-rose-400">
+                      {tenant.suspensionMode === 'read_only' ? 'Lecture seule' : 'Blocage'}
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 text-[11px] pt-1 border-t border-slate-800/60">
+                <div>
+                  <span className="text-slate-500 block text-[10px]">Formule</span>
+                  <span className="font-semibold text-slate-200">{plan?.name || tenant.planId}</span>
+                </div>
+                <div>
+                  <span className="text-slate-500 block text-[10px]">Localisation</span>
+                  <span className="text-slate-300 truncate block">{tenant.company?.city || 'Douala'}</span>
+                </div>
+                <div className="col-span-2">
+                  <span className="text-slate-500 block text-[10px]">Propriétaire</span>
+                  <span className="text-slate-300 font-medium">{tenant.owner?.name}</span>
+                  <span className="text-slate-500 font-mono text-[10px] block truncate">{tenant.owner?.email}</span>
+                </div>
+              </div>
+
+              <div className="pt-2 border-t border-slate-800/60 flex items-center justify-between gap-2">
+                <button
+                  onClick={() => onSelectTenant(tenant.id)}
+                  className="flex-1 px-3 py-2 rounded-xl bg-slate-800 hover:bg-amber-500 hover:text-slate-950 text-slate-200 text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <span>Fiche & Droits</span>
+                  <ArrowUpRight className="w-3.5 h-3.5" />
+                </button>
+
+                {tenant.status === 'suspendu' ? (
+                  <button
+                    onClick={() => handleReactivate(tenant)}
+                    title="Réactiver le restaurant"
+                    className="p-2 rounded-xl bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25 transition-all cursor-pointer border border-emerald-500/30"
+                  >
+                    <Unlock className="w-4 h-4" />
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => setSuspendingTenant(tenant)}
+                    title="Suspendre le restaurant"
+                    className="p-2 rounded-xl bg-rose-500/15 text-rose-400 hover:bg-rose-500/25 transition-all cursor-pointer border border-rose-500/30"
+                  >
+                    <Lock className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+            </div>
+          );
+        })}
+
+        {filteredTenants.length === 0 && (
+          <div className="p-8 text-center text-slate-500 text-xs bg-slate-900/40 rounded-2xl border border-slate-800">
+            Aucun restaurant client ne correspond aux critères de recherche.
+          </div>
+        )}
+      </div>
+
+      {/* Tableau des Restaurants pour Desktop (md et +) */}
+      <div className="hidden md:block rounded-2xl bg-slate-900/60 border border-slate-800 backdrop-blur-sm overflow-hidden shadow-xl">
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
+          <table className="w-full text-left text-xs min-w-[720px]">
             <thead>
               <tr className="border-b border-slate-800 bg-slate-950/40 text-slate-400 text-[11px] uppercase tracking-wider">
                 <th className="py-3 px-4 font-semibold">Établissement</th>
@@ -280,7 +377,7 @@ export const TenantListView: React.FC<TenantListViewProps> = ({
       {/* Modal de Confirmation de Suspension */}
       {suspendingTenant && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-xs animate-in fade-in duration-150">
-          <div className="bg-slate-900 border border-slate-800 w-full max-w-md rounded-3xl p-6 shadow-2xl space-y-4">
+          <div className="bg-slate-900 border border-slate-800 w-full max-w-md rounded-2xl sm:rounded-3xl p-5 sm:p-6 shadow-2xl space-y-4 max-h-[90dvh] overflow-y-auto">
             <div className="flex items-center gap-3 text-rose-400">
               <div className="w-10 h-10 rounded-xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center">
                 <ShieldAlert className="w-5 h-5" />

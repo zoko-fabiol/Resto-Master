@@ -1,10 +1,33 @@
 import React, { useState, useEffect } from 'react';
-import { ShieldCheck, LogOut, Bell, Clock, User, Sparkles } from 'lucide-react';
+import { ShieldCheck, LogOut, Bell, Clock, User, Sparkles, Menu, X } from 'lucide-react';
 import { useAdminAuth } from '../../context/AdminAuthContext';
 
-export const AdminHeader: React.FC = () => {
+interface AdminHeaderProps {
+  mobileOpen?: boolean;
+  setMobileOpen?: (open: boolean) => void;
+  isMobileMenuOpen?: boolean;
+  onOpenMobileMenu?: () => void;
+}
+
+export const AdminHeader: React.FC<AdminHeaderProps> = ({
+  mobileOpen,
+  setMobileOpen,
+  isMobileMenuOpen,
+  onOpenMobileMenu,
+}) => {
   const { currentAdmin, logout } = useAdminAuth();
   const [time, setTime] = useState<string>('');
+
+  const isOpen = isMobileMenuOpen ?? mobileOpen ?? false;
+  const hasMobileControl = !!(onOpenMobileMenu || setMobileOpen);
+
+  const handleToggle = () => {
+    if (onOpenMobileMenu) {
+      onOpenMobileMenu();
+    } else if (setMobileOpen) {
+      setMobileOpen(!mobileOpen);
+    }
+  };
 
   useEffect(() => {
     const update = () => {
@@ -35,13 +58,24 @@ export const AdminHeader: React.FC = () => {
     : { label: 'Admin', color: 'bg-slate-800 text-slate-300 border-slate-700' };
 
   return (
-    <header className="h-16 px-6 bg-slate-900/80 backdrop-blur-md border-b border-slate-800 flex items-center justify-between sticky top-0 z-30">
-      {/* Horloge serveur & statut plateforme */}
-      <div className="flex items-center gap-4">
-        <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-400">
-          <Clock className="w-3.5 h-3.5 text-amber-400" />
+    <header className="h-16 px-3 sm:px-6 bg-slate-900/80 backdrop-blur-md border-b border-slate-800 flex items-center justify-between sticky top-0 z-30">
+      {/* Bouton Hamburger Mobile + Horloge */}
+      <div className="flex items-center gap-2 sm:gap-4">
+        {hasMobileControl && (
+          <button
+            type="button"
+            onClick={handleToggle}
+            aria-label={isOpen ? 'Fermer le menu' : 'Ouvrir le menu'}
+            className="lg:hidden p-2 rounded-xl bg-slate-800/80 hover:bg-slate-800 text-slate-300 hover:text-white transition-colors cursor-pointer touch-manipulation"
+          >
+            {isOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+          </button>
+        )}
+
+        <div className="flex items-center gap-2 px-2.5 sm:px-3 py-1.5 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-400">
+          <Clock className="w-3.5 h-3.5 text-amber-400 shrink-0" />
           <span className="font-mono tabular-nums text-slate-200">{time || '00:00:00'}</span>
-          <span className="text-[10px] text-slate-500 uppercase font-semibold">WAT (GMT+1)</span>
+          <span className="hidden sm:inline text-[10px] text-slate-500 uppercase font-semibold">WAT (GMT+1)</span>
         </div>
 
         <div className="hidden sm:flex items-center gap-2 text-xs text-emerald-400">

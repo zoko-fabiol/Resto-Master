@@ -3,16 +3,63 @@
 :root {
   font-family: 'Outfit', 'Plus Jakarta Sans', system-ui, sans-serif;
   color-scheme: dark;
+
+  /* Safe Area Insets pour encoches et Dynamic Island */
+  --sat: env(safe-area-inset-top, 0px);
+  --sar: env(safe-area-inset-right, 0px);
+  --sab: env(safe-area-inset-bottom, 0px);
+  --sal: env(safe-area-inset-left, 0px);
+}
+
+html {
+  -webkit-tap-highlight-color: transparent;
+  overflow-x: hidden;
+}
+
+body {
+  overflow-x: hidden;
+  min-height: 100dvh;
+}
+
+button, a, [role="button"], .tappable {
+  touch-action: manipulation;
+}
+
+button, [role="button"] {
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+/* Évite le zoom intempestif iOS sur focus d'input (< 16px) */
+@media (pointer: coarse) {
+  input, textarea, select {
+    font-size: 16px;
+  }
 }
 
 code, kbd, samp, pre {
   font-family: 'JetBrains Mono', monospace;
 }
 
+/* Utilitaires Safe Area */
+.pt-safe {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+.pl-safe {
+  padding-left: env(safe-area-inset-left, 0px);
+}
+.pr-safe {
+  padding-right: env(safe-area-inset-right, 0px);
+}
+
 /* Scrollbar discrète et élégante */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
@@ -23,6 +70,16 @@ code, kbd, samp, pre {
 }
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(148, 163, 184, 0.4);
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }
 
 .tabular-nums {

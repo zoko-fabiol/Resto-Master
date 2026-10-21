@@ -111,11 +111,11 @@ export const PlatformDashboardView: React.FC<PlatformDashboardViewProps> = ({
           </p>
         </div>
 
-        <div className="flex items-center gap-2.5">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 w-full sm:w-auto">
           {pendingSignups.length > 0 && (
             <button
               onClick={onNavigateToSignups}
-              className="px-4 py-2.5 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-400 text-xs font-bold hover:bg-amber-500/25 transition-all flex items-center gap-2 cursor-pointer shadow-xs"
+              className="px-4 py-2.5 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-400 text-xs font-bold hover:bg-amber-500/25 transition-all flex items-center justify-center gap-2 cursor-pointer shadow-xs"
             >
               <UserPlus className="w-4 h-4" />
               <span>{pendingSignups.length} Inscription(s) en attente</span>
@@ -124,7 +124,7 @@ export const PlatformDashboardView: React.FC<PlatformDashboardViewProps> = ({
 
           <button
             onClick={onOpenCreateTenantModal}
-            className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 text-xs font-bold shadow-lg shadow-amber-500/20 transition-all flex items-center gap-2 cursor-pointer"
+            className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 text-xs font-bold shadow-lg shadow-amber-500/20 transition-all flex items-center justify-center gap-2 cursor-pointer"
           >
             <Building2 className="w-4 h-4" />
             <span>Nouveau Restaurant Client</span>
@@ -233,8 +233,8 @@ export const PlatformDashboardView: React.FC<PlatformDashboardViewProps> = ({
         </div>
 
         {/* Dernières Actions d'Audit SHA-256 */}
-        <div className="lg:col-span-2 p-6 rounded-2xl bg-slate-900/60 border border-slate-800 backdrop-blur-sm flex flex-col justify-between">
-          <div className="flex items-center justify-between mb-3">
+        <div className="lg:col-span-2 p-4 sm:p-6 rounded-2xl bg-slate-900/60 border border-slate-800 backdrop-blur-sm flex flex-col justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
             <div>
               <h2 className="text-sm font-bold text-white flex items-center gap-2">
                 <ShieldCheck className="w-4 h-4 text-emerald-400" />
@@ -244,7 +244,7 @@ export const PlatformDashboardView: React.FC<PlatformDashboardViewProps> = ({
                 Chaque opération d'administration est scellée par empreinte cryptographique.
               </p>
             </div>
-            <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+            <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 self-start sm:self-auto">
               SHA-256 Chained
             </span>
           </div>
@@ -253,10 +253,10 @@ export const PlatformDashboardView: React.FC<PlatformDashboardViewProps> = ({
             {auditLogs.slice(0, 5).map((log) => (
               <div
                 key={log.id}
-                className="p-3 rounded-xl bg-slate-950/70 border border-slate-800/80 flex items-start justify-between gap-3 text-xs"
+                className="p-3 rounded-xl bg-slate-950/70 border border-slate-800/80 flex flex-col sm:flex-row sm:items-start justify-between gap-2 sm:gap-3 text-xs"
               >
                 <div className="min-w-0">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-semibold text-white">{log.action}</span>
                     {log.targetOrgId && (
                       <span className="font-mono text-[10px] px-1.5 py-0.5 rounded-sm bg-slate-800 text-amber-400">
@@ -269,7 +269,7 @@ export const PlatformDashboardView: React.FC<PlatformDashboardViewProps> = ({
                     Par <span className="text-slate-300 font-medium">{log.actorEmail}</span> • Motif : {log.reason}
                   </p>
                 </div>
-                <div className="text-[10px] font-mono text-slate-500 shrink-0 text-right">
+                <div className="text-[10px] font-mono text-slate-500 shrink-0 sm:text-right flex sm:flex-col justify-between items-center sm:items-end">
                   <div>{log.timestamp ? new Date(log.timestamp).toLocaleTimeString('fr-FR') : ''}</div>
                   <div className="text-[9px] text-emerald-500/80 truncate max-w-[80px]" title={log.sha256Hash}>
                     {log.sha256Hash.slice(0, 8)}…
@@ -288,8 +288,8 @@ export const PlatformDashboardView: React.FC<PlatformDashboardViewProps> = ({
       </div>
 
       {/* Liste des Établissements Récents */}
-      <div className="p-6 rounded-2xl bg-slate-900/60 border border-slate-800 backdrop-blur-sm">
-        <div className="flex items-center justify-between mb-4">
+      <div className="p-4 sm:p-6 rounded-2xl bg-slate-900/60 border border-slate-800 backdrop-blur-sm">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 mb-4">
           <h2 className="text-sm font-bold text-white flex items-center gap-2">
             <Store className="w-4 h-4 text-amber-400" />
             Établissements Récemment Enregistrés
@@ -300,7 +300,7 @@ export const PlatformDashboardView: React.FC<PlatformDashboardViewProps> = ({
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
+          <table className="w-full text-left text-xs min-w-[650px]">
             <thead>
               <tr className="border-b border-slate-800 text-slate-400 text-[11px] uppercase tracking-wider">
                 <th className="pb-3 font-semibold">Restaurant</th>

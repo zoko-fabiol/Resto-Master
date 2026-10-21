@@ -3,6 +3,7 @@ import { AdminAuthProvider, useAdminAuth } from './context/AdminAuthContext';
 import { AdminLoginScreen } from './components/auth/AdminLoginScreen';
 import { AdminHeader } from './components/layout/AdminHeader';
 import { AdminSidebar } from './components/layout/AdminSidebar';
+import { AdminBottomNav } from './components/layout/AdminBottomNav';
 import { PlatformDashboardView } from './components/dashboard/PlatformDashboardView';
 import { TenantListView } from './components/tenants/TenantListView';
 import { TenantDetailView } from './components/tenants/TenantDetailView';
@@ -20,6 +21,7 @@ const AdminPanelInner: React.FC = () => {
   const [currentTab, setCurrentTab] = useState<string>('dashboard');
   const [selectedTenantId, setSelectedTenantId] = useState<string | null>(null);
   const [isCreateTenantOpen, setIsCreateTenantOpen] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   // Données temps réel de la plateforme
   const [tenants, setTenants] = useState<Tenant[]>([]);
@@ -68,26 +70,35 @@ const AdminPanelInner: React.FC = () => {
   const handleSelectTenant = (orgId: string) => {
     setSelectedTenantId(orgId);
     setCurrentTab('tenants');
+    setIsMobileMenuOpen(false);
+  };
+
+  const handleTabChange = (tab: string) => {
+    if (tab !== 'tenants') setSelectedTenantId(null);
+    setCurrentTab(tab);
+    setIsMobileMenuOpen(false);
   };
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-row font-sans antialiased selection:bg-amber-500 selection:text-slate-950">
-      {/* Sidebar Navigation */}
+      {/* Sidebar Navigation (Desktop sticky + Mobile Drawer) */}
       <AdminSidebar
         currentTab={currentTab}
-        setCurrentTab={(tab) => {
-          if (tab !== 'tenants') setSelectedTenantId(null);
-          setCurrentTab(tab);
-        }}
+        setCurrentTab={handleTabChange}
         pendingSignupsCount={pendingSignupsCount}
         activeSupportSessionsCount={activeSupportSessionsCount}
+        isMobileOpen={isMobileMenuOpen}
+        onCloseMobile={() => setIsMobileMenuOpen(false)}
       />
 
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0">
-        <AdminHeader />
+        <AdminHeader
+          onOpenMobileMenu={() => setIsMobileMenuOpen(true)}
+          isMobileMenuOpen={isMobileMenuOpen}
+        />
 
-        <main className="flex-1 p-6 max-w-7xl w-full mx-auto">
+        <main className="flex-1 p-3.5 sm:p-5 lg:p-6 max-w-7xl w-full mx-auto min-w-0 pb-24 lg:pb-8">
           {currentTab === 'dashboard' && (
             <PlatformDashboardView
               tenants={tenants}
@@ -122,13 +133,13 @@ const AdminPanelInner: React.FC = () => {
 
           {currentTab === 'support' && (
             <div className="space-y-4 text-xs">
-              <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-800">
                 <h1 className="text-xl font-black text-white">Sessions de Télémaintenance Support</h1>
                 <span className="font-mono text-slate-400">Total : {supportSessions.length}</span>
               </div>
 
-              <div className="rounded-2xl bg-slate-900/60 border border-slate-800 overflow-hidden">
-                <table className="w-full text-left text-xs">
+              <div className="rounded-2xl bg-slate-900/60 border border-slate-800 overflow-x-auto shadow-xl">
+                <table className="w-full text-left text-xs min-w-[650px]">
                   <thead>
                     <tr className="border-b border-slate-800 bg-slate-950/40 text-slate-400 text-[11px] uppercase tracking-wider">
                       <th className="py-3 px-4 font-semibold">Date Début</th>
@@ -180,7 +191,7 @@ const AdminPanelInner: React.FC = () => {
 
           {currentTab === 'audit' && (
             <div className="space-y-4 text-xs">
-              <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-800">
                 <div>
                   <h1 className="text-xl font-black text-white flex items-center gap-2">
                     <ShieldCheck className="w-5 h-5 text-emerald-400" />
@@ -190,13 +201,13 @@ const AdminPanelInner: React.FC = () => {
                     Chaînage SHA-256 infalsifiable : toute modification de droits ou de configuration est scellée.
                   </p>
                 </div>
-                <span className="font-mono text-emerald-400 text-xs bg-emerald-500/10 px-3 py-1 rounded-full border border-emerald-500/30 font-bold">
+                <span className="font-mono text-emerald-400 text-xs bg-emerald-500/10 px-3 py-1 rounded-full border border-emerald-500/30 font-bold self-start sm:self-auto">
                   SHA-256 Intégrité Certifiée
                 </span>
               </div>
 
-              <div className="rounded-2xl bg-slate-900/60 border border-slate-800 overflow-hidden">
-                <table className="w-full text-left text-xs">
+              <div className="rounded-2xl bg-slate-900/60 border border-slate-800 overflow-x-auto shadow-xl">
+                <table className="w-full text-left text-xs min-w-[720px]">
                   <thead>
                     <tr className="border-b border-slate-800 bg-slate-950/40 text-slate-400 text-[11px] uppercase tracking-wider">
                       <th className="py-3 px-4 font-semibold">Date & Heure</th>
@@ -247,6 +258,15 @@ const AdminPanelInner: React.FC = () => {
           {currentTab === 'admins' && <PlatformAdminsView />}
         </main>
       </div>
+
+      {/* Navigation Mobile Basse */}
+      <AdminBottomNav
+        currentTab={currentTab}
+        setCurrentTab={handleTabChange}
+        pendingSignupsCount={pendingSignupsCount}
+        activeSupportSessionsCount={activeSupportSessionsCount}
+        onOpenMobileMenu={() => setIsMobileMenuOpen(true)}
+      />
 
       {/* Modal Création Restaurant */}
       <CreateTenantModal

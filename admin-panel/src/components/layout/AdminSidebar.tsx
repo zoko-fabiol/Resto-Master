@@ -7,8 +7,8 @@ import {
   ShieldAlert,
   Headphones,
   Settings,
-  ChevronRight,
   UserCheck,
+  X,
 } from 'lucide-react';
 
 interface AdminSidebarProps {
@@ -16,6 +16,10 @@ interface AdminSidebarProps {
   setCurrentTab: (tab: string) => void;
   pendingSignupsCount?: number;
   activeSupportSessionsCount?: number;
+  mobileOpen?: boolean;
+  setMobileOpen?: (open: boolean) => void;
+  isMobileOpen?: boolean;
+  onCloseMobile?: () => void;
 }
 
 export const AdminSidebar: React.FC<AdminSidebarProps> = ({
@@ -23,7 +27,17 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
   setCurrentTab,
   pendingSignupsCount = 0,
   activeSupportSessionsCount = 0,
+  mobileOpen = false,
+  setMobileOpen,
+  isMobileOpen,
+  onCloseMobile,
 }) => {
+  const isDrawerOpen = isMobileOpen ?? mobileOpen;
+  const handleClose = () => {
+    if (onCloseMobile) onCloseMobile();
+    if (setMobileOpen) setMobileOpen(false);
+  };
+
   const navItems = [
     {
       id: 'dashboard',
@@ -66,23 +80,36 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
     },
   ];
 
-  return (
-    <aside className="w-64 bg-slate-950 border-r border-slate-800 flex flex-col shrink-0 min-h-screen">
+  const renderSidebarContent = (isMobile = false) => (
+    <>
       {/* Brand Header */}
-      <div className="h-16 px-5 border-b border-slate-800/80 flex items-center gap-3">
-        <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-amber-600 to-amber-400 flex items-center justify-center text-slate-950 font-black text-lg shadow-lg shadow-amber-500/20 shrink-0">
-          RM
-        </div>
-        <div>
-          <div className="font-extrabold text-white text-sm tracking-tight flex items-center gap-1.5">
-            RestoMaster <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded-sm bg-amber-500/20 text-amber-400 font-bold border border-amber-500/30">Admin</span>
+      <div className="h-16 px-5 border-b border-slate-800/80 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-amber-600 to-amber-400 flex items-center justify-center text-slate-950 font-black text-lg shadow-lg shadow-amber-500/20 shrink-0">
+            RM
           </div>
-          <div className="text-[10px] text-slate-400 font-medium">Console Super Admin SaaS</div>
+          <div>
+            <div className="font-extrabold text-white text-sm tracking-tight flex items-center gap-1.5">
+              RestoMaster <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded-sm bg-amber-500/20 text-amber-400 font-bold border border-amber-500/30">Admin</span>
+            </div>
+            <div className="text-[10px] text-slate-400 font-medium">Console Super Admin SaaS</div>
+          </div>
         </div>
+
+        {isMobile && (
+          <button
+            type="button"
+            onClick={handleClose}
+            aria-label="Fermer le menu"
+            className="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        )}
       </div>
 
       {/* Navigation Items */}
-      <nav className="flex-1 p-3 space-y-1.5">
+      <nav className="flex-1 p-3 space-y-1.5 overflow-y-auto">
         <div className="px-3 pt-3 pb-1 text-[11px] font-bold uppercase tracking-wider text-slate-500">
           Supervision Multi-Tenant
         </div>
@@ -94,8 +121,11 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
           return (
             <button
               key={item.id}
-              onClick={() => setCurrentTab(item.id)}
-              className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+              onClick={() => {
+                setCurrentTab(item.id);
+                if (isMobile) handleClose();
+              }}
+              className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer touch-manipulation ${
                 isActive
                   ? 'bg-amber-500/10 text-amber-400 border border-amber-500/30 shadow-xs'
                   : 'text-slate-400 hover:text-white hover:bg-slate-900/60'
@@ -119,7 +149,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
       </nav>
 
       {/* Footer Info */}
-      <div className="p-4 border-t border-slate-900 bg-slate-950/60 text-[11px] text-slate-500 flex flex-col gap-1">
+      <div className="p-4 border-t border-slate-900 bg-slate-950/60 text-[11px] text-slate-500 flex flex-col gap-1 pb-safe">
         <div className="flex items-center justify-between text-slate-400">
           <span>Architecture</span>
           <span className="font-mono text-[10px] text-amber-400/80">SaaS Multi-Tenant</span>
@@ -129,6 +159,37 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
           <span className="font-mono text-[10px] text-emerald-400">SHA-256 / RBAC</span>
         </div>
       </div>
-    </aside>
+    </>
+  );
+
+  return (
+    <>
+      {/* 1. Desktop Permanent Sidebar */}
+      <aside className="hidden lg:flex w-64 bg-slate-950 border-r border-slate-800 flex-col shrink-0 min-h-screen sticky top-0 h-screen">
+        {renderSidebarContent(false)}
+      </aside>
+
+      {/* 2. Mobile Drawer & Backdrop */}
+      {isDrawerOpen && (
+        <div className="lg:hidden fixed inset-0 z-50 flex">
+          {/* Backdrop */}
+          <div
+            className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm transition-opacity"
+            onClick={handleClose}
+            aria-hidden="true"
+          />
+
+          {/* Drawer Panel */}
+          <aside
+            role="dialog"
+            aria-modal="true"
+            aria-label="Menu principal d'administration"
+            className="relative z-50 w-72 max-w-[85vw] bg-slate-950 border-r border-slate-800 flex flex-col shadow-2xl h-full animate-in slide-in-from-left duration-200"
+          >
+            {renderSidebarContent(true)}
+          </aside>
+        </div>
+      )}
+    </>
   );
 };

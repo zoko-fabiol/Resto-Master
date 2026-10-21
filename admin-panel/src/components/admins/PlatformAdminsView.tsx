@@ -115,7 +115,7 @@ export const PlatformAdminsView: React.FC = () => {
       {/* Admins Table */}
       <div className="rounded-2xl bg-slate-900/60 border border-slate-800 overflow-hidden shadow-xl">
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
+          <table className="w-full text-left text-xs min-w-[680px]">
             <thead>
               <tr className="border-b border-slate-800 bg-slate-950/40 text-slate-400 text-[11px] uppercase tracking-wider">
                 <th className="py-3 px-4 font-semibold">Administrateur</th>

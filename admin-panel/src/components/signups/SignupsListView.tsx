@@ -75,12 +75,12 @@ export const SignupsListView: React.FC<SignupsListViewProps> = ({ signups, onRef
           </p>
         </div>
 
-        <div className="flex items-center gap-2 bg-slate-900 p-1 rounded-xl border border-slate-800">
+        <div className="flex flex-wrap items-center gap-1 bg-slate-900 p-1 rounded-xl border border-slate-800 w-full sm:w-auto">
           {(['en_attente', 'approuvee', 'rejetee', 'all'] as const).map((st) => (
             <button
               key={st}
               onClick={() => setFilter(st)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+              className={`flex-1 sm:flex-none text-center px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                 filter === st
                   ? 'bg-amber-500 text-slate-950 shadow-xs'
                   : 'text-slate-400 hover:text-white'

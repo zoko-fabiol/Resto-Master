@@ -202,12 +202,12 @@ export const FeaturesTab: React.FC<FeaturesTabProps> = ({
           </div>
         </div>
 
-        <div className="flex items-center gap-2.5 flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap w-full sm:w-auto">
           {onOpenSetupWizard && (
             <button
               type="button"
               onClick={onOpenSetupWizard}
-              className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 text-xs font-bold transition-all flex items-center gap-2 cursor-pointer shadow-md shadow-amber-500/20"
+              className="flex-1 sm:flex-none px-3.5 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md shadow-amber-500/20"
             >
               <Wand2 className="w-3.5 h-3.5" />
               <span>Assistant Guidé</span>
@@ -217,27 +217,27 @@ export const FeaturesTab: React.FC<FeaturesTabProps> = ({
           <button
             type="button"
             onClick={onOpenProfileApplicator}
-            className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold transition-all flex items-center gap-2 cursor-pointer border border-slate-700"
+            className="flex-1 sm:flex-none px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer border border-slate-700"
           >
             <Layers className="w-3.5 h-3.5 text-amber-400" />
-            <span>Appliquer un Profil</span>
+            <span>Appliquer Profil</span>
           </button>
 
           <button
             type="button"
             onClick={handleTakeSnapshot}
-            className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold transition-all flex items-center gap-2 cursor-pointer border border-slate-700"
+            className="flex-1 sm:flex-none px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer border border-slate-700"
             title="Créer un instantané de la configuration actuelle"
           >
             <Camera className="w-3.5 h-3.5 text-blue-400" />
-            <span>Créer Instantané</span>
+            <span>Instantané</span>
           </button>
 
           <button
             type="button"
             onClick={handleSaveChanges}
             disabled={!hasChanges || isSaving}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 shadow-lg cursor-pointer ${
+            className={`flex-1 sm:flex-none px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 shadow-lg cursor-pointer ${
               hasChanges
                 ? 'bg-amber-500 hover:bg-amber-400 text-slate-950 shadow-amber-500/20'
                 : 'bg-slate-800 text-slate-500 cursor-not-allowed'
@@ -332,7 +332,7 @@ export const FeaturesTab: React.FC<FeaturesTabProps> = ({
               </div>
 
               {/* Action Controls & Lock Switch */}
-              <div className="pt-3 mt-3 border-t border-slate-800/80 flex items-center justify-between text-xs">
+              <div className="pt-3 mt-3 border-t border-slate-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
                 {/* Padlock button */}
                 <button
                   type="button"
@@ -342,7 +342,7 @@ export const FeaturesTab: React.FC<FeaturesTabProps> = ({
                       ? 'Verrouillé : le restaurant ne peut pas modifier ce réglage'
                       : 'Déverrouillé : modifiable par l’administrateur restaurant'
                   }
-                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-semibold transition-all cursor-pointer ${
+                  className={`flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[10px] font-semibold transition-all cursor-pointer self-start sm:self-auto ${
                     isLocked
                       ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
                       : 'bg-slate-800/80 text-slate-400 hover:text-white'
@@ -353,11 +353,11 @@ export const FeaturesTab: React.FC<FeaturesTabProps> = ({
                 </button>
 
                 {/* 3-State Toggle Button Group */}
-                <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800">
+                <div className="grid grid-cols-3 sm:flex items-center gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800 w-full sm:w-auto">
                   <button
                     type="button"
                     onClick={() => handleToggleStatus(feat.id, 'ACTIVÉ')}
-                    className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer ${
+                    className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer text-center ${
                       isEnabled
                         ? 'bg-emerald-500 text-slate-950 shadow-xs'
                         : 'text-slate-400 hover:text-white'
@@ -369,7 +369,7 @@ export const FeaturesTab: React.FC<FeaturesTabProps> = ({
                   <button
                     type="button"
                     onClick={() => handleToggleStatus(feat.id, 'SUSPENDU')}
-                    className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer ${
+                    className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer text-center ${
                       isSuspended
                         ? 'bg-amber-500 text-slate-950 shadow-xs'
                         : 'text-slate-400 hover:text-white'
@@ -381,7 +381,7 @@ export const FeaturesTab: React.FC<FeaturesTabProps> = ({
                   <button
                     type="button"
                     onClick={() => handleToggleStatus(feat.id, 'DÉSACTIVÉ')}
-                    className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer ${
+                    className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer text-center ${
                       isDisabled
                         ? 'bg-rose-600 text-white shadow-xs'
                         : 'text-slate-400 hover:text-white'

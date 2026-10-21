@@ -129,15 +129,15 @@ export const TenantDetailView: React.FC<TenantDetailViewProps> = ({ orgId, onBac
       </div>
 
       {/* Main Tenant Card Header */}
-      <div className="p-6 rounded-3xl bg-slate-900/80 border border-slate-800 backdrop-blur-md flex flex-col md:flex-row md:items-center md:justify-between gap-6 shadow-xl">
-        <div className="flex items-start gap-4">
-          <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-amber-600 to-amber-400 flex items-center justify-center text-slate-950 font-black text-xl shadow-lg shadow-amber-500/20 shrink-0">
+      <div className="p-4 sm:p-6 rounded-2xl sm:rounded-3xl bg-slate-900/80 border border-slate-800 backdrop-blur-md flex flex-col md:flex-row md:items-center md:justify-between gap-5 sm:gap-6 shadow-xl">
+        <div className="flex items-start gap-3.5 sm:gap-4">
+          <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-gradient-to-tr from-amber-600 to-amber-400 flex items-center justify-center text-slate-950 font-black text-lg sm:text-xl shadow-lg shadow-amber-500/20 shrink-0">
             {tenant.company?.name ? tenant.company.name.slice(0, 2).toUpperCase() : 'RM'}
           </div>
 
-          <div>
-            <div className="flex items-center gap-2.5 flex-wrap">
-              <h1 className="text-xl font-black text-white tracking-tight">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 className="text-lg sm:text-xl font-black text-white tracking-tight truncate">
                 {tenant.company?.name || tenant.id}
               </h1>
               <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${badge.color}`}>
@@ -153,23 +153,23 @@ export const TenantDetailView: React.FC<TenantDetailViewProps> = ({ orgId, onBac
               )}
             </div>
 
-            <div className="flex items-center gap-4 text-xs text-slate-400 mt-2 flex-wrap">
+            <div className="flex items-center gap-2 sm:gap-4 text-xs text-slate-400 mt-2 flex-wrap">
               <span className="font-mono text-slate-300">ID: {tenant.id}</span>
               <span>•</span>
               <span>{tenant.company?.city || 'Douala'}, Cameroun</span>
               <span>•</span>
               <span>Propriétaire : <strong className="text-white">{tenant.owner?.name}</strong></span>
-              <span>•</span>
-              <span className="font-mono text-slate-300">{tenant.owner?.email}</span>
+              <span className="hidden sm:inline">•</span>
+              <span className="font-mono text-slate-300 hidden sm:inline">{tenant.owner?.email}</span>
             </div>
           </div>
         </div>
 
         {/* Quick actions buttons in header */}
-        <div className="flex items-center gap-2 self-start md:self-auto">
+        <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
           <button
             onClick={() => setShowWizardModal(true)}
-            className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 text-xs font-bold transition-all flex items-center gap-2 cursor-pointer shadow-md shadow-amber-500/20"
+            className="flex-1 sm:flex-none px-3.5 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md shadow-amber-500/20"
           >
             <Wand2 className="w-4 h-4" />
             <span>Assistant Guidé</span>
@@ -177,7 +177,7 @@ export const TenantDetailView: React.FC<TenantDetailViewProps> = ({ orgId, onBac
 
           <button
             onClick={() => setShowProfileModal(true)}
-            className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold transition-all flex items-center gap-2 cursor-pointer border border-slate-700"
+            className="flex-1 sm:flex-none px-3.5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer border border-slate-700"
           >
             <Layers className="w-4 h-4 text-amber-400" />
             <span>Appliquer un Profil</span>
@@ -185,8 +185,8 @@ export const TenantDetailView: React.FC<TenantDetailViewProps> = ({ orgId, onBac
         </div>
       </div>
 
-      {/* Tabs Bar */}
-      <div className="flex items-center gap-1 overflow-x-auto border-b border-slate-800 pb-2 custom-scrollbar">
+      {/* Tabs Bar with edge-to-edge touch scroll */}
+      <div className="flex items-center gap-1.5 overflow-x-auto border-b border-slate-800 pb-2.5 custom-scrollbar no-scrollbar touch-pan-x -mx-3 px-3 sm:mx-0 sm:px-0">
         {tabs.map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
@@ -195,13 +195,13 @@ export const TenantDetailView: React.FC<TenantDetailViewProps> = ({ orgId, onBac
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0 ${
+              className={`flex items-center gap-2 px-3.5 py-2 sm:px-4 sm:py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0 whitespace-nowrap ${
                 isActive
                   ? 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20'
                   : 'text-slate-400 hover:text-white hover:bg-slate-900/60'
               }`}
             >
-              <Icon className="w-3.5 h-3.5" />
+              <Icon className="w-3.5 h-3.5 shrink-0" />
               <span>{tab.label}</span>
             </button>
           );
