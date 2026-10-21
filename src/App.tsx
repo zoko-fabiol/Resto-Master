@@ -46,6 +46,7 @@ import { ChangePasswordModal } from './components/auth/ChangePasswordModal';
 import { UserGuideModal } from './components/common/UserGuideModal';
 import { PaymentModal } from './components/pos/PaymentModal';
 import { OnboardingWizard } from './components/admin/OnboardingWizard';
+import { TenantStatusBanner } from './components/common/TenantStatusBanner';
 import { UserRole, UserProfile } from './types/restaurant';
 import { ShieldAlert, ShieldCheck, Utensils } from 'lucide-react';
 
@@ -365,6 +366,9 @@ const AppContent: React.FC = () => {
           sidebarCollapsed ? 'lg:pl-[76px]' : 'lg:pl-72'
         }`}
       >
+        {/* Bannière de Statut Tenant (Essai, Impayé, Suspendu, Lecture Seule) */}
+        <TenantStatusBanner />
+
         {/* Header Bar */}
         <Header
           currentTab={currentTab}

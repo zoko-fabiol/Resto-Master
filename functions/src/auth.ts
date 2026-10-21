@@ -220,3 +220,70 @@ export async function consumeSupervisorToken(
     };
   });
 }
+
+// -----------------------------------------------------------------------------
+// Contrôle de Statut et d'Entitlements Multi-Tenant
+// -----------------------------------------------------------------------------
+
+/**
+ * Vérifie que le tenant est actif et non suspendu (sauf en lecture seule si expressément autorisé)
+ */
+export async function assertTenantActive(
+  orgId: string,
+  options?: { allowReadOnly?: boolean }
+): Promise<void> {
+  if (!orgId) return;
+
+  const tenantDoc = await db.collection('tenants').doc(orgId).get();
+  if (!tenantDoc.exists) return; // Si organisation historique non migrée, ne bloque pas
+
+  const tenantData = tenantDoc.data();
+  const status = tenantData?.status;
+  const suspensionMode = tenantData?.suspensionMode;
+
+  if (status === 'resilie' || status === 'archive') {
+    throw new HttpsError(
+      'permission-denied',
+      'Ce compte restaurant est résilié ou archivé. Les opérations sont désactivées.'
+    );
+  }
+
+  if (status === 'suspendu') {
+    if (suspensionMode === 'full_block' || !options?.allowReadOnly) {
+      throw new HttpsError(
+        'permission-denied',
+        `Ce restaurant est temporairement suspendu : ${tenantData?.suspensionReason || 'Accès restreint par l’administrateur'}`
+      );
+    }
+  }
+}
+
+/**
+ * Vérifie qu'une fonctionnalité spécifique est autorisée pour ce tenant
+ */
+export async function assertFeature(
+  orgId: string,
+  featureKey: string
+): Promise<void> {
+  if (!orgId) return;
+
+  const entitlementsDoc = await db
+    .collection('tenants')
+    .doc(orgId)
+    .collection('entitlements')
+    .doc('current')
+    .get();
+
+  if (!entitlementsDoc.exists) return;
+
+  const data = entitlementsDoc.data();
+  const feature = data?.features?.[featureKey];
+
+  if (feature && feature.status === 'DÉSACTIVÉ') {
+    throw new HttpsError(
+      'permission-denied',
+      `La fonctionnalité "${featureKey}" n’est pas activée pour votre établissement.`
+    );
+  }
+}
+

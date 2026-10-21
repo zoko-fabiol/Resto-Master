@@ -1,7 +1,13 @@
 import { CallableRequest, HttpsError } from 'firebase-functions/v2/https';
 import crypto from 'node:crypto';
 import { db, FieldValue } from '../firebase.js';
-import { getCallerContext, assertRoles, consumeSupervisorToken } from '../auth.js';
+import {
+  getCallerContext,
+  assertRoles,
+  consumeSupervisorToken,
+  assertTenantActive,
+  assertFeature,
+} from '../auth.js';
 import { CreateOrderRequest, AddItemsToOrderRequest, UserRole } from '../types.js';
 
 const ROLE_MAX_DISCOUNT: Record<UserRole, number> = {
@@ -104,6 +110,10 @@ async function resolveAndCalculateItems(
 export async function handleCreateOrder(request: CallableRequest<CreateOrderRequest>) {
   const caller = getCallerContext(request);
   assertRoles(caller, ['direction', 'manager', 'serveur', 'caisse', 'tablette']);
+
+  // Validation du statut actif du restaurant et de la fonctionnalité POS
+  await assertTenantActive(caller.organizationId);
+  await assertFeature(caller.organizationId, 'pos_core');
 
   const data = request.data;
   const restaurantId = data.restaurantId || caller.outlets[0] || 'default-restaurant';
@@ -282,6 +292,7 @@ export async function handleCreateOrder(request: CallableRequest<CreateOrderRequ
 export async function handleAddItemsToOrder(request: CallableRequest<AddItemsToOrderRequest>) {
   const caller = getCallerContext(request);
   assertRoles(caller, ['direction', 'manager', 'serveur', 'caisse']);
+  await assertTenantActive(caller.organizationId);
 
   const { orderId, items, guestCount } = request.data;
   if (!orderId || !items || items.length === 0) {

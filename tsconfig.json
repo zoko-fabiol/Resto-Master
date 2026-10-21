@@ -20,6 +20,9 @@
       "@/*": [
         "./*"
       ],
+      "@shared": [
+        "./shared/types/index.ts"
+      ],
       "@shared/*": [
         "./shared/types/*",
         "./shared/*"

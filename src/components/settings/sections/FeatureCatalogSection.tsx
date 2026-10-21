@@ -89,7 +89,14 @@ export const CONFIG_LABELS: Record<string, { label: string; desc: string }> = {
 };
 
 export const FeatureCatalogSection: React.FC = () => {
-  const { features, updateFeatureStatus, updateFeatureConfig } = useRestaurant();
+  const {
+    features,
+    updateFeatureStatus,
+    updateFeatureConfig,
+    entitlements,
+    isConfigKeyLocked,
+    requestFeatureUnlock,
+  } = useRestaurant();
   const { currentUser } = useAuth();
   const { showToast } = useToast();
   const confirm = useConfirm();
@@ -428,44 +435,57 @@ export const FeatureCatalogSection: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => handleOpenFeatureModal(feat)}
-                  className="px-3.5 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition-all shadow-xs flex items-center gap-1.5"
+                  className="px-3.5 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
                 >
                   <Sliders className="w-3.5 h-3.5 text-amber-400" />
                   <span>Configurer</span>
                 </button>
 
-                <div className="flex items-center gap-1">
-                  {!isEnabled && (
-                    <button
-                      type="button"
-                      onClick={() => handleStatusChange(feat, 'ACTIVÉ')}
-                      className="px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-colors"
-                    >
-                      Activer
-                    </button>
-                  )}
+                {isConfigKeyLocked(feat.id) ||
+                (entitlements?.features && entitlements.features[feat.id]?.status === 'DÉSACTIVÉ') ? (
+                  <button
+                    type="button"
+                    onClick={() => requestFeatureUnlock(feat.id, `Demande d'activation pour ${feat.name}`)}
+                    className="px-2.5 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold transition-all shadow-xs flex items-center gap-1 cursor-pointer"
+                    title="Cette fonctionnalité est régie à distance par votre fournisseur SaaS"
+                  >
+                    <Lock className="w-3.5 h-3.5" />
+                    <span>Demander cette fonctionnalité</span>
+                  </button>
+                ) : (
+                  <div className="flex items-center gap-1">
+                    {!isEnabled && (
+                      <button
+                        type="button"
+                        onClick={() => handleStatusChange(feat, 'ACTIVÉ')}
+                        className="px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-colors cursor-pointer"
+                      >
+                        Activer
+                      </button>
+                    )}
 
-                  {isEnabled && (
-                    <button
-                      type="button"
-                      onClick={() => handleStatusChange(feat, 'SUSPENDU')}
-                      className="px-2.5 py-1.5 rounded-lg bg-amber-100 hover:bg-amber-200 text-amber-900 text-xs font-bold transition-colors"
-                      title="Suspendre temporairement en conservant la configuration"
-                    >
-                      Suspendre
-                    </button>
-                  )}
+                    {isEnabled && (
+                      <button
+                        type="button"
+                        onClick={() => handleStatusChange(feat, 'SUSPENDU')}
+                        className="px-2.5 py-1.5 rounded-lg bg-amber-100 hover:bg-amber-200 text-amber-900 text-xs font-bold transition-colors cursor-pointer"
+                        title="Suspendre temporairement en conservant la configuration"
+                      >
+                        Suspendre
+                      </button>
+                    )}
 
-                  {!isDisabled && (
-                    <button
-                      type="button"
-                      onClick={() => handleStatusChange(feat, 'DÉSACTIVÉ')}
-                      className="px-2.5 py-1.5 rounded-lg bg-slate-100 hover:bg-rose-100 text-slate-600 hover:text-rose-700 text-xs font-semibold transition-colors"
-                    >
-                      Désactiver
-                    </button>
-                  )}
-                </div>
+                    {!isDisabled && (
+                      <button
+                        type="button"
+                        onClick={() => handleStatusChange(feat, 'DÉSACTIVÉ')}
+                        className="px-2.5 py-1.5 rounded-lg bg-slate-100 hover:bg-rose-100 text-slate-600 hover:text-rose-700 text-xs font-semibold transition-colors cursor-pointer"
+                      >
+                        Désactiver
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           );

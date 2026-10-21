@@ -89,7 +89,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
   setCollapsed,
 }) => {
   const { currentUser, canAccess } = useAuth();
-  const { orders, tables, stockItems, expenses, unreadNotifsCount, isFeatureEnabled, isRuleEnabled, activeRestaurant } = useRestaurant();
+  const {
+    orders,
+    tables,
+    stockItems,
+    expenses,
+    unreadNotifsCount,
+    isFeatureEnabled,
+    isRuleEnabled,
+    isModuleEntitled,
+    activeRestaurant,
+  } = useRestaurant();
 
   // Badges calculation
   const pendingOrdersCount = orders.filter(
@@ -418,6 +428,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               if (item.featureKey && !isFeatureEnabled(item.featureKey)) return false;
               const ruleKey = ITEM_RULE_MAP[item.id];
               if (ruleKey && !isRuleEnabled(ruleKey, true)) return false;
+              if (ruleKey && !isModuleEntitled(ruleKey)) return false;
               return true;
             });
 

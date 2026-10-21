@@ -1,12 +1,13 @@
 import { CallableRequest, HttpsError } from 'firebase-functions/v2/https';
 import crypto from 'node:crypto';
 import { db, FieldValue } from '../firebase.js';
-import { getCallerContext, assertRoles } from '../auth.js';
+import { getCallerContext, assertRoles, assertTenantActive } from '../auth.js';
 import { RecordPaymentRequest } from '../types.js';
 
 export async function handleRecordPayment(request: CallableRequest<RecordPaymentRequest>) {
   const caller = getCallerContext(request);
   assertRoles(caller, ['direction', 'manager', 'caisse', 'finance']);
+  await assertTenantActive(caller.organizationId);
 
   const { orderId, amount, method, cashSessionId, idempotencyKey, cashGiven, notes } = request.data;
 

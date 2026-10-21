@@ -107,6 +107,8 @@ import { offlineSyncService } from '../services/firestore/offlineSyncService';
 import { printerService } from '../services/printing/printerService';
 import { cloudinaryService } from '../services/media/cloudinaryService';
 import { customersFirestoreService } from '../services/firestore/customersFirestoreService';
+import { Tenant, TenantEntitlements, TenantStatus } from '../../shared/types';
+import { tenantFirestoreService } from '../services/firestore/tenantFirestoreService';
 
 function isNetworkOrOfflineError(err: any): boolean {
   if (typeof navigator !== 'undefined' && !navigator.onLine) {
@@ -369,6 +371,14 @@ interface RestaurantContextType {
   updateOperationRules: (updates: Partial<OperationRules>) => Promise<void>;
   isRuleEnabled: (ruleKey: string, defaultValue?: boolean) => boolean;
   isFeatureEnabled: (featureId: string) => boolean;
+  tenant: Tenant | null;
+  entitlements: TenantEntitlements | null;
+  tenantStatus: TenantStatus | null;
+  isReadOnlyMode: boolean;
+  isFeatureEntitled: (featureKey: string) => boolean;
+  isModuleEntitled: (moduleKey: string) => boolean;
+  isConfigKeyLocked: (configKey: string) => boolean;
+  requestFeatureUnlock: (featureKey: string, reason?: string) => Promise<void>;
 }
 
 const RestaurantContext = createContext<RestaurantContextType | undefined>(undefined);
@@ -515,6 +525,8 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
   // Architecture Multi-Restaurants & Organisation
   const [organization, setOrganization] = useState<Organization>(() => loadState('organization', DEFAULT_ORGANIZATION));
+  const [tenant, setTenant] = useState<Tenant | null>(null);
+  const [entitlements, setEntitlements] = useState<TenantEntitlements | null>(null);
   const [zones, setZones] = useState<Zone[]>([]);
   const [cashRegisters, setCashRegisters] = useState<CashRegister[]>([]);
   const [decorElements, setDecorElements] = useState<DecorElement[]>([]);
@@ -2945,12 +2957,83 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     return invoice;
   };
 
-  // 30. Centre de Configuration & Fonctionnalités (eZee style)
+  // 30. Entitlements SaaS & Centre de Configuration
+  const currentOrgId = currentUser.organizationId || activeRestaurant?.organizationId || organization.id || '';
+
+  useEffect(() => {
+    if (!currentOrgId) {
+      setTenant(null);
+      setEntitlements(null);
+      return;
+    }
+
+    const unsubTenant = tenantFirestoreService.subscribeToTenant(currentOrgId, (t) => {
+      setTenant(t);
+    });
+
+    const unsubEntitlements = tenantFirestoreService.subscribeToEntitlements(currentOrgId, (ent) => {
+      setEntitlements(ent);
+    });
+
+    return () => {
+      unsubTenant();
+      unsubEntitlements();
+    };
+  }, [currentOrgId]);
+
+  const tenantStatus: TenantStatus | null = tenant?.status || null;
+  const isReadOnlyMode = (tenant?.status === 'suspendu' && tenant?.suspensionMode === 'read_only') || tenant?.status === 'impaye';
+
+  const isFeatureEntitled = useCallback(
+    (featureKey: string): boolean => {
+      if (entitlements?.features && entitlements.features[featureKey]) {
+        return entitlements.features[featureKey].status === 'ACTIVÉ';
+      }
+      return FeatureService.isFeatureEnabled(features, featureKey);
+    },
+    [entitlements, features]
+  );
+
+  const isModuleEntitled = useCallback(
+    (moduleKey: string): boolean => {
+      if (entitlements?.modules && entitlements.modules[moduleKey] !== undefined) {
+        return entitlements.modules[moduleKey];
+      }
+      return true;
+    },
+    [entitlements]
+  );
+
+  const isConfigKeyLocked = useCallback(
+    (configKey: string): boolean => {
+      return Boolean(entitlements?.lockedConfigKeys?.includes(configKey));
+    },
+    [entitlements]
+  );
+
+  const requestFeatureUnlock = useCallback(
+    async (featureKey: string, reason?: string): Promise<void> => {
+      if (!currentOrgId) return;
+      await tenantFirestoreService.requestFeature(
+        currentOrgId,
+        featureKey,
+        currentUser.name || 'Utilisateur',
+        reason
+      );
+      showToast({
+        title: 'Demande transmise',
+        message: `Votre demande d’activation pour "${featureKey}" a été envoyée au fournisseur.`,
+        type: 'info',
+      });
+    },
+    [currentOrgId, currentUser.name, showToast]
+  );
+
   const isFeatureEnabled = useCallback(
     (featureId: string): boolean => {
-      return FeatureService.isFeatureEnabled(features, featureId);
+      return isFeatureEntitled(featureId);
     },
-    [features]
+    [isFeatureEntitled]
   );
 
   // When network comes back online, trigger queue processing if offline sync is enabled
@@ -4070,6 +4153,14 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         updateOperationRules,
         isRuleEnabled,
         isFeatureEnabled,
+        tenant,
+        entitlements,
+        tenantStatus,
+        isReadOnlyMode,
+        isFeatureEntitled,
+        isModuleEntitled,
+        isConfigKeyLocked,
+        requestFeatureUnlock,
       }}
     >
       {children}
