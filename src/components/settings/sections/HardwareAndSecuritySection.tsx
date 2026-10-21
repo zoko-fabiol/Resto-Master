@@ -10,6 +10,7 @@ import {
   ConfigurationProfileType,
 } from '../../../types/configuration';
 import { PrintingHardwareSection } from './PrintingHardwareSection';
+import { AuditView } from '../../audit/AuditView';
 import {
   Users,
   Bell,
@@ -608,50 +609,11 @@ export const HardwareAndSecuritySection: React.FC<Props> = ({ subTab }) => {
     );
   }
 
-  // 7. AUDIT DE CONFIGURATION
+  // 7. AUDIT UNIFIÉ (Fusion avec le Journal d'Audit global B.3)
   if (subTab === 'audit') {
     return (
-      <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-4 text-xs">
-        <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-          <div>
-            <h3 className="text-sm font-bold text-slate-900">Journal d’Audit des Modifications de Configuration</h3>
-            <p className="text-slate-500">Historique horodaté des activations, suspensions et règles modifiées</p>
-          </div>
-          <span className="font-mono text-slate-500 text-[11px] font-bold">
-            {configHistory.length} entrées
-          </span>
-        </div>
-
-        <div className="divide-y divide-slate-100">
-          {configHistory.map((item) => (
-            <div key={item.id} className="py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="font-bold text-slate-900">{item.action}</span>
-                  <span className="px-2 py-0.2 rounded bg-slate-100 text-slate-700 text-[10px] font-mono uppercase">
-                    {item.category}
-                  </span>
-                </div>
-                <p className="text-slate-600 mt-0.5">{item.detail}</p>
-                <div className="text-[10px] text-slate-400 mt-0.5">
-                  Par <strong>{item.user}</strong> le {item.timestamp.slice(0, 10)} à {item.timestamp.slice(11, 16)}
-                </div>
-              </div>
-
-              {item.newValue && (
-                <div className="font-mono text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded border border-emerald-200 shrink-0 inline-flex items-center gap-1.5">
-                  {item.oldValue && (
-                    <>
-                      <span>{item.oldValue}</span>
-                      <ArrowRight className="w-3 h-3 text-emerald-500 shrink-0" />
-                    </>
-                  )}
-                  <span>{item.newValue}</span>
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
+      <div className="space-y-4">
+        <AuditView />
       </div>
     );
   }

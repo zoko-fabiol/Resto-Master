@@ -5,11 +5,11 @@ import { ROLE_LABELS } from '../lib/utils';
 import { UserRole } from '../types/restaurant';
 
 describe('RestoMaster OS — Hygiène de Configuration & Catalogue Opérationnel (Phase 2)', () => {
-  it('1. Valide l\'exhaustivité et l\'intégrité des 189 règles opérationnelles (DEFAULT_OPERATION_RULES)', () => {
+  it('1. Valide l\'exhaustivité et l\'intégrité des règles opérationnelles actives (DEFAULT_OPERATION_RULES post-nettoyage B.4)', () => {
     const keys = Object.keys(DEFAULT_OPERATION_RULES);
-    expect(keys.length).toBeGreaterThanOrEqual(180);
+    expect(keys.length).toBeGreaterThanOrEqual(140);
 
-    // Vérification des domaines clés obligatoires
+    // Vérification des domaines clés obligatoires après assainissement B.4
     const posKeys = keys.filter((k) => k.startsWith('pos_'));
     const tablesKeys = keys.filter((k) => k.startsWith('tables_'));
     const cuisineKeys = keys.filter((k) => k.startsWith('cuisine_'));
@@ -20,10 +20,10 @@ describe('RestoMaster OS — Hygiène de Configuration & Catalogue Opérationnel
     const notifKeys = keys.filter((k) => k.startsWith('notif_'));
     const payKeys = keys.filter((k) => k.startsWith('pay_'));
 
-    expect(posKeys.length).toBeGreaterThanOrEqual(15);
-    expect(tablesKeys.length).toBeGreaterThanOrEqual(10);
-    expect(cuisineKeys.length).toBeGreaterThanOrEqual(8);
-    expect(barKeys.length).toBeGreaterThanOrEqual(8);
+    expect(posKeys.length).toBeGreaterThanOrEqual(14);
+    expect(tablesKeys.length).toBeGreaterThanOrEqual(8);
+    expect(cuisineKeys.length).toBeGreaterThanOrEqual(7);
+    expect(barKeys.length).toBeGreaterThanOrEqual(5);
     expect(stockKeys.length).toBeGreaterThanOrEqual(15);
     expect(achatsKeys.length).toBeGreaterThanOrEqual(8);
     expect(billKeys.length).toBeGreaterThanOrEqual(14);

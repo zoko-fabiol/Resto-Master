@@ -78,15 +78,7 @@ import { ModernRuleToggle } from './ModernRuleToggle';
 import { SearchInput, StickyActionBar } from '../../ui';
 
 interface Props {
-  subTab:
-    | 'pos'
-    | 'tables'
-    | 'cuisine'
-    | 'bar'
-    | 'caisse'
-    | 'livraison'
-    | 'reservations'
-    | 'evenements';
+  subTab: 'pos' | 'tables' | 'cuisine' | 'bar' | 'caisse';
 }
 
 const SENSITIVE_RULE_KEYS = new Set([
@@ -176,12 +168,11 @@ export const OperationsOptionsSection: React.FC<Props> = ({ subTab }) => {
       case 'pos':
         return {
           title: 'Configuration POS (Point de Vente)',
-          sectionNumber: 'Section 7',
+          sectionNumber: 'Section POS',
           description: 'Règles opérationnelles appliquées lors de la saisie des commandes en salle et comptoir',
           icon: ShoppingBag,
           gradient: 'from-amber-500 to-amber-600',
           items: [
-            { key: 'pos_active', label: 'Activer module POS', description: 'Disponibilité générale de l’interface de prise de commande', icon: ShoppingBag },
             { key: 'pos_use_tables', label: 'Utiliser les tables', description: 'Oblige la sélection d’une table pour les commandes en salle', icon: Utensils },
             { key: 'pos_quick_orders', label: 'Commandes rapides comptoir', description: 'Encaissement direct sans attribution préalable de table', icon: Zap },
             { key: 'pos_sale_without_table', label: 'Vente sans table directe', description: 'Mode à emporter et vente minute au comptoir', icon: Store },
@@ -191,15 +182,9 @@ export const OperationsOptionsSection: React.FC<Props> = ({ subTab }) => {
             { key: 'pos_require_cancel_reason', label: 'Exiger motif d’annulation', description: 'Saisie obligatoire d’une justification pour la traçabilité', icon: FileQuestion },
             { key: 'pos_allow_discount', label: 'Autoriser remise commerciale', description: 'Application d’un pourcentage ou montant de remise', icon: Percent },
             { key: 'pos_require_discount_approval', label: 'Exiger approbation remise (Manager)', description: 'Validation superviseur requise pour valider la réduction', icon: Shield },
-            { key: 'pos_custom_price', label: 'Autoriser prix personnalisé', description: 'Saisie manuelle libre du prix unitaire au moment de la vente', icon: Tag },
             { key: 'pos_zero_price', label: 'Autoriser prix zéro (0 FCFA)', description: 'Permet la validation d’articles sans tarification', icon: Coins },
-            { key: 'pos_item_comp', label: 'Autoriser article offert (Gratuité)', description: 'Passage d’un article en geste commercial offert', icon: Gift },
             { key: 'pos_split_bill', label: 'Autoriser fractionnement addition', description: 'Séparation de la facture par convive ou par article', icon: Split },
             { key: 'pos_partial_payment', label: 'Autoriser paiement partiel', description: 'Règlement fractionné sur plusieurs moyens de paiement', icon: CreditCard },
-            { key: 'pos_change_server', label: 'Autoriser changement de serveur', description: 'Réassignation du bon à un autre serveur en salle', icon: UserCheck },
-            { key: 'pos_table_transfer', label: 'Autoriser transfert de table', description: 'Déplacement d’une commande vers une autre table libre', icon: ArrowRightLeft },
-            { key: 'pos_table_merge', label: 'Autoriser fusion de tables', description: 'Regroupement de deux commandes sur une même table', icon: GitMerge },
-            { key: 'pos_table_split', label: 'Autoriser séparation de table', description: 'Division d’une commande vers deux tables distinctes', icon: Scissors },
             { key: 'pos_show_ticket_number', label: 'Afficher numéro de ticket', description: 'Numérotation séquentielle visible sur le reçu', icon: Hash },
             { key: 'pos_show_server', label: 'Afficher nom du serveur', description: 'Mention du serveur sur le ticket et les fiches KDS', icon: User },
             { key: 'pos_show_order_time', label: 'Afficher heure de commande', description: 'Horodatage précis à la minute sur l’addition', icon: Clock },
@@ -209,7 +194,7 @@ export const OperationsOptionsSection: React.FC<Props> = ({ subTab }) => {
       case 'tables':
         return {
           title: 'Configuration Tables & Service en Salle',
-          sectionNumber: 'Section 8',
+          sectionNumber: 'Section Tables',
           description: 'Gestion des tables, du plan de salle interactif et du flux de service',
           icon: Utensils,
           gradient: 'from-blue-500 to-indigo-600',
@@ -219,135 +204,61 @@ export const OperationsOptionsSection: React.FC<Props> = ({ subTab }) => {
             { key: 'tables_zones', label: 'Gestion des zones (Salle, Terrasse, VIP)', description: 'Organisation des espaces par ambiance et tarification', icon: Grid },
             { key: 'tables_capacity', label: 'Capacité en couverts par table', description: 'Contrôle du nombre de convives assis par emplacement', icon: Users },
             { key: 'tables_reservations', label: 'Réservations directes sur table', description: 'Affectation préalable des réservations au plan de salle', icon: Calendar },
-            { key: 'tables_auto_status', label: 'Statut automatique de table', description: 'Changement automatique : Libre, Occupée, Facturée', icon: RefreshCw },
-            { key: 'tables_transfer', label: 'Transfert de table autorisé', description: 'Permet le changement de place des convives en cours de repas', icon: ArrowRightLeft },
             { key: 'tables_merge', label: 'Fusion de tables autorisée', description: 'Regroupement physique pour grandes tablées', icon: GitMerge },
             { key: 'tables_division', label: 'Division de table autorisée', description: 'Scission d’un groupe vers des additions séparées', icon: Scissors },
             { key: 'tables_cleaning', label: 'Étape de nettoyage requise', description: 'Statut À Nettoyer obligatoire avant réaffectation', icon: Brush },
-            { key: 'tables_auto_server_assign', label: 'Attribution automatique serveur', description: 'Affectation des tables selon le rang de service du serveur', icon: UserCheck },
           ],
         };
 
       case 'cuisine':
         return {
           title: 'Configuration Cuisine (KDS & Préparation)',
-          sectionNumber: 'Section 9',
+          sectionNumber: 'Section Cuisine',
           description: 'Production, flux de préparation, minuteurs et écrans cuisine',
           icon: ChefHat,
           gradient: 'from-rose-500 to-red-600',
           items: [
-            { key: 'cuisine_kds', label: 'Kitchen Display System (KDS)', description: 'Affichage numérique des commandes au poste de cuisine', icon: ChefHat },
             { key: 'cuisine_auto_send', label: 'Envoi automatique cuisine', description: 'Transmission immédiate dès validation de commande au POS', icon: Send },
             { key: 'cuisine_priority', label: 'Priorité des bons (VIP, Urgent)', description: 'Mise en avant visuelle des commandes prioritaires', icon: Flame },
             { key: 'cuisine_prep_timer', label: 'Minuteur & compte à rebours', description: 'Suivi du temps de préparation par plat en direct', icon: Clock },
             { key: 'cuisine_notify_ready', label: 'Notification commande prête', description: 'Alerte sonore et visuelle aux serveurs en salle', icon: Bell },
             { key: 'cuisine_notify_delay', label: 'Notification retard (> 20 min)', description: 'Alerte d’urgence en cas d’attente anormale des convives', icon: AlertTriangle },
             { key: 'cuisine_print_ticket', label: 'Impression ticket cuisine 80mm', description: 'Sortie papier thermique automatique aux postes chauds/froids', icon: Printer },
-            { key: 'cuisine_screen', label: 'Écran tactile interactif', description: 'Permet aux cuisiniers de valider les plats d’un clic', icon: Monitor },
             { key: 'cuisine_prep_categories', label: 'Catégories (Chaud, Froid, Grillades)', description: 'Routage automatique par poste de travail en cuisine', icon: Tags },
-            { key: 'cuisine_stations', label: 'Stations de cuisine dédiées', description: 'Séparation physique entre poste pizza, four et pâtisserie', icon: UtensilsCrossed },
           ],
         };
 
       case 'bar':
         return {
           title: 'Configuration Bar, Cave & Boissons',
-          sectionNumber: 'Section 10',
-          description: 'Gestion des boissons, fiches cocktails, doses d’alcool, pertes et casse',
+          sectionNumber: 'Section Bar',
+          description: 'Gestion des boissons, fiches cocktails, pertes et casse',
           icon: Wine,
           gradient: 'from-purple-500 to-pink-600',
           items: [
-            { key: 'bar_module', label: 'Activer module Bar & Cave', description: 'Accès au poste barman et gestion des boissons', icon: Wine },
-            { key: 'bar_screen', label: 'Écran dédié KDS Bar', description: 'File d’attente des boissons et cocktails à préparer', icon: Monitor },
             { key: 'bar_print', label: 'Impression tickets bar', description: 'Sortie thermique directe au comptoir bar', icon: Printer },
-            { key: 'bar_bottles', label: 'Gestion bouteilles entières', description: 'Suivi unitaire des grands crus, champagnes et spiritueux', icon: Package },
-            { key: 'bar_glasses', label: 'Gestion verres / doses (cl)', description: 'Décompte précis au centilitre des doses de spiritueux servies', icon: GlassWater },
             { key: 'bar_cocktails', label: 'Gestion des cocktails maison', description: 'Catalogue des créations du barman et mixologie', icon: GlassWater },
             { key: 'bar_cocktail_recipes', label: 'Fiches recettes techniques', description: 'Déduction automatique des ingrédients de la recette en stock', icon: BookOpen },
             { key: 'bar_losses', label: 'Gestion pertes & coulage', description: 'Enregistrement des fonds de bouteilles et mousse tirage', icon: Trash2 },
             { key: 'bar_breakage', label: 'Gestion de la casse verres', description: 'Comptabilisation des verres et bouteilles cassés', icon: Flame },
-            { key: 'bar_consumption_control', label: 'Contrôle consommation bar', description: 'Vérification croisée entre ventes saisies et bouteilles ouvertes', icon: ShieldCheck },
-          ],
-        };
-
-      case 'livraison':
-        return {
-          title: 'Configuration Livraison & Courses',
-          sectionNumber: 'Section 15',
-          description: 'Gestion des livraisons urbaines moto, frais par quartier et preuves de remise',
-          icon: Bike,
-          gradient: 'from-cyan-500 to-blue-600',
-          items: [
-            { key: 'delivery_active', label: 'Activer module Livraison', description: 'Gestion des commandes hors restaurant et vente à emporter', icon: Bike },
-            { key: 'delivery_online_order', label: 'Commandes WhatsApp & En ligne', description: 'Prise de commande directe par message et web', icon: Globe },
-            { key: 'delivery_zones', label: 'Gestion des zones urbaines', description: 'Cartographie des quartiers desservis (Bonapriso, Bastos...)', icon: MapPin },
-            { key: 'delivery_fees', label: 'Frais de livraison par zone', description: 'Application automatique du tarif selon l’éloignement', icon: Coins },
-            { key: 'delivery_driver_assignment', label: 'Affectation coursier moto', description: 'Assignation nominative du livreur responsable du colis', icon: UserCheck },
-            { key: 'delivery_tracking', label: 'Suivi de statut (En route, Livré)', description: 'Changement de statut en temps réel de la commande', icon: Navigation },
-            { key: 'delivery_proof', label: 'Preuve de livraison (Signature / Réf)', description: 'Validation avec signature client ou ID Mobile Money', icon: FileCheck },
-            { key: 'delivery_customer_notifications', label: 'Notifications SMS au client', description: 'Alerte client au départ du coursier moto', icon: Bell },
-            { key: 'delivery_web_orders', label: 'Intégration commandes web', description: 'Réception automatique des paniers depuis le site web', icon: Share2 },
-          ],
-        };
-
-      case 'reservations':
-        return {
-          title: 'Configuration Réservations & Disponibilités',
-          sectionNumber: 'Section 16',
-          description: 'Gestion des réservations de tables, prévisions de couverts et gestion des No-Show',
-          icon: Calendar,
-          gradient: 'from-violet-500 to-indigo-600',
-          items: [
-            { key: 'res_management', label: 'Activer module Réservations', description: 'Gestion centralisée du cahier de réservations', icon: Calendar },
-            { key: 'res_online', label: 'Réservations en ligne 24/7', description: 'Permet aux convives de réserver depuis le portail web', icon: Globe },
-            { key: 'res_waitlist', label: 'Gestion de la liste d’attente', description: 'Enregistrement des convives en attente de table libérée', icon: Clock },
-            { key: 'res_auto_confirm', label: 'Confirmation automatique SMS/WhatsApp', description: 'Envoi d’un message de validation instantané au client', icon: MessageSquare },
-            { key: 'res_reminders', label: 'Rappels de réservation (H-2)', description: 'Relance préventive automatique pour réduire les absences', icon: Bell },
-            { key: 'res_deposit', label: 'Acompte obligatoire pour groupe (>= 6)', description: 'Exige un paiement de garantie pour les grandes tablées', icon: Coins, badge: '>= 6 couverts' },
-            { key: 'res_noshow', label: 'Gestion stricte des No-show', description: 'Marquage des défections et libération immédiate de la table', icon: UserX },
-            { key: 'res_availability', label: 'Gestion auto des disponibilités', description: 'Blocage des créneaux complets selon la capacité en salle', icon: CheckCircle2 },
-          ],
-        };
-
-      case 'evenements':
-        return {
-          title: 'Configuration Événements, Banquets & Catering',
-          sectionNumber: 'Section 17',
-          description: 'Gestion des devis, acomptes 30%, blocage de salle et factures traiteur',
-          icon: PartyPopper,
-          gradient: 'from-fuchsia-500 to-rose-600',
-          items: [
-            { key: 'event_active', label: 'Activer Événements & Banquets', description: 'Gestion des mariages, séminaires et réceptions privées', icon: PartyPopper },
-            { key: 'event_quotes', label: 'Génération de devis officiels', description: 'Édition de proformas détaillées avec TVA et décharges', icon: FileText },
-            { key: 'event_deposit', label: 'Acompte préalable obligatoire (30%)', description: 'Bloque la réservation définitive sous encaissement d’arrhes', icon: Coins, badge: '30% requis' },
-            { key: 'event_custom_menus', label: 'Menus événementiels sur-mesure', description: 'Création de formules gastronomiques personnalisées', icon: Utensils },
-            { key: 'event_banquet', label: 'Gestion cocktail dînatoire & buffet', description: 'Formules pièces cocktail et service traiteur', icon: GlassWater },
-            { key: 'event_hall', label: 'Blocage de salle événementielle', description: 'Privatisation automatique de l’espace sur le calendrier', icon: Lock },
-            { key: 'event_planning', label: 'Planning & calendrier dédié', description: 'Vue globale des réceptions et déroulement du service', icon: CalendarDays },
-            { key: 'event_billing', label: 'Facturation spécifique événement', description: 'Facturation globale avec déduction d’acomptes perçus', icon: Receipt },
           ],
         };
 
       case 'caisse':
         return {
           title: 'Configuration Caisse & Clôture Journalière',
-          sectionNumber: 'Section 22',
+          sectionNumber: 'Section Caisse',
           description: 'Règles de sécurité financière, comptage aveugle et procédures de clôture Z',
           icon: Coins,
           gradient: 'from-emerald-500 to-teal-600',
           items: [
-            { key: 'caisse_management', label: 'Gestion caisse active', description: 'Contrôle des flux d’encaissement et de décaissement', icon: Coins },
             { key: 'caisse_mandatory_open', label: 'Ouverture obligatoire préalable', description: 'Bloque les ventes tant que la session n’est pas initialisée', icon: Lock },
             { key: 'caisse_float', label: 'Saisie obligatoire fond de caisse', description: 'Déclaration du montant initial en espèces au matin', icon: Wallet },
             { key: 'caisse_expenses', label: 'Saisie des menues dépenses', description: 'Enregistrement des sorties pour achats d’urgence', icon: ArrowDownRight },
             { key: 'caisse_withdrawals', label: 'Retraits d’espèces (Délestage)', description: 'Transferts d’argent vers le coffre-fort en cours de journée', icon: ArrowUpRight },
-            { key: 'caisse_transfers', label: 'Transferts inter-caisses', description: 'Mouvements d’espèces entre caisse principale et bar', icon: ArrowRightLeft },
-            { key: 'caisse_mandatory_close', label: 'Clôture obligatoire fin de service', description: 'Exige la clôture formelle avant de quitter l’application', icon: CheckCircle2 },
             { key: 'caisse_mandatory_count', label: 'Comptage aveugle obligatoire', description: 'Le caissier compte sans voir le théorique informatique', icon: Calculator, badge: 'Anti-Fraude' },
             { key: 'caisse_variance_control', label: 'Contrôle strict des écarts (0 FCFA)', description: 'Tolérance zéro sur les surplus ou déficits de caisse', icon: AlertCircle },
             { key: 'caisse_z_report', label: 'Génération du Rapport Z officiel', description: 'Édition du ticket Z chronologique et archivage fiscal', icon: FileText },
-            { key: 'caisse_block_after_close', label: 'Blocage total après clôture Z', description: 'Interdit toute saisie supplémentaire sur une session close', icon: ShieldAlert },
-            { key: 'caisse_reopen_with_auth', label: 'Réouverture avec PIN Manager', description: 'Déverrouillage exceptionnel sous mandat superviseur', icon: Key },
           ],
         };
 

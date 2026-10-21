@@ -109,12 +109,10 @@ export const TablesView: React.FC<TablesViewProps> = ({ onOpenOrder, onPayOrder,
   const isZonesAllowed = isRuleEnabled('tables_zones', true) && isFeatureEnabled('zones_management');
   const isCapacityAllowed = isRuleEnabled('tables_capacity', true);
   const isReservationsAllowed = isRuleEnabled('tables_reservations', true) && isFeatureEnabled('table_reservations');
-  const isMergeAllowed = isRuleEnabled('tables_merge', true) && isRuleEnabled('pos_table_merge', true);
-  const isDivisionAllowed = isRuleEnabled('tables_division', true) && isRuleEnabled('pos_table_split', true);
-  const isTransferAllowed = isRuleEnabled('tables_transfer', true) && isRuleEnabled('pos_table_transfer', true);
+  const isMergeAllowed = isRuleEnabled('tables_merge', true);
+  const isDivisionAllowed = isRuleEnabled('tables_division', true);
+  const isTransferAllowed = isRuleEnabled('tables_transfer', true);
   const isCleaningAllowed = isRuleEnabled('tables_cleaning', true);
-  const isAutoStatusAllowed = isRuleEnabled('tables_auto_status', true);
-  const isAutoServerAssign = isRuleEnabled('tables_auto_server_assign', false);
 
   // View Mode: 'plan' (2D Vectoriel), 'grille' (Tactile Grid), 'commandes' (Active multi-orders)
   // Sur smartphone (< 640px), bascule automatiquement en vue Grille pour une accessibilité tactile optimale

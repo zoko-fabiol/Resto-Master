@@ -242,8 +242,7 @@ export const DEFAULT_OPERATION_RULES: OperationRules = {
   mod_audit: true,
   mod_settings: true,
 
-  // POS (Section 7)
-  pos_active: true,
+  // POS
   pos_use_tables: true,
   pos_quick_orders: true,
   pos_sale_without_table: true,
@@ -253,100 +252,62 @@ export const DEFAULT_OPERATION_RULES: OperationRules = {
   pos_require_cancel_reason: true,
   pos_allow_discount: true,
   pos_require_discount_approval: true,
-  pos_custom_price: false,
   pos_zero_price: false,
-  pos_item_comp: true,
   pos_split_bill: true,
   pos_partial_payment: true,
-  pos_change_server: true,
-  pos_table_transfer: true,
-  pos_table_merge: true,
-  pos_table_split: true,
   pos_show_ticket_number: true,
   pos_show_server: true,
   pos_show_order_time: true,
 
-  // Tables (Section 8)
+  // Tables
   tables_management: true,
   tables_floor_plan: true,
   tables_zones: true,
   tables_capacity: true,
   tables_reservations: true,
-  tables_auto_status: true,
-  tables_transfer: true,
   tables_merge: true,
   tables_division: true,
   tables_cleaning: true,
-  tables_auto_server_assign: true,
 
-  // Cuisine (Section 9)
-  cuisine_kds: true,
+  // Cuisine
   cuisine_auto_send: true,
   cuisine_priority: true,
   cuisine_prep_timer: true,
   cuisine_notify_ready: true,
   cuisine_notify_delay: true,
   cuisine_print_ticket: true,
-  cuisine_screen: true,
   cuisine_prep_categories: true,
-  cuisine_stations: true,
 
-  // Bar (Section 10)
-  bar_module: true,
-  bar_screen: true,
+  // Bar
   bar_print: true,
-  bar_bottles: true,
-  bar_glasses: true,
   bar_cocktails: true,
   bar_cocktail_recipes: true,
   bar_losses: true,
   bar_breakage: true,
-  bar_consumption_control: true,
 
-  // Caisse (Section 22)
-  caisse_management: true,
+  // Caisse
   caisse_mandatory_open: true,
   caisse_float: true,
   caisse_expenses: true,
   caisse_withdrawals: true,
-  caisse_transfers: true,
-  caisse_mandatory_close: true,
   caisse_mandatory_count: true,
   caisse_variance_control: true,
   caisse_z_report: true,
-  caisse_block_after_close: true,
-  caisse_reopen_with_auth: true,
 
-  // Livraison (Section 15)
-  delivery_active: true,
-  delivery_online_order: true,
-  delivery_zones: true,
+  // Livraison
   delivery_fees: true,
   delivery_driver_assignment: true,
-  delivery_tracking: true,
   delivery_proof: true,
-  delivery_customer_notifications: true,
-  delivery_web_orders: true,
 
-  // Réservations (Section 16)
+  // Réservations
   res_management: true,
-  res_online: true,
   res_waitlist: true,
-  res_auto_confirm: true,
-  res_reminders: true,
   res_deposit: true,
   res_noshow: true,
-  res_availability: true,
 
-  // Événements (Section 17)
-  event_active: true,
+  // Événements
   event_quotes: true,
   event_deposit: true,
-  event_custom_menus: true,
-  event_banquet: true,
-  event_hall: true,
-  event_planning: true,
-  event_billing: true,
 
   // Stocks & Lots (Section 11)
   stock_gestion: true,
