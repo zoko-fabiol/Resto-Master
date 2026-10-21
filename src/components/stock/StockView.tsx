@@ -44,9 +44,9 @@ export const StockView: React.FC = () => {
   const [transferModalOpen, setTransferModalOpen] = useState(false);
   const [quickReceiveModalOpen, setQuickReceiveModalOpen] = useState(false);
 
-  // Quick Delivery Reception Form State (Section 8 du Guide)
+  // Quick Delivery Reception Form State (Section 8 du Guide) — vide par défaut
   const [receiveStockId, setReceiveStockId] = useState(stockItems[0]?.id || '');
-  const [receiveQty, setReceiveQty] = useState<number>(10);
+  const [receiveQty, setReceiveQty] = useState<number | ''>('');
   const [receiveSupplier, setReceiveSupplier] = useState('');
   const [receiveInvoice, setReceiveInvoice] = useState('');
   const [receiveUnitPrice, setReceiveUnitPrice] = useState<number | undefined>(undefined);
@@ -55,7 +55,7 @@ export const StockView: React.FC = () => {
     const target = item || stockItems[0];
     if (target) {
       setReceiveStockId(target.id);
-      setReceiveQty(target.minThreshold || 10);
+      setReceiveQty('');
       setReceiveSupplier(target.supplierName || '');
       setReceiveInvoice('');
       setReceiveUnitPrice(target.purchasePrice);
@@ -65,7 +65,8 @@ export const StockView: React.FC = () => {
 
   const handleConfirmQuickReceive = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!receiveStockId || receiveQty <= 0) {
+    const numQty = typeof receiveQty === 'number' ? receiveQty : parseFloat(receiveQty || '0');
+    if (!receiveStockId || numQty <= 0) {
       showToast({
         type: 'warning',
         title: 'Quantité invalide',
@@ -73,26 +74,30 @@ export const StockView: React.FC = () => {
       });
       return;
     }
-    await quickReceiveStock(receiveStockId, receiveQty, receiveSupplier, receiveInvoice, receiveUnitPrice);
+    await quickReceiveStock(receiveStockId, numQty, receiveSupplier, receiveInvoice, receiveUnitPrice);
     setQuickReceiveModalOpen(false);
+    setReceiveQty('');
+    setReceiveSupplier('');
+    setReceiveInvoice('');
   };
 
-  // Transfer form state
-  const [transferSource, setTransferSource] = useState('Magasin Central (Économat)');
-  const [transferDest, setTransferDest] = useState('Bar Comptoir');
+  // Transfer form state — vide par défaut
+  const [transferSource, setTransferSource] = useState('');
+  const [transferDest, setTransferDest] = useState('');
   const [transferStockId, setTransferStockId] = useState(stockItems[0]?.id || '');
-  const [transferQty, setTransferQty] = useState<number>(5);
+  const [transferQty, setTransferQty] = useState<number | ''>('');
   const [transferNotes, setTransferNotes] = useState('');
 
   const handleConfirmTransfer = async (e: React.FormEvent) => {
     e.preventDefault();
+    const numQty = typeof transferQty === 'number' ? transferQty : parseFloat(transferQty || '0');
     const item = stockItems.find((s) => s.id === transferStockId);
-    if (!item || transferQty <= 0) return;
-    if (isRuleEnabled('stock_disallow_negative', true) && item.currentQuantity - transferQty < 0) {
+    if (!item || numQty <= 0) return;
+    if (isRuleEnabled('stock_disallow_negative', true) && item.currentQuantity - numQty < 0) {
       showToast({
         type: 'error',
         title: 'Stock négatif bloqué (Section 11)',
-        message: `Action bloquée par la règle 'Blocage du stock négatif'. Transfert impossible de ${transferQty} ${item.unit}. Stock actuel : ${item.currentQuantity} ${item.unit}.`,
+        message: `Action bloquée par la règle 'Blocage du stock négatif'. Transfert impossible de ${numQty} ${item.unit}. Stock actuel : ${item.currentQuantity} ${item.unit}.`,
       });
       return;
     }
@@ -100,24 +105,26 @@ export const StockView: React.FC = () => {
       stockItemId: item.id,
       stockItemName: item.name,
       type: 'transfert',
-      quantityChange: -transferQty,
+      quantityChange: -numQty,
       previousQuantity: item.currentQuantity,
-      newQuantity: item.currentQuantity - transferQty,
+      newQuantity: item.currentQuantity - numQty,
       unit: item.unit,
-      reason: `Transfert de [${transferSource}] vers [${transferDest}]${transferNotes ? ` - ${transferNotes}` : ''}`,
+      reason: `Transfert de ${transferSource.trim() || 'Économat'} vers ${transferDest.trim() || 'Cuisine / Bar'}${transferNotes.trim() ? ` — ${transferNotes.trim()}` : ''}`,
     });
     setTransferModalOpen(false);
+    setTransferQty('');
+    setTransferNotes('');
     showToast({
       type: 'success',
       title: 'Transfert effectué',
-      message: `${transferQty} ${item.unit} transféré(s) de ${transferSource} vers ${transferDest}.`,
+      message: `${numQty} ${item.unit} transféré(s) de ${transferSource || 'Économat'} vers ${transferDest || 'Cuisine / Bar'}.`,
     });
   };
 
-  // New Movement form state
-  const [targetStockId, setTargetStockId] = useState(stockItems[0]?.id || '');
+  // New Movement form state — vide par défaut
+  const [targetStockId, setTargetStockId] = useState('');
   const [movementType, setMovementType] = useState<StockMovement['type']>('entree_achat');
-  const [movementQty, setMovementQty] = useState<number>(10);
+  const [movementQty, setMovementQty] = useState<number | ''>('');
   const [movementReason, setMovementReason] = useState('');
 
   // Calculations
@@ -138,12 +145,13 @@ export const StockView: React.FC = () => {
 
   const handleCreateMovement = async (e: React.FormEvent) => {
     e.preventDefault();
+    const parsedQty = typeof movementQty === 'number' ? movementQty : parseFloat(movementQty || '0');
     const item = stockItems.find((s) => s.id === targetStockId);
-    if (!item || movementQty <= 0) {
+    if (!item || isNaN(parsedQty) || parsedQty <= 0) {
       showToast({
         type: 'warning',
-        title: 'Quantité invalide',
-        message: 'Veuillez spécifier une quantité valide supérieure à zéro.',
+        title: 'Champs incomplets ou invalides',
+        message: 'Veuillez sélectionner un article et renseigner une quantité valide supérieure à zéro.',
       });
       return;
     }
@@ -153,7 +161,7 @@ export const StockView: React.FC = () => {
       movementType === 'perte_gaspillage' ||
       movementType === 'perime';
 
-    const actualQtyChange = isNegative ? -Math.abs(movementQty) : Math.abs(movementQty);
+    const actualQtyChange = isNegative ? -Math.abs(parsedQty) : Math.abs(parsedQty);
 
     // Rule: stock_disallow_negative (Section 11)
     if (isNegative && isRuleEnabled('stock_disallow_negative', true)) {
@@ -161,7 +169,7 @@ export const StockView: React.FC = () => {
         showToast({
           type: 'error',
           title: 'Stock négatif bloqué (Section 11)',
-          message: `Action bloquée par la règle 'Blocage du stock négatif'. Retrait impossible de ${Math.abs(movementQty)} ${item.unit}. Stock actuel : ${item.currentQuantity} ${item.unit}.`,
+          message: `Action bloquée par la règle 'Blocage du stock négatif'. Retrait impossible de ${Math.abs(parsedQty)} ${item.unit}. Stock actuel : ${item.currentQuantity} ${item.unit}.`,
         });
         return;
       }
@@ -180,6 +188,8 @@ export const StockView: React.FC = () => {
 
     setMovementModalOpen(false);
     setMovementReason('');
+    setMovementQty('');
+    setTargetStockId('');
   };
 
   if (!isRuleEnabled('stock_gestion', true)) {
@@ -629,10 +639,12 @@ export const StockView: React.FC = () => {
               <div>
                 <label className="text-xs font-bold text-slate-700 block mb-1">Article en stock *</label>
                 <select
+                  required
                   value={targetStockId}
                   onChange={(e) => setTargetStockId(e.target.value)}
                   className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200"
                 >
+                  <option value="">Sélectionner un article...</option>
                   {stockItems.map((s) => (
                     <option key={s.id} value={s.id}>
                       {s.name} (Actuel: {s.currentQuantity} {s.unit})
@@ -672,8 +684,9 @@ export const StockView: React.FC = () => {
                   step="0.01"
                   min="0.01"
                   required
+                  placeholder="Ex: 5"
                   value={movementQty}
-                  onChange={(e) => setMovementQty(parseFloat(e.target.value) || 0)}
+                  onChange={(e) => setMovementQty(e.target.value === '' ? '' : parseFloat(e.target.value))}
                   className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 font-bold"
                 />
               </div>
@@ -763,8 +776,9 @@ export const StockView: React.FC = () => {
                     step="0.01"
                     min="0.01"
                     required
+                    placeholder="Ex: 10"
                     value={receiveQty}
-                    onChange={(e) => setReceiveQty(parseFloat(e.target.value) || 0)}
+                    onChange={(e) => setReceiveQty(e.target.value === '' ? '' : parseFloat(e.target.value))}
                     className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 font-bold"
                   />
                 </div>
@@ -893,8 +907,9 @@ export const StockView: React.FC = () => {
                   step="0.01"
                   min="0.01"
                   required
+                  placeholder="Ex: 5"
                   value={transferQty}
-                  onChange={(e) => setTransferQty(parseFloat(e.target.value) || 0)}
+                  onChange={(e) => setTransferQty(e.target.value === '' ? '' : parseFloat(e.target.value))}
                   className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 font-bold"
                 />
               </div>

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { PageHeader, Button } from '../ui';
 import { useRestaurant } from '../../context/RestaurantContext';
 import { useToast } from '../../context/ToastContext';
@@ -21,7 +21,16 @@ import {
 import { RestaurantEvent } from '../../types/restaurant';
 
 export const EventsView: React.FC = () => {
-  const { events, createEvent, updateEventStatus, settings, isRuleEnabled, isFeatureEnabled } = useRestaurant();
+  const {
+    events,
+    createEvent,
+    updateEventStatus,
+    settings,
+    isRuleEnabled,
+    isFeatureEnabled,
+    zones,
+    tables,
+  } = useRestaurant();
   const { showToast } = useToast();
 
   // Règles Opérationnelles (Section 17 Événements & Banquets)
@@ -39,20 +48,59 @@ export const EventsView: React.FC = () => {
   const [filterType, setFilterType] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Form State
+  // Récupération dynamique des salles et zones réelles depuis la base de données
+  const dynamicZones = useMemo(() => {
+    const zoneList: Array<{ id: string; name: string; tablesCount: number; capacity: number }> = [];
+
+    if (zones && zones.length > 0) {
+      zones.forEach((z) => {
+        const zoneTables = tables.filter((t) => t.zone === z.name || t.zoneId === z.id);
+        const capacity = zoneTables.reduce((sum, t) => sum + (t.capacity || 0), 0) || z.capacity || 0;
+        zoneList.push({
+          id: z.id,
+          name: z.name,
+          tablesCount: zoneTables.length,
+          capacity,
+        });
+      });
+    }
+
+    // Récupérer également les zones distinctes configurées sur les tables
+    const tableZoneNames = Array.from(new Set(tables.map((t) => t.zone).filter(Boolean)));
+    tableZoneNames.forEach((name) => {
+      if (!zoneList.some((z) => z.name.toLowerCase() === name.toLowerCase())) {
+        const zoneTables = tables.filter((t) => t.zone === name);
+        const capacity = zoneTables.reduce((sum, t) => sum + (t.capacity || 0), 0);
+        zoneList.push({
+          id: name,
+          name,
+          tablesCount: zoneTables.length,
+          capacity,
+        });
+      }
+    });
+
+    return zoneList;
+  }, [zones, tables]);
+
+  const totalRestaurantCapacity = useMemo(() => {
+    return tables.reduce((sum, t) => sum + (t.capacity || 0), 0);
+  }, [tables]);
+
+  // Form State — 100% vide à l'ouverture, aucune valeur factice pré-remplie
   const [title, setTitle] = useState('');
   const [type, setType] = useState<RestaurantEvent['type']>('seminaire');
   const [clientName, setClientName] = useState('');
   const [clientPhone, setClientPhone] = useState('');
   const [clientEmail, setClientEmail] = useState('');
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
-  const [startTime, setStartTime] = useState('14:00');
-  const [endTime, setEndTime] = useState('18:00');
-  const [guestCount, setGuestCount] = useState<number>(30);
-  const [assignedHallOrZone, setAssignedHallOrZone] = useState('Salle Principale');
-  const [menuSelected, setMenuSelected] = useState('Menu Buffet Prestige');
-  const [quoteAmount, setQuoteAmount] = useState<number>(600000);
-  const [depositAmount, setDepositAmount] = useState<number>(200000);
+  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [startTime, setStartTime] = useState('');
+  const [endTime, setEndTime] = useState('');
+  const [guestCount, setGuestCount] = useState<number | ''>('');
+  const [assignedHallOrZone, setAssignedHallOrZone] = useState('');
+  const [menuSelected, setMenuSelected] = useState('');
+  const [quoteAmount, setQuoteAmount] = useState<number | ''>('');
+  const [depositAmount, setDepositAmount] = useState<number | ''>('');
   const [notes, setNotes] = useState('');
 
   const filteredEvents = events.filter((e) => {
@@ -67,16 +115,29 @@ export const EventsView: React.FC = () => {
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title || !clientName || quoteAmount <= 0) {
+    const numQuote = typeof quoteAmount === 'number' ? quoteAmount : parseFloat(quoteAmount || '0');
+    const numDeposit = typeof depositAmount === 'number' ? depositAmount : parseFloat(depositAmount || '0');
+    const numGuests = typeof guestCount === 'number' ? guestCount : parseInt(guestCount || '0', 10);
+
+    if (!title.trim() || !clientName.trim() || numQuote <= 0) {
       showToast({
         type: 'warning',
         title: 'Formulaire incomplet',
-        message: 'Veuillez renseigner le titre de l’événement, le client et un montant de devis supérieur à zéro.',
+        message: 'Veuillez renseigner le titre de l’événement, le nom du client et un montant de devis supérieur à zéro.',
       });
       return;
     }
 
-    if (isDepositMandatory && depositAmount <= 0) {
+    if (!assignedHallOrZone) {
+      showToast({
+        type: 'warning',
+        title: 'Salle / Zone non sélectionnée',
+        message: 'Veuillez sélectionner la salle ou zone réelle du restaurant pour cet événement.',
+      });
+      return;
+    }
+
+    if (isDepositMandatory && numDeposit <= 0) {
       showToast({
         type: 'warning',
         title: 'Acompte obligatoire',
@@ -85,34 +146,40 @@ export const EventsView: React.FC = () => {
       return;
     }
 
-    const remainingBalance = Math.max(0, quoteAmount - depositAmount);
+    const remainingBalance = Math.max(0, numQuote - numDeposit);
 
     await createEvent({
-      title,
+      title: title.trim(),
       type,
-      clientName,
-      clientPhone,
-      clientEmail: clientEmail || undefined,
+      clientName: clientName.trim(),
+      clientPhone: clientPhone.trim(),
+      clientEmail: clientEmail.trim() || undefined,
       date,
-      startTime,
-      endTime,
-      guestCount,
+      startTime: startTime || '',
+      endTime: endTime || '',
+      guestCount: numGuests > 0 ? numGuests : 1,
       assignedHallOrZone,
-      menuSelected,
-      quoteAmount,
-      depositAmount,
+      menuSelected: menuSelected.trim() || undefined,
+      quoteAmount: numQuote,
+      depositAmount: numDeposit,
       remainingBalance,
-      status: depositAmount > 0 ? 'confirme' : 'devis_envoye',
-      notes,
+      status: numDeposit > 0 ? 'confirme' : 'devis_envoye',
+      notes: notes.trim() || undefined,
     });
 
     setModalOpen(false);
-    // Reset
+    // Réinitialisation complète des champs
     setTitle('');
     setClientName('');
     setClientPhone('');
-    setQuoteAmount(600000);
-    setDepositAmount(200000);
+    setClientEmail('');
+    setGuestCount('');
+    setStartTime('');
+    setEndTime('');
+    setAssignedHallOrZone('');
+    setMenuSelected('');
+    setQuoteAmount('');
+    setDepositAmount('');
     setNotes('');
   };
 
@@ -355,8 +422,9 @@ export const EventsView: React.FC = () => {
                   <input
                     type="number"
                     min={1}
+                    placeholder="Ex: 50"
                     value={guestCount}
-                    onChange={(e) => setGuestCount(Number(e.target.value))}
+                    onChange={(e) => setGuestCount(e.target.value === '' ? '' : Number(e.target.value))}
                     className="w-full p-2 border border-slate-300 rounded-lg font-bold"
                   />
                 </div>
@@ -419,17 +487,25 @@ export const EventsView: React.FC = () => {
               </div>
 
               <div>
-                <label className="font-bold text-slate-700 block mb-1">Salle / Zone Affectée :</label>
+                <label className="font-bold text-slate-700 block mb-1">Salle / Zone Affectée (Base de Données) :</label>
                 <select
                   value={assignedHallOrZone}
                   onChange={(e) => setAssignedHallOrZone(e.target.value)}
-                  className="w-full p-2 border border-slate-300 rounded-lg"
+                  className="w-full p-2 border border-slate-300 rounded-lg bg-white"
+                  required
                 >
-                  <option value="Salle Principale">Salle Principale (120 places)</option>
-                  <option value="Terrasse Panoramique">Terrasse Panoramique (80 places)</option>
-                  <option value="VIP Lounge">VIP Lounge (30 places)</option>
-                  <option value="Mezzanine">Mezzanine (40 places)</option>
-                  <option value="Espace Complet (Privatisation)">Espace Complet (Privatisation)</option>
+                  <option value="">Sélectionner une salle / zone réelle...</option>
+                  {dynamicZones.map((z) => (
+                    <option key={z.id} value={z.name}>
+                      {z.name} ({z.tablesCount} table{z.tablesCount > 1 ? 's' : ''} • {z.capacity} places réelles)
+                    </option>
+                  ))}
+                  {tables.length > 0 && (
+                    <option value="Privatisation Globale">
+                      Privatisation Globale ({tables.length} tables • {totalRestaurantCapacity} places au total)
+                    </option>
+                  )}
+                  <option value="Autre Espace (Préciser en notes)">Autre Espace (Préciser en notes)</option>
                 </select>
               </div>
 
@@ -438,10 +514,12 @@ export const EventsView: React.FC = () => {
                   <label className="font-bold text-slate-700 block mb-1">Montant Devis TTC :</label>
                   <input
                     type="number"
-                    min={10000}
+                    min={1}
+                    placeholder="Ex: 500000"
                     value={quoteAmount}
-                    onChange={(e) => setQuoteAmount(Number(e.target.value))}
+                    onChange={(e) => setQuoteAmount(e.target.value === '' ? '' : Number(e.target.value))}
                     className="w-full p-2 border border-slate-300 rounded-lg font-bold font-mono"
+                    required
                   />
                 </div>
 
@@ -450,8 +528,9 @@ export const EventsView: React.FC = () => {
                   <input
                     type="number"
                     min={0}
+                    placeholder="0"
                     value={depositAmount}
-                    onChange={(e) => setDepositAmount(Number(e.target.value))}
+                    onChange={(e) => setDepositAmount(e.target.value === '' ? '' : Number(e.target.value))}
                     className="w-full p-2 border border-slate-300 rounded-lg font-bold font-mono text-emerald-700"
                   />
                 </div>

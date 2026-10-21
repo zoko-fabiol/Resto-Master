@@ -49,13 +49,13 @@ export const ReservationsView: React.FC<ReservationsViewProps> = ({ onSeatGuest 
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [modalOpen, setModalOpen] = useState(false);
 
-  // Form state
+  // Form state — vide par défaut
   const [customerName, setCustomerName] = useState('');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
-  const [time, setTime] = useState('20:00');
-  const [guestCount, setGuestCount] = useState(2);
+  const [time, setTime] = useState('');
+  const [guestCount, setGuestCount] = useState<number | ''>('');
   const [tableId, setTableId] = useState('');
   const [specialRequests, setSpecialRequests] = useState('');
 
@@ -117,16 +117,18 @@ export const ReservationsView: React.FC<ReservationsViewProps> = ({ onSeatGuest 
 
   const handleCreateSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!customerName || !phone) {
+    const numGuests = typeof guestCount === 'number' ? guestCount : parseInt(guestCount || '0', 10);
+
+    if (!customerName.trim() || !phone.trim() || !time.trim()) {
       showToast({
         type: 'warning',
         title: 'Champs manquants',
-        message: 'Veuillez renseigner au minimum le nom et le téléphone du client.',
+        message: 'Veuillez renseigner le nom, le téléphone et l’heure de la réservation.',
       });
       return;
     }
 
-    if (isDepositRequired && guestCount >= 6 && !depositReceived) {
+    if (isDepositRequired && numGuests >= 6 && !depositReceived) {
       showToast({
         type: 'warning',
         title: 'Acompte obligatoire',
@@ -138,16 +140,16 @@ export const ReservationsView: React.FC<ReservationsViewProps> = ({ onSeatGuest 
     const assignedTable = tables.find((t) => t.id === tableId);
 
     await createReservation({
-      customerName,
-      phone,
-      email: email || undefined,
+      customerName: customerName.trim(),
+      phone: phone.trim(),
+      email: email.trim() || undefined,
       date,
       time,
-      guestCount,
+      guestCount: numGuests > 0 ? numGuests : 1,
       tableId: tableId || undefined,
       tableName: assignedTable ? assignedTable.number : undefined,
       status: 'confirmee',
-      specialRequests: specialRequests || undefined,
+      specialRequests: specialRequests.trim() || undefined,
     });
 
     // Marquer la table comme réservée sur le plan de salle
@@ -160,6 +162,8 @@ export const ReservationsView: React.FC<ReservationsViewProps> = ({ onSeatGuest 
     setCustomerName('');
     setPhone('');
     setEmail('');
+    setTime('');
+    setGuestCount('');
     setSpecialRequests('');
     setTableId('');
     setDepositReceived(false);
@@ -431,8 +435,9 @@ export const ReservationsView: React.FC<ReservationsViewProps> = ({ onSeatGuest 
                     min={1}
                     max={50}
                     required
+                    placeholder="Ex: 4"
                     value={guestCount}
-                    onChange={(e) => setGuestCount(parseInt(e.target.value) || 1)}
+                    onChange={(e) => setGuestCount(e.target.value === '' ? '' : parseInt(e.target.value, 10))}
                     className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200"
                   />
                 </div>
@@ -443,11 +448,11 @@ export const ReservationsView: React.FC<ReservationsViewProps> = ({ onSeatGuest 
                   <label className="text-xs font-bold text-slate-700">Affecter une table (Optionnel)</label>
                   <button
                     type="button"
-                    onClick={() => handleSuggestTable(guestCount)}
+                    onClick={() => handleSuggestTable(typeof guestCount === 'number' ? guestCount : 2)}
                     className="text-[11px] font-bold text-amber-600 hover:text-amber-700 flex items-center gap-1 hover:underline"
                   >
                     <Wand2 className="w-3 h-3 text-amber-500" />
-                    <span>Suggérer table adaptée ({guestCount}p)</span>
+                    <span>Suggérer table adaptée ({guestCount || 2}p)</span>
                   </button>
                 </div>
                 <select
@@ -475,7 +480,7 @@ export const ReservationsView: React.FC<ReservationsViewProps> = ({ onSeatGuest 
                 />
               </div>
 
-              {isDepositRequired && guestCount >= 6 && (
+              {isDepositRequired && Number(guestCount) >= 6 && (
                 <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-xs space-y-2">
                   <div className="font-bold text-amber-900">
                     Acompte de groupe obligatoire (≥ 6 convives)

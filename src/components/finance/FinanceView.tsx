@@ -25,8 +25,8 @@ export const FinanceView: React.FC = () => {
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
 
-  // Form state
-  const [amount, setAmount] = useState<number>(50000);
+  // Form state — vide par défaut
+  const [amount, setAmount] = useState<number | ''>('');
   const [category, setCategory] = useState<Expense['category']>('achats_alimentaires');
   const [beneficiary, setBeneficiary] = useState('');
   const [reason, setReason] = useState('');
@@ -55,7 +55,9 @@ export const FinanceView: React.FC = () => {
 
   const handleCreateExpense = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (amount <= 0 || !beneficiary || !reason) {
+    const numAmount = typeof amount === 'number' ? amount : parseFloat(amount || '0');
+
+    if (numAmount <= 0 || !beneficiary.trim() || !reason.trim()) {
       showToast({
         type: 'warning',
         title: 'Champs obligatoires',
@@ -66,10 +68,10 @@ export const FinanceView: React.FC = () => {
 
     await createExpense({
       date: new Date().toISOString().slice(0, 10),
-      amount,
+      amount: numAmount,
       category,
-      beneficiary,
-      reason,
+      beneficiary: beneficiary.trim(),
+      reason: reason.trim(),
       paymentMethod,
       status: 'en_attente',
     });
@@ -77,7 +79,7 @@ export const FinanceView: React.FC = () => {
     setModalOpen(false);
     setBeneficiary('');
     setReason('');
-    setAmount(50000);
+    setAmount('');
   };
 
   return (
@@ -308,8 +310,9 @@ export const FinanceView: React.FC = () => {
                   type="number"
                   required
                   min={100}
+                  placeholder="Ex: 50000"
                   value={amount}
-                  onChange={(e) => setAmount(parseFloat(e.target.value) || 0)}
+                  onChange={(e) => setAmount(e.target.value === '' ? '' : parseFloat(e.target.value))}
                   className="w-full px-3 py-2 text-base font-black rounded-xl border border-slate-300"
                 />
               </div>

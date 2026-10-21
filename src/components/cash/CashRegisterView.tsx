@@ -83,7 +83,7 @@ export const CashRegisterView: React.FC<CashRegisterViewProps> = ({ onOpenPaymen
 
   // Movement Form
   const [movType, setMovType] = useState<CashMovement['type']>('entree');
-  const [movAmount, setMovAmount] = useState<number>(10000);
+  const [movAmount, setMovAmount] = useState<number | ''>('');
   const [movReason, setMovReason] = useState('');
 
   // Closing Form
@@ -94,7 +94,7 @@ export const CashRegisterView: React.FC<CashRegisterViewProps> = ({ onOpenPaymen
   const [blindCountRevealed, setBlindCountRevealed] = useState(false);
 
   // Opening Form
-  const [initialFloat, setInitialFloat] = useState<number>(100000);
+  const [initialFloat, setInitialFloat] = useState<number | ''>('');
 
   // Historique search & filter
   const [historySearch, setHistorySearch] = useState('');
@@ -205,7 +205,8 @@ export const CashRegisterView: React.FC<CashRegisterViewProps> = ({ onOpenPaymen
 
   const handleRecordMovement = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (movAmount <= 0 || !movReason.trim()) {
+    const numMovAmount = typeof movAmount === 'number' ? movAmount : parseFloat(movAmount || '0');
+    if (isNaN(numMovAmount) || numMovAmount <= 0 || !movReason.trim()) {
       showToast({
         type: 'warning',
         title: 'Champs incomplets',
@@ -223,15 +224,16 @@ export const CashRegisterView: React.FC<CashRegisterViewProps> = ({ onOpenPaymen
       return;
     }
 
-    await recordCashMovement(movType, movAmount, movReason);
+    await recordCashMovement(movType, numMovAmount, movReason);
     showToast({
       type: 'success',
       title: 'Mouvement de caisse enregistré',
-      message: `${movType === 'entree' ? '+' : '-'}${formatCurrency(movAmount, settings.currency)} (${movReason})`,
+      message: `${movType === 'entree' ? '+' : '-'}${formatCurrency(numMovAmount, settings.currency)} (${movReason})`,
     });
 
     setMovementModalOpen(false);
     setMovReason('');
+    setMovAmount('');
   };
 
   const handleCloseSession = async (e: React.FormEvent) => {
@@ -265,7 +267,8 @@ export const CashRegisterView: React.FC<CashRegisterViewProps> = ({ onOpenPaymen
 
   const handleOpenSession = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (isFloatMandatory && (!initialFloat || initialFloat <= 0)) {
+    const numInitialFloat = typeof initialFloat === 'number' ? initialFloat : parseFloat(initialFloat || '0');
+    if (isFloatMandatory && (isNaN(numInitialFloat) || numInitialFloat <= 0)) {
       showToast({
         type: 'error',
         title: 'Fond de caisse obligatoire',
@@ -274,14 +277,15 @@ export const CashRegisterView: React.FC<CashRegisterViewProps> = ({ onOpenPaymen
       return;
     }
 
-    await openCashRegister(initialFloat, 'Ouverture du service');
+    await openCashRegister(numInitialFloat, 'Ouverture du service');
     playAudioChime('kitchen');
     showToast({
       type: 'success',
       title: 'Caisse ouverte',
-      message: `Nouvelle session initialisée avec un fond de caisse de ${formatCurrency(initialFloat, settings.currency)}.`,
+      message: `Nouvelle session initialisée avec un fond de caisse de ${formatCurrency(numInitialFloat, settings.currency)}.`,
     });
     setOpeningModalOpen(false);
+    setInitialFloat('');
   };
 
   // Connect Bluetooth printer
@@ -991,8 +995,9 @@ export const CashRegisterView: React.FC<CashRegisterViewProps> = ({ onOpenPaymen
                   min="100"
                   step="50"
                   required
+                  placeholder="Ex: 10000"
                   value={movAmount}
-                  onChange={(e) => setMovAmount(parseFloat(e.target.value) || 0)}
+                  onChange={(e) => setMovAmount(e.target.value === '' ? '' : parseFloat(e.target.value))}
                   className="w-full px-3 py-2 text-sm font-bold rounded-xl border border-slate-200"
                 />
               </div>
@@ -1232,8 +1237,9 @@ export const CashRegisterView: React.FC<CashRegisterViewProps> = ({ onOpenPaymen
                 <input
                   type="number"
                   required
+                  placeholder="Ex: 50000"
                   value={initialFloat}
-                  onChange={(e) => setInitialFloat(parseFloat(e.target.value) || 0)}
+                  onChange={(e) => setInitialFloat(e.target.value === '' ? '' : parseFloat(e.target.value))}
                   className="w-full px-3 py-2 text-base font-black rounded-xl border border-slate-300"
                 />
               </div>

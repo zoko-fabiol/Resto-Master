@@ -36,7 +36,7 @@ function isPaymentStatus(value: string): value is DeliveryOrder['paymentStatus']
 }
 
 export const DeliveryView: React.FC = () => {
-  const { deliveries, createDelivery, updateDeliveryStatus, settings, isRuleEnabled } = useRestaurant();
+  const { deliveries, createDelivery, updateDeliveryStatus, settings, isRuleEnabled, employees } = useRestaurant();
   const { showToast } = useToast();
 
   // Règles Opérationnelles (Section Livraison & Courses)
@@ -51,15 +51,15 @@ export const DeliveryView: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('all');
 
-  // Form State
+  // Form State — 100% vide à l'ouverture
   const [clientName, setClientName] = useState('');
   const [clientPhone, setClientPhone] = useState('');
   const [city, setCity] = useState(settings.city || 'Yaoundé');
-  const [quartier, setQuartier] = useState('Bastos');
+  const [quartier, setQuartier] = useState('');
   const [repere, setRepere] = useState('');
   const [instructions, setInstructions] = useState('');
-  const [deliveryFee, setDeliveryFee] = useState<number>(1500);
-  const [deliveryPersonName, setDeliveryPersonName] = useState('Alain Mbarga (Moto 1)');
+  const [deliveryFee, setDeliveryFee] = useState<number | ''>('');
+  const [deliveryPersonName, setDeliveryPersonName] = useState('');
   const [orderNumber] = useState(`CMD-${Date.now().toString().slice(-6)}`);
   const [paymentStatus, setPaymentStatus] = useState<DeliveryOrder['paymentStatus']>('paye_a_la_livraison');
 
@@ -85,6 +85,8 @@ export const DeliveryView: React.FC = () => {
       return;
     }
 
+    const numDeliveryFee = typeof deliveryFee === 'number' ? deliveryFee : parseFloat(deliveryFee || '0');
+
     await createDelivery({
       orderId: `ord-deliv-${Date.now()}`,
       orderNumber,
@@ -94,8 +96,8 @@ export const DeliveryView: React.FC = () => {
       quartier,
       repere,
       instructions: instructions || undefined,
-      deliveryFee,
-      deliveryPersonName,
+      deliveryFee: isNaN(numDeliveryFee) ? 0 : numDeliveryFee,
+      deliveryPersonName: deliveryPersonName || 'Non assigné',
       departureTime: new Date().toTimeString().slice(0, 5),
       paymentStatus,
       status: 'CONFIRMEE',
@@ -104,8 +106,11 @@ export const DeliveryView: React.FC = () => {
     setModalOpen(false);
     setClientName('');
     setClientPhone('');
+    setQuartier('');
     setRepere('');
     setInstructions('');
+    setDeliveryFee('');
+    setDeliveryPersonName('');
   };
 
   return (
@@ -325,9 +330,15 @@ export const DeliveryView: React.FC = () => {
                   value={deliveryPersonName}
                   onChange={(e) => setDeliveryPersonName(e.target.value)}
                 >
-                  <option value="Alain Mbarga (Moto 1)">Alain Mbarga (Moto 1)</option>
-                  <option value="Serge Nono (Moto 2)">Serge Nono (Moto 2)</option>
-                  <option value="Partenaire Coursier Express">Partenaire Coursier Express</option>
+                  <option value="">Sélectionner un coursier...</option>
+                  {employees
+                    .filter((emp) => emp.status === 'actif')
+                    .map((emp) => (
+                      <option key={emp.id} value={`${emp.fullName} (${emp.role})`}>
+                        {emp.fullName} ({emp.role})
+                      </option>
+                    ))}
+                  <option value="Partenaire Coursier Moto Externe">Partenaire Coursier Moto Externe</option>
                 </Select>
               </Field>
             )}
@@ -337,9 +348,12 @@ export const DeliveryView: React.FC = () => {
                 <TextInput
                   type="number"
                   min={0}
-                  step={500}
+                  step={250}
+                  placeholder="Ex : 1500"
                   value={deliveryFee}
-                  onChange={(e) => setDeliveryFee(Math.max(0, Math.round(Number(e.target.value) || 0)))}
+                  onChange={(e) =>
+                    setDeliveryFee(e.target.value === '' ? '' : Math.max(0, Math.round(Number(e.target.value) || 0)))
+                  }
                 />
               </Field>
             )}

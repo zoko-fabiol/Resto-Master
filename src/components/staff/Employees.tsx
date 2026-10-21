@@ -50,12 +50,12 @@ export const Employees: React.FC = () => {
 
   const [selectedEmp, setSelectedEmp] = useState<RhEmployee | null>(null);
 
-  // Form State
+  // Form State — vide par défaut
   const [formNom, setFormNom] = useState('');
   const [formPrenom, setFormPrenom] = useState('');
   const [formSite, setFormSite] = useState('');
   const [formType, setFormType] = useState<'permanent' | 'temporaire'>('permanent');
-  const [formSalaireBase, setFormSalaireBase] = useState<number>(0);
+  const [formSalaireBase, setFormSalaireBase] = useState<number | ''>('');
   const [formContact, setFormContact] = useState('');
   const [formStatut, setFormStatut] = useState<'actif' | 'renvoye'>('actif');
   const [formDateRenvoi, setFormDateRenvoi] = useState('');
@@ -75,9 +75,9 @@ export const Employees: React.FC = () => {
     setSelectedEmp(null);
     setFormNom('');
     setFormPrenom('');
-    setFormSite(SITES[0] || '');
+    setFormSite('');
     setFormType('permanent');
-    setFormSalaireBase(0);
+    setFormSalaireBase('');
     setFormContact('');
     setFormStatut('actif');
     setFormDateRenvoi('');
@@ -775,7 +775,9 @@ export const Employees: React.FC = () => {
                     value={formSite}
                     onChange={e => setFormSite(e.target.value)}
                     className="form-input"
+                    required
                   >
+                    <option value="">Sélectionner un site...</option>
                     {SITES.map(site => <option key={site} value={site}>{site}</option>)}
                   </select>
                 </div>
@@ -799,10 +801,11 @@ export const Employees: React.FC = () => {
                   </label>
                   <input
                     type="number"
+                    min={0}
                     value={formSalaireBase}
-                    onChange={e => setFormSalaireBase(Number(e.target.value))}
+                    onChange={e => setFormSalaireBase(e.target.value === '' ? '' : Number(e.target.value))}
                     className="form-input font-mono font-semibold"
-                    placeholder="0"
+                    placeholder="Ex: 150000"
                   />
                 </div>
                 <div>

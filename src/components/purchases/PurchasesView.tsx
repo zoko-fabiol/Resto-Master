@@ -39,15 +39,15 @@ export const PurchasesView: React.FC = () => {
   const [receivingPoId, setReceivingPoId] = useState<string | null>(null);
   const [invoiceNumberInput, setInvoiceNumberInput] = useState('');
 
-  // New PO form
-  const [selectedSupplierId, setSelectedSupplierId] = useState(suppliers[0]?.id || '');
+  // New PO form — vide par défaut
+  const [selectedSupplierId, setSelectedSupplierId] = useState('');
   const [poItems, setPoItems] = useState<PurchaseOrderItem[]>([]);
   const [expectedDate, setExpectedDate] = useState('');
 
-  // Item selector inside PO modal
-  const [targetStockId, setTargetStockId] = useState(stockItems[0]?.id || '');
-  const [itemQty, setItemQty] = useState<number>(10);
-  const [itemPrice, setItemPrice] = useState<number>(1000);
+  // Item selector inside PO modal — vide par défaut
+  const [targetStockId, setTargetStockId] = useState('');
+  const [itemQty, setItemQty] = useState<number | ''>('');
+  const [itemPrice, setItemPrice] = useState<number | ''>('');
 
   // New Supplier form
   const [supCompany, setSupCompany] = useState('');
@@ -58,6 +58,26 @@ export const PurchasesView: React.FC = () => {
   const [supProducts, setSupProducts] = useState('');
 
   const handleAddItemToPo = () => {
+    if (!targetStockId) {
+      showToast({
+        type: 'warning',
+        title: 'Article requis',
+        message: 'Veuillez sélectionner un article en stock à commander.',
+      });
+      return;
+    }
+    const numQty = typeof itemQty === 'number' ? itemQty : parseFloat(itemQty || '0');
+    const numPrice = typeof itemPrice === 'number' ? itemPrice : parseFloat(itemPrice || '0');
+
+    if (numQty <= 0) {
+      showToast({
+        type: 'warning',
+        title: 'Quantité invalide',
+        message: 'Veuillez renseigner une quantité positive.',
+      });
+      return;
+    }
+
     const stock = stockItems.find((s) => s.id === targetStockId);
     if (!stock) return;
 
@@ -70,21 +90,37 @@ export const PurchasesView: React.FC = () => {
       return;
     }
 
+    const effectivePrice = numPrice > 0 ? numPrice : (stock.purchasePrice || 0);
+
     setPoItems((prev) => [
       ...prev,
       {
         stockItemId: stock.id,
         stockItemName: stock.name,
-        quantity: itemQty,
-        unitPrice: itemPrice,
-        total: itemQty * itemPrice,
+        quantity: numQty,
+        unitPrice: effectivePrice,
+        total: numQty * effectivePrice,
         unit: stock.unit,
       },
     ]);
+
+    // Réinitialiser la ligne d'ajout
+    setTargetStockId('');
+    setItemQty('');
+    setItemPrice('');
   };
 
   const handleCreatePo = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!selectedSupplierId) {
+      showToast({
+        type: 'warning',
+        title: 'Fournisseur manquant',
+        message: 'Veuillez sélectionner le fournisseur destinataire du bon de commande.',
+      });
+      return;
+    }
+
     if (poItems.length === 0) {
       showToast({
         type: 'warning',
@@ -118,7 +154,12 @@ export const PurchasesView: React.FC = () => {
     }
 
     setPoModalOpen(false);
+    setSelectedSupplierId('');
     setPoItems([]);
+    setExpectedDate('');
+    setTargetStockId('');
+    setItemQty('');
+    setItemPrice('');
   };
 
   const handleConfirmReceive = async () => {
@@ -494,8 +535,10 @@ export const PurchasesView: React.FC = () => {
                   <select
                     value={selectedSupplierId}
                     onChange={(e) => setSelectedSupplierId(e.target.value)}
-                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200"
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 bg-white"
+                    required
                   >
+                    <option value="">Sélectionner un fournisseur...</option>
                     {suppliers.map((s) => (
                       <option key={s.id} value={s.id}>
                         {s.company} ({s.name})
@@ -524,10 +567,11 @@ export const PurchasesView: React.FC = () => {
                       onChange={(e) => {
                         setTargetStockId(e.target.value);
                         const s = stockItems.find((item) => item.id === e.target.value);
-                        if (s) setItemPrice(s.purchasePrice);
+                        if (s) setItemPrice(s.purchasePrice || '');
                       }}
                       className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-300 bg-white"
                     >
+                      <option value="">Sélectionner un article...</option>
                       {stockItems.map((s) => (
                         <option key={s.id} value={s.id}>
                           {s.name} ({s.unit})
@@ -541,7 +585,7 @@ export const PurchasesView: React.FC = () => {
                       min="1"
                       placeholder="Qté"
                       value={itemQty}
-                      onChange={(e) => setItemQty(parseFloat(e.target.value) || 1)}
+                      onChange={(e) => setItemQty(e.target.value === '' ? '' : parseFloat(e.target.value))}
                       className="w-full px-2 py-1.5 text-xs rounded-lg border border-slate-300 bg-white"
                     />
                   </div>

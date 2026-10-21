@@ -17,7 +17,7 @@ export const AddZoneModal: React.FC<AddZoneModalProps> = ({
 }) => {
   const [name, setName] = useState('');
   const [type, setType] = useState<ZoneType>('salle_principale');
-  const [capacity, setCapacity] = useState(40);
+  const [capacity, setCapacity] = useState<number | ''>('');
   const [color, setColor] = useState('#f59e0b');
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -97,10 +97,11 @@ export const AddZoneModal: React.FC<AddZoneModalProps> = ({
               <label className="text-xs font-semibold text-slate-700">Capacité totale</label>
               <input
                 type="number"
-                min="5"
+                min="1"
                 max="500"
+                placeholder="Ex: 50"
                 value={capacity}
-                onChange={(e) => setCapacity(Math.max(1, parseInt(e.target.value, 10) || 30))}
+                onChange={(e) => setCapacity(e.target.value === '' ? '' : parseInt(e.target.value, 10))}
                 className="w-full text-xs font-bold border border-slate-200 rounded-xl px-3 py-2 mt-1 focus:ring-2 focus:ring-amber-500 focus:outline-hidden"
               />
             </div>

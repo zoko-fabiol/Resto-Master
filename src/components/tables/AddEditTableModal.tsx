@@ -40,7 +40,7 @@ export const AddEditTableModal: React.FC<AddEditTableModalProps> = ({
   }, [initialTable, existingTables]);
 
   const [number, setNumber] = useState(initialTable?.number || '');
-  const [capacity, setCapacity] = useState(initialTable?.capacity || 4);
+  const [capacity, setCapacity] = useState<number | ''>(initialTable ? initialTable.capacity : '');
   const [shape, setShape] = useState<TableShape>(initialTable?.shape || 'carree');
   const [zoneId, setZoneId] = useState(defaultZoneId);
   const [x, setX] = useState<number>(initialPos.x);
@@ -139,8 +139,9 @@ export const AddEditTableModal: React.FC<AddEditTableModalProps> = ({
                 type="number"
                 min="1"
                 max="50"
+                placeholder="Ex: 4"
                 value={capacity}
-                onChange={(e) => setCapacity(Math.max(1, parseInt(e.target.value, 10) || 2))}
+                onChange={(e) => setCapacity(e.target.value === '' ? '' : Math.max(1, parseInt(e.target.value, 10)))}
                 className="w-full text-xs font-bold border border-slate-200 rounded-xl px-3 py-2.5 mt-1 focus:ring-2 focus:ring-amber-500 focus:outline-hidden tabular-nums"
               />
             </div>

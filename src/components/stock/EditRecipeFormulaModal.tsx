@@ -38,25 +38,23 @@ export const EditRecipeFormulaModal: React.FC<EditRecipeFormulaModalProps> = ({
   const [sellingPrice, setSellingPrice] = useState<number>(0);
   const [isSaving, setIsSaving] = useState(false);
 
-  // Form for adding new ingredient
+  // Form for adding new ingredient — vide par défaut
   const [selectedStockId, setSelectedStockId] = useState<string>('');
-  const [addQty, setAddQty] = useState<number>(0.1);
+  const [addQty, setAddQty] = useState<number | ''>('');
 
   useEffect(() => {
     if (product) {
       setIngredients(product.ingredients || []);
       setPortionYield(product.portionYield || 1);
       setSellingPrice(product.price || 0);
-      if (stockItems.length > 0 && !selectedStockId) {
-        setSelectedStockId(stockItems[0].id);
-      }
     }
-  }, [product, stockItems]);
+  }, [product]);
 
   if (!isOpen || !product) return null;
 
   const handleAddIngredient = () => {
-    if (!selectedStockId || addQty <= 0) {
+    const numAddQty = typeof addQty === 'number' ? addQty : parseFloat(addQty || '0');
+    if (!selectedStockId || isNaN(numAddQty) || numAddQty <= 0) {
       showToast({
         type: 'warning',
         title: 'Ingrédient invalide',
@@ -83,13 +81,14 @@ export const EditRecipeFormulaModal: React.FC<EditRecipeFormulaModalProps> = ({
       {
         stockItemId: stockItem.id,
         stockItemName: stockItem.name,
-        quantityRequired: addQty,
+        quantityRequired: numAddQty,
         unit: stockItem.unit,
         costPerUnit: stockItem.purchasePrice,
       },
     ]);
 
-    setAddQty(0.1);
+    setAddQty('');
+    setSelectedStockId('');
   };
 
   const handleUpdateQty = (stockItemId: string, newQty: number) => {
@@ -460,6 +459,7 @@ export const EditRecipeFormulaModal: React.FC<EditRecipeFormulaModalProps> = ({
                   onChange={(e) => setSelectedStockId(e.target.value)}
                   className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 bg-white font-medium"
                 >
+                  <option value="">Sélectionner un ingrédient...</option>
                   {stockItems.map((s) => (
                     <option key={s.id} value={s.id}>
                       {s.name} ({s.currentQuantity} {s.unit} dispo — {formatCurrency(s.purchasePrice, currency)})
@@ -476,8 +476,9 @@ export const EditRecipeFormulaModal: React.FC<EditRecipeFormulaModalProps> = ({
                   type="number"
                   step="0.01"
                   min="0.001"
+                  placeholder="Ex: 0.25"
                   value={addQty}
-                  onChange={(e) => setAddQty(parseFloat(e.target.value) || 0)}
+                  onChange={(e) => setAddQty(e.target.value === '' ? '' : parseFloat(e.target.value))}
                   className="w-full px-3 py-2 text-xs font-bold rounded-xl border border-slate-200 bg-white"
                 />
               </div>

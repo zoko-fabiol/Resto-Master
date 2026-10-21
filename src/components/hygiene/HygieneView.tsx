@@ -23,9 +23,9 @@ export const HygieneView: React.FC = () => {
   const [modalOpen, setModalOpen] = useState(false);
   const [filterCategory, setFilterCategory] = useState<string>('all');
 
-  // Form State
+  // Form State — 100% vide à l'ouverture
   const [category, setCategory] = useState<HygieneCheck['category']>('temperature');
-  const [equipmentOrZone, setEquipmentOrZone] = useState('Chambre Froide Positive (+2°C / +4°C)');
+  const [equipmentOrZone, setEquipmentOrZone] = useState('');
   const [inspectorName, setInspectorName] = useState(currentUser?.name || '');
 
   useEffect(() => {
@@ -33,8 +33,8 @@ export const HygieneView: React.FC = () => {
       setInspectorName(currentUser.name);
     }
   }, [currentUser?.name]);
-  const [measuredValue, setMeasuredValue] = useState('+3.0°C');
-  const [thresholdOrStandard, setThresholdOrStandard] = useState('Entre +0°C et +4°C');
+  const [measuredValue, setMeasuredValue] = useState('');
+  const [thresholdOrStandard, setThresholdOrStandard] = useState('');
   const [result, setResult] = useState<HygieneCheck['result']>('conforme');
   const [correctiveAction, setCorrectiveAction] = useState('');
   const [notes, setNotes] = useState('');
@@ -60,6 +60,9 @@ export const HygieneView: React.FC = () => {
     });
 
     setModalOpen(false);
+    setEquipmentOrZone('');
+    setMeasuredValue('');
+    setThresholdOrStandard('');
     setCorrectiveAction('');
     setNotes('');
   };
@@ -209,24 +212,8 @@ export const HygieneView: React.FC = () => {
                 <label className="font-bold text-slate-700 block mb-1">Catégorie de Contrôle :</label>
                 <select
                   value={category}
-                  onChange={(e) => {
-                    const cat = e.target.value as any;
-                    setCategory(cat);
-                    if (cat === 'temperature') {
-                      setEquipmentOrZone('Chambre Froide Positive (+2°C / +4°C)');
-                      setThresholdOrStandard('Entre +0°C et +4°C');
-                      setMeasuredValue('+3.0°C');
-                    } else if (cat === 'huile_friture') {
-                      setEquipmentOrZone('Friteuse Double Cuve Cuisine');
-                      setThresholdOrStandard('Taux composés polaires < 25%');
-                      setMeasuredValue('15%');
-                    } else if (cat === 'nettoyage') {
-                      setEquipmentOrZone('Plan de Travail Boucherie & Poissons');
-                      setThresholdOrStandard('Désinfection virucide / bactéricide');
-                      setMeasuredValue('Propre');
-                    }
-                  }}
-                  className="w-full p-2 border border-slate-300 rounded-lg"
+                  onChange={(e) => setCategory(e.target.value as any)}
+                  className="w-full p-2 border border-slate-300 rounded-lg bg-white"
                 >
                   <option value="temperature">Chaîne du Froid (Température)</option>
                   <option value="huile_friture">Contrôle Huile de Friture</option>
@@ -240,6 +227,7 @@ export const HygieneView: React.FC = () => {
                 <input
                   type="text"
                   required
+                  placeholder="Ex: Chambre froide positive, Poste Bar, Plan découpe..."
                   value={equipmentOrZone}
                   onChange={(e) => setEquipmentOrZone(e.target.value)}
                   className="w-full p-2 border border-slate-300 rounded-lg font-bold"
@@ -252,6 +240,7 @@ export const HygieneView: React.FC = () => {
                   <input
                     type="text"
                     required
+                    placeholder="Ex: +3.0°C ou 15%"
                     value={measuredValue}
                     onChange={(e) => setMeasuredValue(e.target.value)}
                     className="w-full p-2 border border-slate-300 rounded-lg font-mono font-bold"
@@ -263,6 +252,7 @@ export const HygieneView: React.FC = () => {
                   <input
                     type="text"
                     required
+                    placeholder="Ex: Entre 0°C et +4°C"
                     value={thresholdOrStandard}
                     onChange={(e) => setThresholdOrStandard(e.target.value)}
                     className="w-full p-2 border border-slate-300 rounded-lg"

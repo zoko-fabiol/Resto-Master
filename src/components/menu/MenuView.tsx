@@ -30,13 +30,13 @@ export const MenuView: React.FC = () => {
   const [search, setSearch] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
 
-  // New product form
+  // New product form — vide par défaut
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [categoryId, setCategoryId] = useState(categories[0]?.id || '');
-  const [price, setPrice] = useState<number>(5000);
-  const [costPrice, setCostPrice] = useState<number>(2000);
-  const [prepTime, setPrepTime] = useState<number>(15);
+  const [price, setPrice] = useState<number | ''>('');
+  const [costPrice, setCostPrice] = useState<number | ''>('');
+  const [prepTime, setPrepTime] = useState<number | ''>('');
   const [destination, setDestination] = useState<'cuisine' | 'bar'>('cuisine');
   const [image, setImage] = useState('');
   const [imagePublicId, setImagePublicId] = useState('');
@@ -46,9 +46,9 @@ export const MenuView: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [ingredients, setIngredients] = useState<RecipeIngredient[]>([]);
 
-  // Ingredient adding
-  const [selectedStockId, setSelectedStockId] = useState(stockItems[0]?.id || '');
-  const [ingredientQty, setIngredientQty] = useState<number>(1);
+  // Ingredient adding — vide par défaut
+  const [selectedStockId, setSelectedStockId] = useState('');
+  const [ingredientQty, setIngredientQty] = useState<number | ''>('');
 
   const filteredProducts = products.filter((p) => {
     const matchCat = selectedCat === 'all' || p.categoryId === selectedCat;
@@ -60,6 +60,24 @@ export const MenuView: React.FC = () => {
   });
 
   const handleAddIngredient = () => {
+    if (!selectedStockId) {
+      showToast({
+        type: 'warning',
+        title: 'Ingrédient requis',
+        message: 'Veuillez sélectionner un ingrédient en stock.',
+      });
+      return;
+    }
+    const numQty = typeof ingredientQty === 'number' ? ingredientQty : parseFloat(ingredientQty || '0');
+    if (numQty <= 0) {
+      showToast({
+        type: 'warning',
+        title: 'Quantité invalide',
+        message: 'Veuillez saisir une quantité supérieure à zéro.',
+      });
+      return;
+    }
+
     const stockItem = stockItems.find((s) => s.id === selectedStockId);
     if (!stockItem) return;
     if (ingredients.some((i) => i.stockItemId === stockItem.id)) {
@@ -76,10 +94,13 @@ export const MenuView: React.FC = () => {
       {
         stockItemId: stockItem.id,
         stockItemName: stockItem.name,
-        quantityRequired: ingredientQty,
+        quantityRequired: numQty,
         unit: stockItem.unit,
       },
     ]);
+
+    setSelectedStockId('');
+    setIngredientQty('');
   };
 
   const handleRemoveIngredient = (stockId: string) => {
@@ -88,7 +109,11 @@ export const MenuView: React.FC = () => {
 
   const handleCreateProduct = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name || price <= 0) {
+    const numPrice = typeof price === 'number' ? price : parseFloat(price || '0');
+    const numCost = typeof costPrice === 'number' ? costPrice : parseFloat(costPrice || '0');
+    const numPrep = typeof prepTime === 'number' ? prepTime : parseInt(prepTime || '0', 10);
+
+    if (!name.trim() || numPrice <= 0) {
       showToast({
         type: 'warning',
         title: 'Formulaire incomplet',
@@ -100,13 +125,13 @@ export const MenuView: React.FC = () => {
     const cat = categories.find((c) => c.id === categoryId);
 
     await createProduct({
-      name,
-      description,
+      name: name.trim(),
+      description: description.trim(),
       categoryId,
       categoryName: cat ? cat.name : 'Général',
-      price,
-      costPrice,
-      preparationTimeMinutes: prepTime,
+      price: numPrice,
+      costPrice: numCost,
+      preparationTimeMinutes: numPrep > 0 ? numPrep : 10,
       available: true,
       destination,
       image: image || undefined,
@@ -117,15 +142,18 @@ export const MenuView: React.FC = () => {
     });
 
     setModalOpen(false);
-    // Reset
+    // Reset — tous les champs remis à vide
     setName('');
     setDescription('');
-    setPrice(5000);
-    setCostPrice(2000);
+    setPrice('');
+    setCostPrice('');
+    setPrepTime('');
     setImage('');
     setImagePublicId('');
     setIngredients([]);
-    showToast('Plat enregistré avec succès avec sa photo Cloudinary !', 'success');
+    setSelectedStockId('');
+    setIngredientQty('');
+    showToast('Plat enregistré avec succès !', 'success');
   };
 
   const handleFileUploadToCloudinary = async (file: File) => {
@@ -436,8 +464,10 @@ export const MenuView: React.FC = () => {
                   <input
                     type="number"
                     required
+                    min={100}
+                    placeholder="Ex: 5000"
                     value={price}
-                    onChange={(e) => setPrice(parseFloat(e.target.value) || 0)}
+                    onChange={(e) => setPrice(e.target.value === '' ? '' : parseFloat(e.target.value))}
                     className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200"
                   />
                 </div>
@@ -445,8 +475,10 @@ export const MenuView: React.FC = () => {
                   <label className="text-xs font-bold text-slate-700 block mb-1">Coût estimé (Matières)</label>
                   <input
                     type="number"
+                    min={0}
+                    placeholder="Ex: 2000"
                     value={costPrice}
-                    onChange={(e) => setCostPrice(parseFloat(e.target.value) || 0)}
+                    onChange={(e) => setCostPrice(e.target.value === '' ? '' : parseFloat(e.target.value))}
                     className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200"
                   />
                 </div>
@@ -454,8 +486,10 @@ export const MenuView: React.FC = () => {
                   <label className="text-xs font-bold text-slate-700 block mb-1">Temps prép. (min)</label>
                   <input
                     type="number"
+                    min={1}
+                    placeholder="Ex: 15"
                     value={prepTime}
-                    onChange={(e) => setPrepTime(parseInt(e.target.value) || 0)}
+                    onChange={(e) => setPrepTime(e.target.value === '' ? '' : parseInt(e.target.value, 10))}
                     className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200"
                   />
                 </div>
@@ -573,6 +607,7 @@ export const MenuView: React.FC = () => {
                     onChange={(e) => setSelectedStockId(e.target.value)}
                     className="flex-1 px-2.5 py-1.5 text-xs rounded-lg border border-slate-300 bg-white"
                   >
+                    <option value="">Sélectionner un ingrédient...</option>
                     {stockItems.map((s) => (
                       <option key={s.id} value={s.id}>
                         {s.name} ({s.unit})
@@ -586,7 +621,7 @@ export const MenuView: React.FC = () => {
                     min="0.01"
                     placeholder="Qté"
                     value={ingredientQty}
-                    onChange={(e) => setIngredientQty(parseFloat(e.target.value) || 1)}
+                    onChange={(e) => setIngredientQty(e.target.value === '' ? '' : parseFloat(e.target.value))}
                     className="w-20 px-2 py-1.5 text-xs rounded-lg border border-slate-300 bg-white"
                   />
 
