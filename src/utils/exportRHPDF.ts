@@ -17,6 +17,7 @@ import {
 } from './exportRHHelpers';
 
 import { showToast } from '../components/ui/Toast';
+import { platform } from '../platform';
 
 import type { RhEmployee } from '../types/restaurant';
 
@@ -45,6 +46,22 @@ export interface PayrollEntry {
 const getLogo = (): string | null =>
   localStorage.getItem('stock_expert_logo');
 
+async function savePdf(doc: jsPDF, filename: string): Promise<boolean> {
+  try {
+    const data = doc.output('arraybuffer');
+    await platform.files.save({
+      filename,
+      mimeType: 'application/pdf',
+      data: new Uint8Array(data),
+    });
+    return true;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    showToast(`Échec de l'export PDF : ${message}`, 'error');
+    return false;
+  }
+}
+
 // ----------------------------------------------------------------
 // 1. EXPORT PERSONNEL PDF (avec sélection de colonnes)
 // ----------------------------------------------------------------
@@ -60,10 +77,10 @@ interface PersonnelPDFOptions {
   };
 }
 
-export const exportPersonnelPDF = (
+export const exportPersonnelPDF = async (
   employees: RhEmployee[],
   options: PersonnelPDFOptions = {}
-): void => {
+): Promise<void> => {
   const { exportColumns = ['nomComplet', 'type', 'statut', 'site', 'contact', 'salaire'], customColumns = [], filters = {} } = options;
 
   const isDismissedFilter = filters.statut === 'renvoye';
@@ -140,7 +157,7 @@ export const exportPersonnelPDF = (
     },
   });
 
-  doc.save(`echos_personnel_${getExportFileSuffix()}.pdf`);
+  await savePdf(doc, `echos_personnel_${getExportFileSuffix()}.pdf`);
   showToast('Liste du personnel exportée en PDF !', 'success');
 };
 
@@ -153,13 +170,13 @@ interface AttendanceFilters {
   site?: string;
 }
 
-export const exportAttendancePDF = (
+export const exportAttendancePDF = async (
   employees: RhEmployee[],
   attendance: Record<string, number>,
   filters: AttendanceFilters,
   attendanceDetails?: Record<string, any>,
   dailyNotes?: Record<string, string>
-): void => {
+): Promise<void> => {
   const { year, month, site } = filters;
 
   // Filtrer uniquement les employés actifs
@@ -433,20 +450,20 @@ export const exportAttendancePDF = (
   }
 
   const monthNum = String(month + 1).padStart(2, '0');
-  doc.save(`echos_pointage_${year}-${monthNum}_${getExportFileSuffix()}.pdf`);
+  await savePdf(doc, `echos_pointage_${year}-${monthNum}_${getExportFileSuffix()}.pdf`);
   showToast('Fiche de pointage exportée en PDF !', 'success');
 };
 
 // ----------------------------------------------------------------
 // 3. PRÉSENCE DU JOUR PDF (DESIGN MODERNE AVEC KPI & DÉTAILS)
 // ----------------------------------------------------------------
-export const exportAttendanceTodayPDF = (
+export const exportAttendanceTodayPDF = async (
   employees: RhEmployee[],
   attendance: Record<string, number>,
   attendanceDetails?: Record<string, any>,
   dailyNotes?: Record<string, string>,
   options?: { site?: string; day?: number; month?: number; year?: number }
-): void => {
+): Promise<void> => {
   const now = new Date();
   const year = options?.year ?? now.getFullYear();
   const month = options?.month ?? now.getMonth();
@@ -667,16 +684,16 @@ export const exportAttendanceTodayPDF = (
     doc.text(splitLines, 19, noteY + 10.5);
   }
 
-  doc.save(`echos_presence_${getExportFileSuffix()}.pdf`);
+  await savePdf(doc, `echos_presence_${getExportFileSuffix()}.pdf`);
   showToast('Feuille de présence du jour exportée en PDF !', 'success');
 };
 
 // ----------------------------------------------------------------
 // 4. BULLETINS DE PAIE PDF
 // ----------------------------------------------------------------
-export const exportPayrollPDF = (
+export const exportPayrollPDF = async (
   payrollData: PayrollEntry[]
-): void => {
+): Promise<void> => {
   // Filtrer uniquement les employés actifs
   const activePayroll = payrollData.filter(p => p.emp.statut !== 'renvoye');
 
@@ -777,7 +794,7 @@ export const exportPayrollPDF = (
     y += 65;
   });
 
-  doc.save(`echos_bulletins_${getExportFileSuffix()}.pdf`);
+  await savePdf(doc, `echos_bulletins_${getExportFileSuffix()}.pdf`);
   showToast('Bulletins de paie exportés en PDF !', 'success');
 };
 
@@ -791,11 +808,11 @@ interface HistoryItem {
   netPay: number;
 }
 
-export const exportRHHistoryPDF = (
+export const exportRHHistoryPDF = async (
   employee: RhEmployee,
   historyItems: HistoryItem[],
   year: number
-): void => {
+): Promise<void> => {
   if (historyItems.length === 0) {
     showToast("Aucune donnée d'historique disponible.", 'warning');
     return;
@@ -836,7 +853,7 @@ export const exportRHHistoryPDF = (
   );
 
   const fname = removeAccents(`historique_${employee.nom}_${employee.prenom}_${year}_${getExportFileSuffix()}`).replace(/\s/g, '_');
-  doc.save(`${fname}.pdf`);
+  await savePdf(doc, `${fname}.pdf`);
   showToast('Historique exporté en PDF !', 'success');
 };
 
