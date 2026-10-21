@@ -111,11 +111,10 @@ console.log(`• Règles mortes (jamais lues hors réglages) : ${deadRuleKeys.le
 console.log(`• Clés lues via isRuleEnabled non déclarées : ${unregisteredRuleKeys.size}`);
 
 if (deadRuleKeys.length > 0) {
-  console.log(`\n  Exemples de règles mortes (${Math.min(deadRuleKeys.length, 12)} / ${deadRuleKeys.length}) :`);
-  for (const k of deadRuleKeys.slice(0, 12)) {
+  console.log(`\n  Toutes les règles mortes (${deadRuleKeys.length}) :`);
+  for (const k of deadRuleKeys) {
     console.log(`    - ${k}`);
   }
-  if (deadRuleKeys.length > 12) console.log(`    ... et ${deadRuleKeys.length - 12} autres.`);
 }
 
 if (unregisteredRuleKeys.size > 0) {

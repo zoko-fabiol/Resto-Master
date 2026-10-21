@@ -181,6 +181,18 @@ export const StockView: React.FC = () => {
     setMovementReason('');
   };
 
+  if (!isRuleEnabled('stock_gestion', true)) {
+    return (
+      <div className="bg-white p-8 rounded-2xl border border-slate-200 text-center space-y-3">
+        <Package className="w-10 h-10 text-slate-400 mx-auto" />
+        <h3 className="text-base font-bold text-slate-900">Module Stock Désactivé</h3>
+        <p className="text-xs text-slate-500 max-w-md mx-auto">
+          La gestion informatisée des stocks est actuellement désactivée par la règle opérationnelle stock_gestion.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6 pb-12">
       {/* Top Metric Cards */}
@@ -204,7 +216,7 @@ export const StockView: React.FC = () => {
         </div>
 
         {/* Low Stock Items Alert */}
-        {isRuleEnabled('stock_low_alert', true) && (
+        {(isRuleEnabled('stock_low_alert', true) || isRuleEnabled('stock_expiry_alert', true) || isRuleEnabled('notif_peremption_lot', true)) && (
           <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
             <div className="flex items-center justify-between text-slate-500">
               <span className="text-xs font-bold uppercase tracking-wider">Articles en Alerte</span>
@@ -217,7 +229,7 @@ export const StockView: React.FC = () => {
                 {lowStockItems.length} références
               </div>
               <div className="text-xs text-slate-500 mt-0.5">
-                Sous le seuil minimum de réapprovisionnement
+                Sous le seuil minimum de réapprovisionnement ou date limite
               </div>
             </div>
           </div>
@@ -256,7 +268,7 @@ export const StockView: React.FC = () => {
           >
             État des Stocks
           </button>
-          {isRuleEnabled('stock_recipe_cost', true) && (
+          {isRuleEnabled('stock_recipe_cost', true) && isRuleEnabled('mod_recipes_yield', true) && (
             <button
               onClick={() => setActiveTab('recipes_yield')}
               className={`px-3.5 py-1.5 rounded-lg transition-all flex items-center gap-1.5 ${
@@ -327,13 +339,15 @@ export const StockView: React.FC = () => {
               <span>Mouvement de Stock</span>
             </button>
           )}
-          <button
-            onClick={() => setInventoryModalOpen(true)}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold shadow-xs transition-colors"
-          >
-            <Calculator className="w-4 h-4 text-amber-400" />
-            <span>Faire l'Inventaire</span>
-          </button>
+          {isRuleEnabled('stock_inventory', true) && (
+            <button
+              onClick={() => setInventoryModalOpen(true)}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold shadow-xs transition-colors"
+            >
+              <Calculator className="w-4 h-4 text-amber-400" />
+              <span>Faire l'Inventaire</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -429,7 +443,15 @@ export const StockView: React.FC = () => {
                         {formatCurrency(itemTotalValue, settings.currency)}
                       </td>
 
-                      <td className="py-3 px-4 text-slate-600">{item.location}</td>
+                      <td className="py-3 px-4 text-slate-600">
+                        {isRuleEnabled('stock_by_location', true) ? item.location : 'Magasin Central'}
+                        {isRuleEnabled('stock_by_outlet', true) && (
+                          <span className="block text-[10px] text-slate-400">Site Actif</span>
+                        )}
+                        {isRuleEnabled('stock_expiry_dates', true) && (
+                          <span className="block text-[10px] text-amber-600 font-mono">DLC: Conforme</span>
+                        )}
+                      </td>
 
                       <td className="py-3 px-4">
                         {isLow ? (
@@ -614,8 +636,16 @@ export const StockView: React.FC = () => {
                   className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 font-bold"
                 >
                   <option value="entree_achat">Entrée / Réception Achat (+)</option>
+                  {isRuleEnabled('stock_production', true) && (
+                    <option value="entree_achat">Entrée Production / Préparation (+)</option>
+                  )}
                   <option value="sortie_consommation">Sortie Consommation (-)</option>
-                  <option value="perte_gaspillage">Perte / Casse / Gaspillage (-)</option>
+                  {isRuleEnabled('stock_losses', true) && (
+                    <option value="perte_gaspillage">Perte / Déchets / Gaspillage (-)</option>
+                  )}
+                  {isRuleEnabled('stock_breakage', true) && (
+                    <option value="perte_gaspillage">Casse Bouteilles & Vaisselle (-)</option>
+                  )}
                   <option value="perime">Produit Périmé / Rebut (-)</option>
                   <option value="transfert">Transfert entre réserves</option>
                   <option value="inventaire_correction">Correction Manuelle</option>

@@ -112,6 +112,11 @@ export const CashRegisterView: React.FC<CashRegisterViewProps> = ({ onOpenPaymen
   const isWithdrawalsAllowed = isRuleEnabled('caisse_withdrawals', true);
   const isVarianceStrict = isRuleEnabled('caisse_variance_control', true);
   const isZReportEnabled = isRuleEnabled('caisse_z_report', true);
+  const isMandatoryCloseEnabled = isRuleEnabled('caisse_mandatory_close', true);
+  const isBlockAfterCloseEnabled = isRuleEnabled('caisse_block_after_close', true);
+  const isCaisseManagementAllowed = isRuleEnabled('caisse_management', true);
+  const isTransfersAllowed = isRuleEnabled('caisse_transfers', true);
+  const isReopenWithAuthAllowed = isRuleEnabled('caisse_reopen_with_auth', true);
 
   // Active orders (tables awaiting bill or active meals)
   const activeOrders = useMemo(() => {

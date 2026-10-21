@@ -37,6 +37,7 @@ export const FiscalCenterView: React.FC = () => {
     fiscalObligations,
     updateFiscalObligationStatus,
     recordWithholding,
+    isRuleEnabled,
   } = useRestaurant();
 
   const [activeTab, setActiveTab] = useState<
@@ -703,6 +704,11 @@ export const FiscalCenterView: React.FC = () => {
               <h3 className="text-sm font-bold text-slate-900">Calendrier des Échéances Fiscales & Sociales (Cameroun)</h3>
               <p className="text-xs text-slate-500">Suivi des dates limites légales au Centre des Impôts et à la CNPS</p>
             </div>
+            {isRuleEnabled('notif_rappel_fiscal', true) && (
+              <span className="text-[10px] px-2.5 py-1 rounded-full bg-blue-100 text-blue-800 font-bold">
+                Rappels Automatiques Actifs
+              </span>
+            )}
           </div>
 
           <div className="divide-y divide-slate-100">

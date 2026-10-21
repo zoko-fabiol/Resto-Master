@@ -79,15 +79,14 @@ import { SearchInput, StickyActionBar } from '../../ui';
 
 interface Props {
   subTab:
-    | 'modules'
     | 'pos'
     | 'tables'
     | 'cuisine'
     | 'bar'
+    | 'caisse'
     | 'livraison'
     | 'reservations'
-    | 'evenements'
-    | 'caisse';
+    | 'evenements';
 }
 
 const SENSITIVE_RULE_KEYS = new Set([
@@ -103,7 +102,7 @@ export const OperationsOptionsSection: React.FC<Props> = ({ subTab }) => {
   const { operationRules, updateOperationRules, settings, updateSettings } = useRestaurant();
   const { currentUser } = useAuth();
   const { showToast } = useToast();
-  const isSuperAdmin = currentUser?.role === 'direction';
+  const isSuperAdmin = currentUser?.role === 'superadmin' || currentUser?.role === 'direction';
 
   const [savedSuccess, setSavedSuccess] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -174,40 +173,6 @@ export const OperationsOptionsSection: React.FC<Props> = ({ subTab }) => {
   // Content configurations according to subTab
   const getSubTabConfig = () => {
     switch (subTab) {
-      case 'modules':
-        return {
-          title: 'Activation & Visibilité des Modules Applicatifs',
-          sectionNumber: 'Section 4',
-          description: 'Activez ou masquez les sections dans le menu latéral selon votre type d’établissement',
-          icon: Layers,
-          gradient: 'from-slate-700 to-zinc-800',
-          items: [
-            { key: 'mod_dashboard', label: 'Tableau de bord exécutif', description: 'Vue consolidée du chiffre d’affaires, alertes et indicateurs clés en direct', icon: BarChart3 },
-            { key: 'mod_pos', label: 'Prise de commande / POS', description: 'Caisse tactile et prise de commandes en salle et comptoir', icon: ShoppingBag },
-            { key: 'mod_tables', label: 'Plan des tables & Salles', description: 'Plan visuel, gestion terrasse, salle et salons VIP', icon: Utensils },
-            { key: 'mod_cuisine', label: 'Cuisine KDS', description: 'Écran de production cuisine chaud, froid et grillades', icon: ChefHat },
-            { key: 'mod_bar', label: 'Bar & Boissons', description: 'Comptoir boissons, fiches cocktails et gestion doses', icon: Wine },
-            { key: 'mod_bar_pos', label: 'Espace Bar Dédié (100% Boissons)', description: 'Interface POS ultra-rapide réservée aux barmans et mixologues', icon: GlassWater },
-            { key: 'mod_menu', label: 'Carte & Recettes', description: 'Catalogue complet des articles, cocktails, plats et tarifs', icon: BookOpen },
-            { key: 'mod_recipes_yield', label: 'Fiches Techniques & Rendement (BOM)', description: 'Coût portion, grammages des recettes et fiches techniques', icon: Calculator },
-            { key: 'mod_caisse', label: 'Gestion de caisse & Rapport Z', description: 'Ouverture, clôture, fond de caisse et audit Z', icon: Coins },
-            { key: 'mod_stock', label: 'Stocks & Lots (FEFO/FIFO)', description: 'Inventaires, alertes DLC et denrées périssables', icon: Package },
-            { key: 'mod_purchases', label: 'Achats & Fournisseurs', description: 'Bons de commande, réceptions et factures fournisseurs', icon: Truck },
-            { key: 'mod_hygiene', label: 'Hygiène & Contrôles HACCP', description: 'Relevés de températures et traçabilité sanitaire', icon: ShieldCheck },
-            { key: 'mod_main_courante', label: 'Main Courante Restauration', description: 'Rapprochement et conformité hôtelière Cameroun', icon: Building2 },
-            { key: 'mod_fiscal', label: 'Fiscalité & E-Billing (CGI 2026)', description: 'TVA 19,25%, retenues AIR et télétransmission DGI', icon: Receipt },
-            { key: 'mod_finance', label: 'Finances & Décaissements', description: 'Approbations des charges et suivi de trésorerie', icon: CreditCard },
-            { key: 'mod_clients', label: 'Clients & Fidélité CRM', description: 'Fiches NIU, comptes crédit et barème de points', icon: Users },
-            { key: 'res_management', label: 'Cahier de Réservations & Tables', description: 'Prise de réservations et gestion du plan d’occupation', icon: Calendar },
-            { key: 'mod_delivery', label: 'Courses & Livraisons Moto', description: 'Gestion des zones urbaines et coursiers moto', icon: Bike },
-            { key: 'mod_events', label: 'Événements & Banquets', description: 'Devis traiteur, séminaires et mariages avec acomptes', icon: PartyPopper },
-            { key: 'mod_staff', label: 'Personnel & Présences', description: 'Pointage, fiches employés et planning de service', icon: UserCheck },
-            { key: 'mod_documents', label: 'Documents & Scanner GED', description: 'Classeur numérique et factures scannées', icon: FileText },
-            { key: 'mod_audit', label: 'Journal d’Audit & Traçabilité', description: 'Registre inaltérable de tous les événements et annulations', icon: ShieldAlert },
-            { key: 'mod_reports', label: 'Rapports & Statistiques', description: 'Chiffre d’affaires, marges et exports SYSCOHADA', icon: BarChart3 },
-          ],
-        };
-
       case 'pos':
         return {
           title: 'Configuration POS (Point de Vente)',

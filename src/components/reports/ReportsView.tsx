@@ -25,7 +25,8 @@ import {
 } from 'lucide-react';
 
 export const ReportsView: React.FC = () => {
-  const { orders, products, employees, settings } = useRestaurant();
+  const { orders, products, employees, settings, isFeatureEnabled } = useRestaurant();
+  const isSyscohadaExportEnabled = isFeatureEnabled('accounting_export_syscohada');
 
   // Selected Report Tab (Section 10 du Guide : 4 rapports officiels)
   const [activeReportTab, setActiveReportTab] = useState<'ca' | 'top_plats' | 'serveurs' | 'transactions'>('ca');

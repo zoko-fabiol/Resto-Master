@@ -67,10 +67,20 @@ export const ClientsView: React.FC = () => {
           />
         </div>
 
-        <div className="flex items-center gap-3 text-xs text-slate-500 font-medium">
-          {isRuleEnabled('loyalty_active', true) && (
+        <div className="flex items-center gap-2 text-xs text-slate-500 font-medium flex-wrap">
+          {isRuleEnabled('loyalty_active', true) && isRuleEnabled('clients_loyalty', true) && (
             <span className="px-2.5 py-1 rounded-lg bg-amber-50 text-amber-900 border border-amber-200 font-bold">
-              Programme Fidélité : Actif (10 pts / 1 000 FCFA)
+              Fidélité : {isRuleEnabled('loyalty_points_accrual', true) ? 'Acquisition active' : 'Mode standard'}
+            </span>
+          )}
+          {isRuleEnabled('loyalty_promotions', true) && (
+            <span className="px-2 py-0.5 rounded-md bg-purple-50 text-purple-700 font-semibold border border-purple-200">
+              Promos En Cours
+            </span>
+          )}
+          {isRuleEnabled('loyalty_referral', true) && (
+            <span className="px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 font-semibold border border-blue-200">
+              Parrainage
             </span>
           )}
           <span>{customers.length} clients fidélisés</span>
@@ -98,10 +108,12 @@ export const ClientsView: React.FC = () => {
                   </div>
 
                   <div className="flex flex-col items-end gap-1">
-                    <div className="flex items-center gap-1 text-xs font-black text-amber-800 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
-                      <Award className="w-3.5 h-3.5 text-amber-500" />
-                      <span>{customer.loyaltyPoints} pts</span>
-                    </div>
+                    {isRuleEnabled('clients_points', true) && (
+                      <div className="flex items-center gap-1 text-xs font-black text-amber-800 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
+                        <Award className="w-3.5 h-3.5 text-amber-500" />
+                        <span>{customer.loyaltyPoints} pts</span>
+                      </div>
+                    )}
                     {isRuleEnabled('loyalty_tiers', true) && (
                       <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded border ${tier.style}`}>
                         {tier.label}
@@ -139,7 +151,23 @@ export const ClientsView: React.FC = () => {
                       <CreditCard className="w-3 h-3 text-emerald-600" />
                       <span>Crédit Autorisé</span>
                     </div>
-                    <span className="font-bold">{formatCurrency(250000, settings.currency)} max</span>
+                    {isRuleEnabled('clients_credit_limit', true) && (
+                      <span className="font-bold">{formatCurrency(250000, settings.currency)} max</span>
+                    )}
+                  </div>
+                )}
+
+                {/* Coupons & Bons (Section 13 & 14) */}
+                {(isRuleEnabled('clients_coupons', true) || isRuleEnabled('loyalty_coupons', true) || isRuleEnabled('loyalty_rewards', true)) && (
+                  <div className="text-[10px] font-medium text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-200 mt-1.5 flex items-center gap-1.5">
+                    <span>Coupons & Récompenses actifs</span>
+                  </div>
+                )}
+
+                {/* Cartes Cadeaux (Section 13 & 14) */}
+                {(isRuleEnabled('clients_gift_cards', true) || isRuleEnabled('loyalty_gift_cards', true)) && (
+                  <div className="text-[10px] font-medium text-rose-700 bg-rose-50 px-2 py-0.5 rounded-md border border-rose-200 mt-1.5 flex items-center gap-1.5">
+                    <span>Carte Cadeau / Voucher éligible</span>
                   </div>
                 )}
 

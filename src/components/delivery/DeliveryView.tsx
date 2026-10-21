@@ -25,6 +25,11 @@ export const DeliveryView: React.FC = () => {
   const isProofRequired = isRuleEnabled('delivery_proof', true);
   const isDriverAssignmentAllowed = isRuleEnabled('delivery_driver_assignment', true);
   const isDeliveryFeesAllowed = isRuleEnabled('delivery_fees', true);
+  const isOnlineOrderAllowed = isRuleEnabled('delivery_online_order', true);
+  const isDeliveryZonesAllowed = isRuleEnabled('delivery_zones', true);
+  const isTrackingAllowed = isRuleEnabled('delivery_tracking', true);
+  const isCustomerNotifsAllowed = isRuleEnabled('delivery_customer_notifications', true);
+  const isWebOrdersAllowed = isRuleEnabled('delivery_web_orders', true);
 
   const [modalOpen, setModalOpen] = useState(false);
   const [proofModalDeliveryId, setProofModalDeliveryId] = useState<string | null>(null);
@@ -99,6 +104,11 @@ export const DeliveryView: React.FC = () => {
             <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 font-bold">
               Repères & Coursiers Moto
             </span>
+            {isWebOrdersAllowed && (
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold">
+                Passerelle Web Active
+              </span>
+            )}
           </div>
           <p className="text-xs text-slate-500 mt-0.5">
             Adresses adaptées au contexte local : Ville, Quartier, Carrefour & Repère géographique précis

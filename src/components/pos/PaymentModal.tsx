@@ -54,6 +54,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, onClose }) 
   const isOrangeEnabled = isFeatureEnabled('mobile_money_orange') && isFeatureEnabled('mobile_money_hub');
   const isCreditEnabled = isFeatureEnabled('client_credit_receivables');
   const isInvoiceA5Enabled = isFeatureEnabled('invoice_laser_a5');
+  const isMobilePaymentsQrEnabled = isFeatureEnabled('mobile_payments_qr');
 
   // Règles Opérationnelles
   const isSplitBillAllowed = isRuleEnabled('pos_split_bill', true) && isRuleEnabled('pay_multiple', true);

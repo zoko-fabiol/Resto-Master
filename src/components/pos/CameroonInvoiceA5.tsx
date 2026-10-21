@@ -20,10 +20,28 @@ export const CameroonInvoiceA5: React.FC<CameroonInvoiceA5Props> = ({
   folio,
   onClose,
 }) => {
-  const { isRuleEnabled } = useRestaurant();
+  const { isRuleEnabled, isFeatureEnabled } = useRestaurant();
+  const isEbillingDgiReady = isFeatureEnabled('ebilling_dgi_ready');
   const [qrDataUrl, setQrDataUrl] = useState<string>('');
   const [fiscalSeal, setFiscalSeal] = useState<string>('');
   const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
+
+  // Billing rules
+  const isA5 = isRuleEnabled('bill_a5', true);
+  const customTemplates = isRuleEnabled('bill_custom_templates', true);
+  const isCorporate = isRuleEnabled('bill_corporate', true) && Boolean(order.companyBillingName || order.companyBillingNiu);
+  const isEventBilling = isRuleEnabled('bill_events', true) && Boolean(order.tableId === 'evenement');
+  const isClientCredit = isRuleEnabled('bill_client_credit', true) && Boolean(order.paymentMethod === 'credit_entreprise');
+  const isCreditNote = isRuleEnabled('bill_credit_notes', true) && order.status === 'annulee';
+  const isCancellation = isRuleEnabled('bill_cancellations', true) && order.status === 'annulee';
+  const isRefund = isRuleEnabled('bill_refunds', true) && order.status === 'annulee';
+  const invoicePrefix = isRuleEnabled('bill_numbering_by_outlet', true)
+    ? (settings.city?.slice(0, 3).toUpperCase() || 'DLA') + '-'
+    : isRuleEnabled('bill_numbering_by_terminal', false)
+    ? 'TERM-'
+    : isRuleEnabled('bill_auto_numbering', true)
+    ? 'FAC-'
+    : '';
 
   // Filter items by folio if requested
   const itemsToPrint = folio
@@ -33,6 +51,17 @@ export const CameroonInvoiceA5: React.FC<CameroonInvoiceA5Props> = ({
   const subtotalHt = itemsToPrint.reduce((s, i) => s + i.unitPrice * i.quantity, 0);
   const taxes = calculateCameroonTaxes(subtotalHt, settings.taxRate);
   const totalInLetters = numberToFrenchWords(taxes.totalTtc).toUpperCase();
+
+  if (!isRuleEnabled('bill_active', true)) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+        <div className="bg-white p-6 rounded-2xl max-w-sm text-center space-y-3">
+          <p className="font-bold text-sm text-slate-800">Édition des factures désactivée (bill_active)</p>
+          <button onClick={onClose} className="px-4 py-2 bg-slate-900 text-white rounded-xl text-xs font-bold">Fermer</button>
+        </div>
+      </div>
+    );
+  }
 
   useEffect(() => {
     DgiFiscalHelper.generateQrDataUrl(
@@ -221,6 +250,18 @@ export const CameroonInvoiceA5: React.FC<CameroonInvoiceA5Props> = ({
                 <span>Total Prestations HT :</span>
                 <span className="font-semibold">{formatCurrency(taxes.subtotalHt, settings.currency)}</span>
               </div>
+              {isRuleEnabled('bill_discounts', true) && order.discount ? (
+                <div className="flex justify-between text-emerald-700 text-[11px]">
+                  <span>Remise accordée :</span>
+                  <span>-{formatCurrency(order.discount, settings.currency)}</span>
+                </div>
+              ) : null}
+              {isRuleEnabled('bill_withholdings', true) && order.companyBillingNiu ? (
+                <div className="flex justify-between text-slate-500 text-[10px] italic">
+                  <span>Retenue AIR éventuelle :</span>
+                  <span>Selon statut</span>
+                </div>
+              ) : null}
               {isRuleEnabled('bill_taxes_detail', true) ? (
                 <>
                   <div className="flex justify-between text-slate-600 text-[11px]">

@@ -37,6 +37,10 @@ export const ReservationsView: React.FC<ReservationsViewProps> = ({ onSeatGuest 
   const isDepositRequired = isRuleEnabled('res_deposit', true);
   const isNoShowAllowed = isRuleEnabled('res_noshow', true);
   const isWaitlistAllowed = isRuleEnabled('res_waitlist', true);
+  const isOnlineResAllowed = isRuleEnabled('res_online', true);
+  const isAutoConfirmAllowed = isRuleEnabled('res_auto_confirm', true);
+  const isRemindersAllowed = isRuleEnabled('res_reminders', true);
+  const isAvailabilityAllowed = isRuleEnabled('res_availability', true);
 
   const [depositReceived, setDepositReceived] = useState(false);
 

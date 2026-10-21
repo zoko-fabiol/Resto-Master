@@ -20,12 +20,19 @@ import {
 import { RestaurantEvent } from '../../types/restaurant';
 
 export const EventsView: React.FC = () => {
-  const { events, createEvent, updateEventStatus, settings, isRuleEnabled } = useRestaurant();
+  const { events, createEvent, updateEventStatus, settings, isRuleEnabled, isFeatureEnabled } = useRestaurant();
   const { showToast } = useToast();
 
   // Règles Opérationnelles (Section 17 Événements & Banquets)
+  const isCateringBanquetAllowed = isFeatureEnabled('events_banquets') || isFeatureEnabled('catering_banquet');
+  const isEventActive = isRuleEnabled('event_active', true);
   const isDepositMandatory = isRuleEnabled('event_deposit', true);
   const isQuotesAllowed = isRuleEnabled('event_quotes', true);
+  const isCustomMenusAllowed = isRuleEnabled('event_custom_menus', true);
+  const isBanquetAllowed = isRuleEnabled('event_banquet', true);
+  const isHallAllowed = isRuleEnabled('event_hall', true);
+  const isPlanningAllowed = isRuleEnabled('event_planning', true);
+  const isEventBillingAllowed = isRuleEnabled('event_billing', true);
 
   const [modalOpen, setModalOpen] = useState(false);
   const [filterType, setFilterType] = useState<string>('all');

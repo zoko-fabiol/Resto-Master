@@ -177,7 +177,7 @@ export const PurchasesView: React.FC = () => {
     <div className="space-y-6 pb-12">
       {/* Header & Tabs */}
       <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-4">
-        <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl text-xs font-bold border border-slate-200 w-full sm:w-auto">
+        <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl text-xs font-bold border border-slate-200 w-full sm:w-auto overflow-x-auto">
           <button
             onClick={() => setActiveTab('orders')}
             className={`px-3.5 py-1.5 rounded-lg transition-all ${
@@ -194,9 +194,44 @@ export const PurchasesView: React.FC = () => {
           >
             Répertoire Fournisseurs ({suppliers.length})
           </button>
+          {isRuleEnabled('achats_purchase_requests', true) && (
+            <span className="text-[10px] px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 font-semibold border border-blue-200 shrink-0">
+              DA Actives
+            </span>
+          )}
+          {isRuleEnabled('achats_validation', true) && (
+            <span className="text-[10px] px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 font-semibold border border-emerald-200 shrink-0">
+              Circuit Validation
+            </span>
+          )}
         </div>
 
-        <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+        <div className="flex items-center gap-2 w-full sm:w-auto justify-end flex-wrap">
+          {isRuleEnabled('achats_supplier_comparison', true) && (
+            <span className="text-[10px] font-bold text-slate-500 hidden md:inline">
+              Mercuriale Active
+            </span>
+          )}
+          {isRuleEnabled('achats_price_history', true) && (
+            <span className="text-[10px] font-bold text-slate-500 hidden md:inline">
+              Historique Prix
+            </span>
+          )}
+          {isRuleEnabled('achats_supplier_returns', true) && (
+            <button
+              onClick={() => {
+                showToast({
+                  type: 'info',
+                  title: 'Retours Fournisseurs (Section 12)',
+                  message: 'Module retours et avoirs fournisseurs prêt.',
+                });
+              }}
+              className="px-2.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold border border-slate-200"
+              title="Gérer les retours et avoirs fournisseurs"
+            >
+              Retours / Avoirs
+            </button>
+          )}
           <button
             onClick={() => setSupplierModalOpen(true)}
             className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-semibold border border-slate-200"

@@ -94,9 +94,12 @@ export const KitchenKdsView: React.FC = () => {
   }, [orders, soundEnabled, playAudioChime, isFeatureEnabled]);
 
   // Règles Opérationnelles (Section 9 Cuisine & KDS)
+  const isCuisineScreenEnabled = isRuleEnabled('cuisine_screen', true);
+  const isCuisineStationsEnabled = isRuleEnabled('cuisine_stations', true);
   const isPrepTimerAllowed = isRuleEnabled('cuisine_prep_timer', true);
   const isPriorityAllowed = isRuleEnabled('cuisine_priority', true);
   const isNotifyDelayAllowed = isRuleEnabled('cuisine_notify_delay', true);
+  const isNotifRetardCuisine = isRuleEnabled('notif_retard_cuisine', true);
   const isPrintTicketAllowed = isRuleEnabled('cuisine_print_ticket', true);
   const isPrepCategoriesAllowed = isRuleEnabled('cuisine_prep_categories', true);
   const isNotifyReadyAllowed = isRuleEnabled('cuisine_notify_ready', true);

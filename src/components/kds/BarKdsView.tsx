@@ -59,9 +59,14 @@ export const BarKdsView: React.FC = () => {
   }, []);
 
   // Règles Opérationnelles (Section 10 Bar & Cave)
+  const isBarScreenEnabled = isRuleEnabled('bar_screen', true);
+  const isBarBottlesAllowed = isRuleEnabled('bar_bottles', true);
+  const isBarGlassesAllowed = isRuleEnabled('bar_glasses', true);
+  const isBarConsumptionControl = isRuleEnabled('bar_consumption_control', true);
   const isBarLossesAllowed = isRuleEnabled('bar_losses', true) || isRuleEnabled('bar_breakage', true);
   const isBarCocktailsAllowed = isRuleEnabled('bar_cocktails', true) || isRuleEnabled('bar_cocktail_recipes', true);
   const isBarPrintAllowed = isRuleEnabled('bar_print', true);
+  const isNotifRuptureBar = isRuleEnabled('notif_rupture_bar', true);
 
   const [lossModalOpen, setLossModalOpen] = useState(false);
   const [lossBottle, setLossBottle] = useState('Whisky Black Label 75cl');

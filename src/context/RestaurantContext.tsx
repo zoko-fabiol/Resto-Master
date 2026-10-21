@@ -3050,6 +3050,18 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     printerService.setHardwareEnabled(isFeatureEnabled('printers_hardware'));
   }, [isFeatureEnabled]);
 
+  // Request browser notification permissions if mobile_notifications feature is enabled
+  useEffect(() => {
+    if (
+      isFeatureEnabled('mobile_notifications') &&
+      typeof window !== 'undefined' &&
+      'Notification' in window &&
+      Notification.permission === 'default'
+    ) {
+      Notification.requestPermission().catch(() => {});
+    }
+  }, [isFeatureEnabled]);
+
   const updateFeatureStatus = async (featureId: string, status: FeatureStatus) => {
     const targetFeat = features.find((f) => f.id === featureId);
     if (!targetFeat) return;

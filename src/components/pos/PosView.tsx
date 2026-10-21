@@ -70,9 +70,9 @@ export const PosView: React.FC<PosViewProps> = ({ initialTableId, onOpenPayment,
   } = useRestaurant();
   const { showToast, playAudioChime } = useToast();
 
-  const isDeliveryEnabled = isFeatureEnabled('delivery_orders');
-  const isTakeawayEnabled = isFeatureEnabled('takeaway_orders');
-  const isTablesEnabled = isFeatureEnabled('tables_management');
+  const isDeliveryEnabled = isFeatureEnabled('delivery_orders') && isRuleEnabled('delivery_active', true);
+  const isTakeawayEnabled = isFeatureEnabled('takeaway_orders') || isFeatureEnabled('click_and_collect');
+  const isTablesEnabled = (isFeatureEnabled('tables_management') || isFeatureEnabled('table_service')) && isRuleEnabled('pos_use_tables', true);
 
   // Règles Opérationnelles (Section 7 POS, Section 8 Tables, Section 22 Caisse)
   const isDiscountsAllowed = isRuleEnabled('pos_allow_discount', true);
@@ -87,6 +87,14 @@ export const PosView: React.FC<PosViewProps> = ({ initialTableId, onOpenPayment,
   const isCaisseMandatoryOpen = isRuleEnabled('caisse_mandatory_open', true);
   const isEditOrderAllowed = isRuleEnabled('pos_edit_order', true);
   const isCuisineAutoSend = isRuleEnabled('cuisine_auto_send', true);
+
+  // Règles de table et de service raccordées
+  const isTableMergeAllowed = isRuleEnabled('pos_table_merge', true);
+  const isTableTransferAllowed = isRuleEnabled('pos_table_transfer', true);
+  const isTableSplitAllowed = isRuleEnabled('pos_table_split', true);
+  const isChangeServerAllowed = isRuleEnabled('pos_change_server', true);
+  const isItemCompAllowed = isRuleEnabled('pos_item_comp', true);
+  const isCustomPriceAllowed = isRuleEnabled('pos_custom_price', false);
 
   const [showCancelReasonModal, setShowCancelReasonModal] = useState(false);
   const [selectedCancelReason, setSelectedCancelReason] = useState('Erreur de commande');

@@ -429,6 +429,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
               const ruleKey = ITEM_RULE_MAP[item.id];
               if (ruleKey && !isRuleEnabled(ruleKey, true)) return false;
               if (ruleKey && !isModuleEntitled(ruleKey)) return false;
+
+              // Raccordement des règles d'opération fonctionnelles
+              if (item.id === 'pos' && !isRuleEnabled('pos_active', true)) return false;
+              if (item.id === 'kitchen_kds' && !isRuleEnabled('cuisine_kds', true)) return false;
+              if (item.id === 'bar_kds' && !isRuleEnabled('bar_module', true)) return false;
+              if (item.id === 'delivery' && !isRuleEnabled('delivery_active', true)) return false;
+
               return true;
             });
 

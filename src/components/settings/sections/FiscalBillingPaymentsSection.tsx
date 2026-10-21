@@ -31,7 +31,7 @@ import {
 import { ModernRuleToggle } from './ModernRuleToggle';
 
 interface Props {
-  subTab: 'facturation' | 'fiscalite' | 'paiements' | 'mobile_money' | 'comptabilite';
+  subTab: 'facturation' | 'fiscalite' | 'paiements';
 }
 
 export const FiscalBillingPaymentsSection: React.FC<Props> = ({ subTab }) => {
@@ -39,12 +39,8 @@ export const FiscalBillingPaymentsSection: React.FC<Props> = ({ subTab }) => {
   const [savedSuccess, setSavedSuccess] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const [activeBillingTab, setActiveBillingTab] = useState<'billing' | 'accounting'>(
-    subTab === 'comptabilite' ? 'accounting' : 'billing'
-  );
-  const [activePaymentTab, setActivePaymentTab] = useState<'methods' | 'momo'>(
-    subTab === 'mobile_money' ? 'momo' : 'methods'
-  );
+  const [activeBillingTab, setActiveBillingTab] = useState<'billing' | 'accounting'>('billing');
+  const [activePaymentTab, setActivePaymentTab] = useState<'methods' | 'momo'>('methods');
 
   // Fiscal Form State
   const [niu, setNiu] = useState(settings.niu || 'M012012345678A');
@@ -341,7 +337,7 @@ export const FiscalBillingPaymentsSection: React.FC<Props> = ({ subTab }) => {
   );
 
   // 1. FACTURATION & SYSCOHADA (Sections 18 & 21b)
-  if (subTab === 'facturation' || subTab === 'comptabilite') {
+  if (subTab === 'facturation') {
     const billingItems = [
       {
         key: 'bill_active',
@@ -972,7 +968,7 @@ export const FiscalBillingPaymentsSection: React.FC<Props> = ({ subTab }) => {
   );
 
   // 3. PAIEMENTS & MOBILE MONEY (Sections 20 & 21)
-  if (subTab === 'paiements' || subTab === 'mobile_money') {
+  if (subTab === 'paiements') {
 
     const paymentMethodsList = [
       {

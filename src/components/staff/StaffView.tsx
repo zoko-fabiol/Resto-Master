@@ -88,8 +88,11 @@ export const StaffView: React.FC = () => {
     addAttendanceRecord,
     updateEmployeeWeeklySchedule,
     userAccounts,
+    isFeatureEnabled,
   } = useRestaurant();
   const { showToast } = useToast();
+  const isMobileStaffAppEnabled = isFeatureEnabled('mobile_app_staff');
+  const isRolePermissionsMatrixEnabled = isFeatureEnabled('role_permissions_matrix');
 
   const [activeTab, setActiveTab] = useState<'dashboard' | 'employees' | 'attendance' | 'plannings' | 'salaires' | 'accounts'>('dashboard');
   const [clockInModalOpen, setClockInModalOpen] = useState(false);

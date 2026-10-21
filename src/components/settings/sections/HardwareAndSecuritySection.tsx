@@ -45,16 +45,12 @@ import { ModernRuleToggle } from './ModernRuleToggle';
 
 interface Props {
   subTab:
-    | 'notifications' // Section 23
-    | 'personnel'     // Section 24
-    | 'permissions'   // Section 25
-    | 'impression'    // Section 26
-    | 'terminaux'     // Section 27
-    | 'integrations'  // Section 28
-    | 'securite'      // Section 28b
-    | 'audit'         // Section 29
-    | 'offline'       // Section 30
-    | 'avance';       // Section 31
+    | 'notifications'
+    | 'permissions'
+    | 'impression'
+    | 'terminaux'
+    | 'audit'
+    | 'offline';
 }
 
 export const HardwareAndSecuritySection: React.FC<Props> = ({ subTab }) => {
@@ -75,59 +71,35 @@ export const HardwareAndSecuritySection: React.FC<Props> = ({ subTab }) => {
     updateOperationRules,
     generateTerminalPairingCode,
     pairDeviceWithCode,
+    isFeatureEnabled,
   } = useRestaurant();
   const { showToast } = useToast();
   const { currentUser } = useAuth();
   const confirm = useConfirm();
-  const isSuperAdmin = currentUser?.role === 'direction';
+  const isSuperAdmin = currentUser?.role === 'superadmin' || currentUser?.role === 'direction';
+  const isRbacMatrixEnabled = isFeatureEnabled('role_permissions_matrix');
+  const isMobileNotifEnabled = isFeatureEnabled('mobile_notifications');
 
   const [savedSuccess, setSavedSuccess] = useState(false);
   const [copiedTerminalId, setCopiedTerminalId] = useState<string | null>(null);
+  const [showRolesGuide, setShowRolesGuide] = useState(false);
 
-  // 1. PERSONNEL & RÔLES (Section 24)
-  if (subTab === 'personnel') {
-    const rolesList: { role: UserRole; label: string; desc: string }[] = [
-      { role: 'direction', label: 'Direction Générale / Propriétaire', desc: 'Accès sans restriction à tous les modules, configurations et clôtures.' },
-      { role: 'manager', label: 'Manager / Responsable d’Exploitation', desc: 'Gestion opérationnelle, approbations de remises et annulations.' },
-      { role: 'caisse', label: 'Chef Caissier / Caissière', desc: 'Encaissements, ouvertures/clôtures de caisse et rapports Z.' },
-      { role: 'serveur', label: 'Serveur / Hôte de Table', desc: 'Prise de commande, transmission cuisine/bar, consultation additions.' },
-      { role: 'cuisine', label: 'Chef de Cuisine / Cuisinier', desc: 'KDS Cuisine, temps de préparation, alertes de cuisson.' },
-      { role: 'bar', label: 'Barman / Sommelier', desc: 'KDS Bar, gestion des doses et des bouteilles, fiches cocktails.' },
-      { role: 'stock', label: 'Gestionnaire de Stock / Économe', desc: 'Entrées/sorties, réceptions de commandes et inventaires FEFO.' },
-      { role: 'finance', label: 'Responsable Financier', desc: 'Suivi de trésorerie, règlements fournisseurs, décaissements.' },
-      { role: 'comptable', label: 'Comptable SYSCOHADA', desc: 'Exports journaux de ventes, écritures d’achats et TVA/CAC.' },
-      { role: 'rh', label: 'Ressources Humaines', desc: 'Gestion des contrats, pointage des heures et documents administratifs.' },
-      { role: 'auditeur', label: 'Auditeur Interne / Commissaire', desc: 'Consultation exclusive en lecture seule des journaux et traçabilité.' },
-    ];
+  const rolesList: { role: UserRole; label: string; desc: string }[] = [
+    { role: 'direction', label: 'Direction Générale / Propriétaire', desc: 'Accès sans restriction à tous les modules, configurations et clôtures.' },
+    { role: 'manager', label: 'Manager / Responsable d’Exploitation', desc: 'Gestion opérationnelle, approbations de remises et annulations.' },
+    { role: 'caisse', label: 'Chef Caissier / Caissière', desc: 'Encaissements, ouvertures/clôtures de caisse et rapports Z.' },
+    { role: 'serveur', label: 'Serveur / Hôte de Table', desc: 'Prise de commande, transmission cuisine/bar, consultation additions.' },
+    { role: 'cuisine', label: 'Chef de Cuisine / Cuisinier', desc: 'KDS Cuisine, temps de préparation, alertes de cuisson.' },
+    { role: 'bar', label: 'Barman / Sommelier', desc: 'KDS Bar, gestion des doses et des bouteilles, fiches cocktails.' },
+    { role: 'stock', label: 'Gestionnaire de Stock / Économe', desc: 'Entrées/sorties, réceptions de commandes et inventaires FEFO.' },
+    { role: 'finance', label: 'Responsable Financier', desc: 'Suivi de trésorerie, règlements fournisseurs, décaissements.' },
+    { role: 'comptable', label: 'Comptable SYSCOHADA', desc: 'Exports journaux de ventes, écritures d’achats et TVA/CAC.' },
+    { role: 'rh', label: 'Ressources Humaines', desc: 'Gestion des contrats, pointage des heures et documents administratifs.' },
+    { role: 'auditeur', label: 'Auditeur Interne / Commissaire', desc: 'Consultation exclusive en lecture seule des journaux et traçabilité.' },
+  ];
 
-    return (
-      <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-6">
-        <div className="border-b border-slate-100 pb-4">
-          <h3 className="text-sm font-bold text-slate-900">Personnel, Rôles & Niveaux d’Accès (Section 24)</h3>
-          <p className="text-xs text-slate-500">
-            Définition des privilèges, attributions par établissement, caisses et modules autorisés
-          </p>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {rolesList.map((r) => (
-            <div key={r.role} className="p-4 rounded-xl border border-slate-200 bg-slate-50 space-y-2 text-xs">
-              <div className="flex items-center justify-between">
-                <span className="font-bold text-slate-900 text-sm">{r.label}</span>
-                <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-white font-bold border border-slate-200">
-                  {r.role}
-                </span>
-              </div>
-              <p className="text-slate-600 text-xs leading-relaxed">{r.desc}</p>
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  }
-
-  // 2. PERMISSIONS RBAC GRANULAIRES & PLAFONDS FINANCIERS
-  if (subTab === 'permissions' || (subTab as string) === 'securite') {
+  // 1. PERMISSIONS RBAC GRANULAIRES & PLAFONDS FINANCIERS
+  if (subTab === 'permissions') {
     const modules: { module: PermissionModule; label: string }[] = [
       { module: 'pos', label: 'POS & Prise de commande' },
       { module: 'tables', label: 'Plan des tables & Salles' },
@@ -151,9 +123,9 @@ export const HardwareAndSecuritySection: React.FC<Props> = ({ subTab }) => {
       <div className="space-y-6">
         {/* Matrice RBAC */}
         <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-4">
-          <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-rose-600 text-white flex items-center justify-center font-bold shadow-md shadow-rose-600/20">
+              <div className="w-10 h-10 rounded-xl bg-rose-600 text-white flex items-center justify-center font-bold shadow-md shadow-rose-600/20 shrink-0">
                 <ShieldCheck className="w-5 h-5" />
               </div>
               <div>
@@ -163,10 +135,45 @@ export const HardwareAndSecuritySection: React.FC<Props> = ({ subTab }) => {
                 </p>
               </div>
             </div>
-            <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-3 py-1 rounded-xl border border-emerald-200">
-              Traçabilité active
-            </span>
+            <div className="flex items-center gap-2 self-end sm:self-auto">
+              <button
+                type="button"
+                onClick={() => setShowRolesGuide((prev) => !prev)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs font-bold transition-colors cursor-pointer"
+              >
+                <Users className="w-3.5 h-3.5 text-slate-500" />
+                <span>{showRolesGuide ? 'Masquer le Référentiel des Rôles' : 'Consulter le Référentiel des Rôles'}</span>
+              </button>
+              <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-3 py-1.5 rounded-xl border border-emerald-200">
+                Traçabilité active
+              </span>
+            </div>
           </div>
+
+          {/* Guide Référentiel des Rôles (Accordéon) */}
+          {showRolesGuide && (
+            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3 animate-in fade-in duration-200">
+              <div className="flex items-center justify-between">
+                <h4 className="text-xs font-black uppercase tracking-wider text-slate-700">
+                  Référentiel des Rôles & Définitions de Postes (11 Rôles)
+                </h4>
+                <span className="text-[10px] text-slate-400">Attributions et privilèges système</span>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+                {rolesList.map((r) => (
+                  <div key={r.role} className="p-3 rounded-xl border border-slate-200 bg-white space-y-1 text-xs">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-slate-900">{r.label}</span>
+                      <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-slate-100 font-bold border border-slate-200">
+                        {r.role}
+                      </span>
+                    </div>
+                    <p className="text-slate-600 text-[11px] leading-relaxed">{r.desc}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           <div className="overflow-x-auto custom-scrollbar">
             <table className="w-full text-left border-collapse text-xs">
@@ -601,38 +608,7 @@ export const HardwareAndSecuritySection: React.FC<Props> = ({ subTab }) => {
     );
   }
 
-  // 7. INTÉGRATIONS
-  if (subTab === 'integrations') {
-    return (
-      <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-4 text-xs">
-        <div className="border-b border-slate-100 pb-3">
-          <h3 className="text-sm font-bold text-slate-900">Intégrations & Passerelles Externes</h3>
-          <p className="text-slate-500">Connecteurs API avec les services tiers et l'administration</p>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {[
-            { title: 'Passerelle MTN MoMo Pay', status: 'Connecté', desc: 'API MoMo Open avec notification USSD et encaissements.' },
-            { title: 'Passerelle Orange Money Web', status: 'Connecté', desc: 'API Orange Money #150# et QR Codes Max it.' },
-            { title: 'Télé-déclaration DGI E-Billing', status: 'Prêt', desc: 'Format d’exportation conforme et archivage légal 10 ans.' },
-            { title: 'Sauvegarde Cloud Firestore', status: 'Actif', desc: 'Synchronisation temps réel et redondance multi-zones.' },
-          ].map((item, idx) => (
-            <div key={idx} className="p-4 rounded-xl border border-slate-200 bg-slate-50 space-y-1.5">
-              <div className="flex items-center justify-between">
-                <span className="font-bold text-slate-900">{item.title}</span>
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-800">
-                  {item.status}
-                </span>
-              </div>
-              <p className="text-slate-600 text-xs">{item.desc}</p>
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  }
-
-  // 8. AUDIT DE CONFIGURATION (Section 29)
+  // 7. AUDIT DE CONFIGURATION
   if (subTab === 'audit') {
     return (
       <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-4 text-xs">
@@ -720,139 +696,5 @@ export const HardwareAndSecuritySection: React.FC<Props> = ({ subTab }) => {
     );
   }
 
-  // 10. AVANCÉ & PROFILS PRÉDÉFINIS (Section 31)
-  const handleApplyProfile = async (id: ConfigurationProfileType, title: string) => {
-    if (!isSuperAdmin) {
-      showToast({
-        title: 'Action Réservée',
-        message: 'Seul le Super Administrateur (Direction) peut appliquer un profil d’exploitation.',
-        type: 'warning',
-      });
-      return;
-    }
-    const ok = await confirm({
-      title: 'Application du profil d\'exploitation',
-      message: `Voulez-vous appliquer le profil "${title}" ? Cette action ajustera l'activation des modules et des règles métier.`,
-      confirmText: 'Appliquer',
-    });
-    if (ok) {
-      await applyConfigProfile(id);
-      showToast({
-        title: 'Profil Déployé',
-        message: `Le profil "${title}" a été activé avec succès.`,
-        type: 'success',
-      });
-    }
-  };
-
-  return (
-    <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-6 text-xs">
-      <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-        <div>
-          <h3 className="text-sm font-bold text-slate-900">Paramètres Avancés & Profils Métier (1-Clic)</h3>
-          <p className="text-slate-500">Déployez instantanément un modèle d'exploitation adapté à votre établissement</p>
-        </div>
-        {isSuperAdmin && (
-          <span className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-100 text-amber-900 font-bold text-[11px] border border-amber-300">
-            <Crown className="w-3.5 h-3.5 text-amber-700" />
-            Super Admin
-          </span>
-        )}
-      </div>
-
-      {!isSuperAdmin && (
-        <div className="flex items-center gap-2.5 px-4 py-2.5 rounded-xl bg-slate-100 border border-slate-200 text-slate-700 text-xs font-medium">
-          <Lock className="w-4 h-4 text-slate-500 shrink-0" />
-          <span>
-            <strong>Mode Consultation :</strong> L’application des profils et la réinitialisation sont réservées au Super Administrateur.
-          </span>
-        </div>
-      )}
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {[
-          {
-            id: 'depart_essentiel' as ConfigurationProfileType,
-            title: 'Profil Essentiel Restaurant (Resto #1)',
-            desc: 'Configuration ciblée 12 modules : Tableau de bord, POS, Cuisine KDS, Carte & Recettes, Stocks, Achats, Caisse, Personnel, GED, Audit, Rapports et Paramètres.',
-            badge: 'Recommandé Resto #1',
-            highlight: true,
-          },
-          {
-            id: 'restaurant_classique' as ConfigurationProfileType,
-            title: 'Restaurant Classique & Grillades',
-            desc: 'Service à table, cuisine chaude, bar lounge, facturation TVA et clôture de caisse standard.',
-            badge: 'Généraliste',
-            highlight: false,
-          },
-          {
-            id: 'bar_lounge' as ConfigurationProfileType,
-            title: 'Bar Lounge & Cave à Vins',
-            desc: 'Cocktails, gestion bouteilles/verres, cartes boissons et ambiance lounge.',
-            badge: 'Boissons',
-            highlight: false,
-          },
-          {
-            id: 'fast_food' as ConfigurationProfileType,
-            title: 'Fast-Food & Vente à Emporter',
-            desc: 'Commandes rapides au comptoir, click & collect et livraisons moto.',
-            badge: 'Rapide',
-            highlight: false,
-          },
-          {
-            id: 'evenementiel_traiteur' as ConfigurationProfileType,
-            title: 'Traiteur, Banquets & Cérémonies',
-            desc: 'Devis complets, gestion des acomptes et factures laser A5 entreprises.',
-            badge: 'Banquets',
-            highlight: false,
-          },
-        ].map((p) => (
-          <div
-            key={p.id}
-            className={`p-4 rounded-xl border flex flex-col justify-between space-y-3 transition-all ${
-              p.highlight
-                ? 'bg-amber-50/60 border-amber-300 ring-2 ring-amber-400/20'
-                : 'border-slate-200 bg-slate-50'
-            }`}
-          >
-            <div>
-              <div className="flex items-center justify-between gap-2 mb-1">
-                <h4 className="font-bold text-slate-900 text-sm flex items-center gap-1.5">
-                  {p.highlight && <Star className="w-4 h-4 text-amber-600 fill-amber-500 shrink-0" />}
-                  <span>{p.title}</span>
-                </h4>
-                {p.badge && (
-                  <span
-                    className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
-                      p.highlight
-                        ? 'bg-amber-200 text-amber-900 border border-amber-300'
-                        : 'bg-slate-200 text-slate-700'
-                    }`}
-                  >
-                    {p.badge}
-                  </span>
-                )}
-              </div>
-              <p className="text-slate-600 mt-1 leading-relaxed text-xs">{p.desc}</p>
-            </div>
-            <button
-              type="button"
-              disabled={!isSuperAdmin}
-              onClick={() => handleApplyProfile(p.id, p.title)}
-              className={`flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl font-bold transition-colors ${
-                isSuperAdmin
-                  ? p.highlight
-                    ? 'bg-amber-600 text-white hover:bg-amber-700 shadow-xs'
-                    : 'bg-slate-900 text-white hover:bg-slate-800'
-                  : 'bg-slate-200 text-slate-400 cursor-not-allowed'
-              }`}
-            >
-              <span>Appliquer ce profil</span>
-              <ArrowRight className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
+  return null;
 };

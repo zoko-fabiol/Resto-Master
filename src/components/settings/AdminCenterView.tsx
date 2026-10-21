@@ -1,12 +1,10 @@
 import React, { useState, useMemo } from 'react';
 import { useRestaurant } from '../../context/RestaurantContext';
 import {
-  Sliders,
   Building,
   Monitor,
   Search,
   AlertTriangle,
-  Settings,
   ShoppingBag,
   Coins,
   Utensils,
@@ -14,21 +12,12 @@ import {
   Wine,
   Package,
   Truck,
-  Users,
-  Award,
-  Bike,
-  Calendar,
-  PartyPopper,
   Zap,
   Rocket,
   Receipt,
   CreditCard,
-  Smartphone,
-  FileSpreadsheet,
-  UserCheck,
   Bell,
   Printer,
-  Share2,
   Lock,
   ShieldCheck,
   History,
@@ -38,12 +27,10 @@ import {
   Building2,
   LayoutGrid,
   ArrowLeft,
-  ArrowUpRight,
-  Filter,
-  CheckCircle2,
   X,
-  Compass,
   Crown,
+  Sparkles,
+  Sliders,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
@@ -51,10 +38,9 @@ import { useConfirm } from '../ui/ConfirmDialog';
 import { ConfigurationProfileType } from '../../types/configuration';
 
 import { GeneralAndOutletsSection } from './sections/GeneralAndOutletsSection';
-import { FeatureCatalogSection } from './sections/FeatureCatalogSection';
+import { FeaturesAndModulesSection } from './sections/FeaturesAndModulesSection';
 import { OperationsOptionsSection } from './sections/OperationsOptionsSection';
 import { StockAndPurchasesSection } from './sections/StockAndPurchasesSection';
-import { ClientsAndLoyaltySection } from './sections/ClientsAndLoyaltySection';
 import { FiscalBillingPaymentsSection } from './sections/FiscalBillingPaymentsSection';
 import { HardwareAndSecuritySection } from './sections/HardwareAndSecuritySection';
 import { OrganizationSection } from './sections/OrganizationSection';
@@ -62,62 +48,46 @@ import { OnboardingWizard } from '../admin/OnboardingWizard';
 
 export type SubMenuKey =
   | 'library'
-  // Sec. 1 à 4 : Base & Système
+  // Parcours 1 : Identité & Fiscalité
   | 'general'
-  | 'etablissement'
-  | 'features'
-  | 'modules'
-  // Sec. 7 à 10 : Vente, Salle & Cuisine
+  | 'fiscalite'
+  | 'facturation'
+  // Parcours 2 : Salle & Ventes
   | 'pos'
   | 'tables'
+  | 'caisse'
+  | 'paiements'
+  | 'features_modules'
+  // Parcours 3 : Cuisine & Bar
   | 'cuisine'
   | 'bar'
-  // Sec. 11 à 14 : Stocks, Achats & Fidélité
+  // Parcours 4 : Stock & Achats
   | 'stock'
   | 'achats'
-  | 'clients'
-  | 'fidelite'
-  // Sec. 15 à 17 : Services & Banquets
-  | 'livraison'
-  | 'reservations'
-  | 'evenements'
-  // Sec. 18 à 22 : Finance, Fiscalité & Caisse
-  | 'facturation'
-  | 'fiscalite'
-  | 'paiements'
-  | 'mobile_money'
-  | 'comptabilite'
-  | 'caisse'
-  // Sec. 23 à 25 : Personnel & Permissions
-  | 'notifications'
-  | 'personnel'
+  // Parcours 5 : Équipe & Accès
   | 'permissions'
-  // Sec. 26 à 31 : Matériel, Audit & PWA
+  | 'notifications'
+  | 'audit'
+  // Parcours 6 : Matériel & Système
   | 'impression'
   | 'terminaux'
-  | 'integrations'
-  | 'securite'
-  | 'audit'
   | 'offline'
-  | 'avance'
-  // Groupe
+  // Groupe (Multi-Sites, conditionnel)
   | 'organisation';
 
 export type AppCategory =
   | 'all'
-  | 'system'
-  | 'operations'
-  | 'stocks'
-  | 'services'
-  | 'finance'
-  | 'hardware_security'
+  | 'identity_fiscal'
+  | 'sales_floor'
+  | 'kitchen_bar'
+  | 'stock_purchases'
+  | 'team_access'
+  | 'hardware'
   | 'group';
 
 export interface AppMetadata {
   key: SubMenuKey;
   orderNumber: number;
-  sectionCode: string;
-  sectionNumber: string;
   title: string;
   category: AppCategory;
   categoryLabel: string;
@@ -138,7 +108,6 @@ export const AdminCenterView: React.FC = () => {
     setSelectedTerminalId,
     adminDisplayMode,
     setAdminDisplayMode,
-    features,
     cashRegisters,
     tables,
     settings,
@@ -150,6 +119,7 @@ export const AdminCenterView: React.FC = () => {
   const { currentUser } = useAuth();
   const { showToast } = useToast();
   const confirm = useConfirm();
+
   const isSuperAdmin = currentUser?.role === 'superadmin' || currentUser?.role === 'direction';
   const isTrueSuperAdmin = currentUser?.role === 'superadmin';
 
@@ -213,388 +183,270 @@ export const AdminCenterView: React.FC = () => {
   const [selectedCategory, setSelectedCategory] = useState<AppCategory>('all');
   const [searchQuery, setSearchQuery] = useState('');
 
-  // 25 Applications Métier Consolidées
-  const appLibrary: AppMetadata[] = [
-    // =========================================================================
-    // SYSTÈME, ÉTABLISSEMENTS & BASE
-    // =========================================================================
-    {
-      key: 'general',
-      orderNumber: 1,
-      sectionCode: '01',
-      sectionNumber: 'Section 1',
-      title: 'Identité, Devises & Établissements',
-      category: 'system',
-      categoryLabel: 'Système & Établissements',
-      description: 'Devise principale FCFA (XAF), identité légale, NIU, RCCM, fuseau horaire et gestion des succursales.',
-      icon: Building,
-      gradient: 'from-slate-700 to-slate-900',
-      badge: 'Devise & Multi-Sites',
-      tags: ['general', 'etablissement', 'devise', 'fcfa', 'succursale', 'adresse', 'niu', 'rccm'],
-    },
-    {
-      key: 'features',
-      orderNumber: 2,
-      sectionCode: '02',
-      sectionNumber: 'Section 2',
-      title: 'Catalogue des Fonctionnalités',
-      category: 'system',
-      categoryLabel: 'Système & Établissements',
-      description: 'Gouvernance globale et activation granulaire des 17 packs fonctionnels modulaires.',
-      icon: Sliders,
-      gradient: 'from-violet-600 to-indigo-700',
-      badge: '17 Packs',
-      tags: ['fonctionnalites', 'catalogue', 'packs', 'activation', 'licence'],
-    },
-    {
-      key: 'modules',
-      orderNumber: 3,
-      sectionCode: '03',
-      sectionNumber: 'Section 3',
-      title: 'Activation des Modules Latéraux',
-      category: 'system',
-      categoryLabel: 'Système & Établissements',
-      description: 'Afficher ou masquer les onglets du menu de navigation gauche selon votre type d’établissement.',
-      icon: Layers,
-      gradient: 'from-slate-700 to-zinc-800',
-      badge: 'Menu Latéral',
-      tags: ['modules', 'menu', 'sidebar', 'visibilite', 'masquer'],
-    },
+  // Bibliothèque structurée selon les 6 parcours logiques (+ Groupe conditionnel si multi-sites)
+  const appLibrary: AppMetadata[] = useMemo(() => {
+    const list: AppMetadata[] = [
+      // =========================================================================
+      // 1. IDENTITÉ ET FISCALITÉ
+      // =========================================================================
+      {
+        key: 'general',
+        orderNumber: 1,
+        title: 'Identité, Devises & Établissements',
+        category: 'identity_fiscal',
+        categoryLabel: 'Identité & Fiscalité',
+        description: 'Devise principale FCFA (XAF), identité légale, NIU, RCCM, fuseau horaire et succursales.',
+        icon: Building,
+        gradient: 'from-slate-700 to-slate-900',
+        badge: 'Devise & Multi-Sites',
+        tags: ['general', 'etablissement', 'devise', 'fcfa', 'succursale', 'adresse', 'niu', 'rccm'],
+      },
+      {
+        key: 'fiscalite',
+        orderNumber: 2,
+        title: 'Fiscalité Cameroun (CGI 2026)',
+        category: 'identity_fiscal',
+        categoryLabel: 'Identité & Fiscalité',
+        description: 'TVA 17,5% + CAC 1,75% = 19,25%, acomptes AIR (2,2% / 5,5%), droit de timbre et télétransmission DGI.',
+        icon: ShieldCheck,
+        gradient: 'from-red-600 to-rose-700',
+        badge: 'CGI 2026 Conforme',
+        tags: ['fiscalite', 'tva', 'cac', 'air', 'dgi', 'cameroun', 'impots', 'timbre', 'reel'],
+      },
+      {
+        key: 'facturation',
+        orderNumber: 3,
+        title: 'Facturation Officielle & SYSCOHADA',
+        category: 'identity_fiscal',
+        categoryLabel: 'Identité & Fiscalité',
+        description: 'Factures déductibles Laser A5, mentions DGI, avoirs et plan comptable OHADA (701100, 443100, 571100).',
+        icon: Receipt,
+        gradient: 'from-emerald-600 to-green-700',
+        badge: 'A5 & SYSCOHADA',
+        tags: ['facture', 'facturation', 'a5', 'toutes lettres', 'avoir', 'proforma', 'syscohada', 'ohada', 'comptabilite'],
+      },
 
-    // =========================================================================
-    // VENTE, SALLE & CUISINE
-    // =========================================================================
-    {
-      key: 'pos',
-      orderNumber: 4,
-      sectionCode: '04',
-      sectionNumber: 'Section 4',
-      title: 'POS & Prise de Commande',
-      category: 'operations',
-      categoryLabel: 'Vente, Salle & Cuisine',
-      description: 'Saisie rapide, annulations avec motif obligatoire, remises autorisées et division d’addition.',
-      icon: ShoppingBag,
-      gradient: 'from-amber-500 to-amber-600',
-      badge: 'Règles POS',
-      tags: ['pos', 'commande', 'ticket', 'addition', 'remise', 'annulation', 'vente'],
-    },
-    {
-      key: 'tables',
-      orderNumber: 5,
-      sectionCode: '05',
-      sectionNumber: 'Section 5',
-      title: 'Tables & Plan de Salle 2D',
-      category: 'operations',
-      categoryLabel: 'Vente, Salle & Cuisine',
-      description: 'Plan interactif 2D, gestion des zones (Terrasse, VIP), statut ménage, couverts et fusions.',
-      icon: Utensils,
-      gradient: 'from-blue-500 to-indigo-600',
-      badge: 'Plan 2D & Zones',
-      tags: ['table', 'salle', 'terrasse', 'vip', 'plan', 'couverts', 'fusion'],
-    },
-    {
-      key: 'cuisine',
-      orderNumber: 6,
-      sectionCode: '06',
-      sectionNumber: 'Section 6',
-      title: 'Cuisine KDS & Préparation',
-      category: 'operations',
-      categoryLabel: 'Vente, Salle & Cuisine',
-      description: 'Écrans de production cuisine (Chaud / Froid), chrono préparation, alerte retard (>20 min) et tickets 80mm.',
-      icon: ChefHat,
-      gradient: 'from-rose-500 to-red-600',
-      badge: 'KDS Chaud/Froid',
-      tags: ['cuisine', 'kds', 'production', 'chaud', 'froid', 'ticket', 'preparation', 'retard'],
-    },
-    {
-      key: 'bar',
-      orderNumber: 7,
-      sectionCode: '07',
-      sectionNumber: 'Section 7',
-      title: 'Bar, Cave & Boissons',
-      category: 'operations',
-      categoryLabel: 'Vente, Salle & Cuisine',
-      description: 'Fiches recettes cocktails, gestion des doses et verres, déclaration casse et coulage bar.',
-      icon: Wine,
-      gradient: 'from-purple-500 to-pink-600',
-      badge: 'Doses & Coulage',
-      tags: ['bar', 'cocktail', 'boisson', 'vin', 'biere', 'casse', 'coulage', 'doses'],
-    },
+      // =========================================================================
+      // 2. SALLE ET VENTES
+      // =========================================================================
+      {
+        key: 'pos',
+        orderNumber: 4,
+        title: 'POS & Prise de Commande',
+        category: 'sales_floor',
+        categoryLabel: 'Salle & Ventes',
+        description: 'Saisie rapide, annulations avec motif obligatoire, remises autorisées et division d’addition.',
+        icon: ShoppingBag,
+        gradient: 'from-amber-500 to-amber-600',
+        badge: 'Règles POS',
+        tags: ['pos', 'commande', 'ticket', 'addition', 'remise', 'annulation', 'vente'],
+      },
+      {
+        key: 'tables',
+        orderNumber: 5,
+        title: 'Tables & Plan de Salle 2D',
+        category: 'sales_floor',
+        categoryLabel: 'Salle & Ventes',
+        description: 'Plan interactif 2D vectoriel, gestion des zones (Terrasse, VIP), fusions, séparations et statut ménage.',
+        icon: Utensils,
+        gradient: 'from-blue-500 to-indigo-600',
+        badge: 'Plan 2D & Zones',
+        tags: ['table', 'salle', 'terrasse', 'vip', 'plan', 'couverts', 'fusion', 'split'],
+      },
+      {
+        key: 'caisse',
+        orderNumber: 6,
+        title: 'Caisse & Clôture Z',
+        category: 'sales_floor',
+        categoryLabel: 'Salle & Ventes',
+        description: 'Fonds de caisse obligatoire, comptage aveugle (blind count), sorties d’espèces et clôtures Z immuables.',
+        icon: Coins,
+        gradient: 'from-emerald-500 to-teal-600',
+        badge: 'Sécurité Z',
+        tags: ['caisse', 'fond', 'cloture', 'rapport z', 'especes', 'ecart', 'blind count'],
+      },
+      {
+        key: 'paiements',
+        orderNumber: 7,
+        title: 'Moyens d’Encaissement & Mobile Money',
+        category: 'sales_floor',
+        categoryLabel: 'Salle & Ventes',
+        description: 'Espèces FCFA, cartes bancaires GIMAC/Visa, et comptes marchands MTN MoMo & Orange Money Cameroun.',
+        icon: CreditCard,
+        gradient: 'from-indigo-600 to-purple-700',
+        badge: 'Multi-Paiement & MoMo',
+        tags: ['paiement', 'encaissement', 'cb', 'especes', 'cheque', 'virement', 'gimac', 'momo', 'orange money', 'mtn'],
+      },
+      {
+        key: 'features_modules',
+        orderNumber: 8,
+        title: 'Modules & Fonctionnalités',
+        category: 'sales_floor',
+        categoryLabel: 'Salle & Ventes',
+        description: 'Gouvernance unifiée : activation des modules du menu latéral et catalogue des packs fonctionnels métier.',
+        icon: Layers,
+        gradient: 'from-violet-600 to-indigo-700',
+        badge: 'Gouvernance Unifiée',
+        tags: ['features', 'modules', 'menu', 'sidebar', 'packs', 'catalogue', 'activation'],
+      },
 
-    // =========================================================================
-    // STOCKS & ACHATS
-    // =========================================================================
-    {
-      key: 'stock',
-      orderNumber: 8,
-      sectionCode: '08',
-      sectionNumber: 'Section 8',
-      title: 'Stocks, Lots & FEFO',
-      category: 'stocks',
-      categoryLabel: 'Stocks & Achats',
-      description: 'Méthode FEFO (Premier Expiré, Premier Sorti), blocage de stock négatif et alertes DLC.',
-      icon: Package,
-      gradient: 'from-amber-600 to-orange-600',
-      badge: 'FEFO Strict',
-      tags: ['stock', 'fefo', 'lots', 'dlc', 'expiration', 'inventaire', 'magasin', 'negatif'],
-    },
-    {
-      key: 'achats',
-      orderNumber: 9,
-      sectionCode: '09',
-      sectionNumber: 'Section 9',
-      title: 'Achats & Fournisseurs',
-      category: 'stocks',
-      categoryLabel: 'Stocks & Achats',
-      description: 'Bons de commande, seuil d’approbation Direction (>100k FCFA), réceptions magasin et factures.',
-      icon: Truck,
-      gradient: 'from-teal-600 to-emerald-700',
-      badge: 'Cycle Achat',
-      tags: ['achat', 'fournisseur', 'bon de commande', 'reception', 'facture', 'approbation'],
-    },
+      // =========================================================================
+      // 3. CUISINE ET BAR
+      // =========================================================================
+      {
+        key: 'cuisine',
+        orderNumber: 9,
+        title: 'Cuisine KDS & Préparation',
+        category: 'kitchen_bar',
+        categoryLabel: 'Cuisine & Bar',
+        description: 'Écrans de production cuisine (Chaud / Froid), chrono préparation, alerte retard (>20 min) et tickets 80mm.',
+        icon: ChefHat,
+        gradient: 'from-rose-500 to-red-600',
+        badge: 'KDS Chaud/Froid',
+        tags: ['cuisine', 'kds', 'production', 'chaud', 'froid', 'ticket', 'preparation', 'retard'],
+      },
+      {
+        key: 'bar',
+        orderNumber: 10,
+        title: 'Bar, Cave & Boissons',
+        category: 'kitchen_bar',
+        categoryLabel: 'Cuisine & Bar',
+        description: 'Fiches recettes cocktails, gestion des doses et verres, déclaration casse et coulage bar.',
+        icon: Wine,
+        gradient: 'from-purple-500 to-pink-600',
+        badge: 'Doses & Coulage',
+        tags: ['bar', 'cocktail', 'boisson', 'vin', 'biere', 'casse', 'coulage', 'doses'],
+      },
 
-    // =========================================================================
-    // SERVICES, CLIENTS & BANQUETS
-    // =========================================================================
-    {
-      key: 'clients',
-      orderNumber: 10,
-      sectionCode: '10',
-      sectionNumber: 'Section 10',
-      title: 'Clients, CRM & Programme Fidélité',
-      category: 'services',
-      categoryLabel: 'Clients & Services',
-      description: 'Fiches clients complètes avec NIU contribuable, plafonds d’encours crédit et barème fidélité VIP.',
-      icon: Users,
-      gradient: 'from-sky-500 to-indigo-600',
-      badge: 'CRM & Club VIP',
-      tags: ['client', 'crm', 'credit', 'compte', 'niu', 'historique', 'fidelite', 'vip', 'points'],
-    },
-    {
-      key: 'reservations',
-      orderNumber: 11,
-      sectionCode: '11',
-      sectionNumber: 'Section 11',
-      title: 'Réservations & Disponibilités',
-      category: 'services',
-      categoryLabel: 'Clients & Services',
-      description: 'Réservations en ligne, liste d’attente, acompte obligatoire ≥ 6 couverts et gestion du No-Show.',
-      icon: Calendar,
-      gradient: 'from-violet-500 to-indigo-600',
-      badge: 'Couverts & No-Show',
-      tags: ['reservation', 'couverts', 'acompte', 'noshow', 'attente', 'sms'],
-    },
-    {
-      key: 'livraison',
-      orderNumber: 12,
-      sectionCode: '12',
-      sectionNumber: 'Section 12',
-      title: 'Livraison & Courses Moto',
-      category: 'services',
-      categoryLabel: 'Clients & Services',
-      description: 'Frais par quartier (Akwa, Bonapriso, Bastos...), assignation livreurs moto et suivi WhatsApp.',
-      icon: Bike,
-      gradient: 'from-cyan-500 to-blue-600',
-      badge: 'Moto & Zones',
-      tags: ['livraison', 'coursier', 'moto', 'quartier', 'whatsapp', 'frais', 'momo'],
-    },
-    {
-      key: 'evenements',
-      orderNumber: 13,
-      sectionCode: '13',
-      sectionNumber: 'Section 13',
-      title: 'Événements & Banquets',
-      category: 'services',
-      categoryLabel: 'Clients & Services',
-      description: 'Devis officiels traiteur, acompte préalable 30%, blocage de salle et menus spéciaux banquets.',
-      icon: PartyPopper,
-      gradient: 'from-fuchsia-500 to-rose-600',
-      badge: 'Devis & Traiteur',
-      tags: ['evenement', 'banquet', 'traiteur', 'devis', 'acompte', 'salle', 'reception'],
-    },
+      // =========================================================================
+      // 4. STOCK ET ACHATS
+      // =========================================================================
+      {
+        key: 'stock',
+        orderNumber: 11,
+        title: 'Stocks, Lots & FEFO',
+        category: 'stock_purchases',
+        categoryLabel: 'Stock & Achats',
+        description: 'Méthode FEFO (Premier Expiré, Premier Sorti), blocage de stock négatif et alertes DLC.',
+        icon: Package,
+        gradient: 'from-amber-600 to-orange-600',
+        badge: 'FEFO Strict',
+        tags: ['stock', 'fefo', 'lots', 'dlc', 'expiration', 'inventaire', 'magasin', 'negatif'],
+      },
+      {
+        key: 'achats',
+        orderNumber: 12,
+        title: 'Achats & Fournisseurs',
+        category: 'stock_purchases',
+        categoryLabel: 'Stock & Achats',
+        description: 'Bons de commande, seuil d’approbation Direction (>100k FCFA), réceptions magasin et factures.',
+        icon: Truck,
+        gradient: 'from-teal-600 to-emerald-700',
+        badge: 'Cycle Achat',
+        tags: ['achat', 'fournisseur', 'bon de commande', 'reception', 'facture', 'approbation'],
+      },
 
-    // =========================================================================
-    // FINANCE, FISCALITÉ & CAISSE
-    // =========================================================================
-    {
-      key: 'facturation',
-      orderNumber: 14,
-      sectionCode: '14',
-      sectionNumber: 'Section 14',
-      title: 'Facturation Officielle & SYSCOHADA',
-      category: 'finance',
-      categoryLabel: 'Finance & Caisses',
-      description: 'Factures déductibles Laser A5, mentions DGI, avoirs et plan comptable OHADA (701100, 443100, 571100).',
-      icon: Receipt,
-      gradient: 'from-emerald-600 to-green-700',
-      badge: 'A5 & SYSCOHADA',
-      tags: ['facture', 'facturation', 'a5', 'toutes lettres', 'avoir', 'proforma', 'syscohada', 'ohada', 'comptabilite'],
-    },
-    {
-      key: 'fiscalite',
-      orderNumber: 15,
-      sectionCode: '15',
-      sectionNumber: 'Section 15',
-      title: 'Fiscalité Cameroun (CGI 2026)',
-      category: 'finance',
-      categoryLabel: 'Finance & Caisses',
-      description: 'TVA 17,5% + CAC 1,75% = 19,25%, acomptes AIR (2,2% / 5,5%), droit de timbre et télétransmission DGI.',
-      icon: ShieldCheck,
-      gradient: 'from-red-600 to-rose-700',
-      badge: 'CGI 2026 Conforme',
-      tags: ['fiscalite', 'tva', 'cac', 'air', 'dgi', 'cameroun', 'impots', 'timbre', 'reel'],
-    },
-    {
-      key: 'paiements',
-      orderNumber: 16,
-      sectionCode: '16',
-      sectionNumber: 'Section 16',
-      title: 'Moyens d’Encaissement & Mobile Money',
-      category: 'finance',
-      categoryLabel: 'Finance & Caisses',
-      description: 'Espèces FCFA, cartes bancaires GIMAC/Visa, et comptes marchands MTN MoMo & Orange Money Cameroun.',
-      icon: CreditCard,
-      gradient: 'from-indigo-600 to-purple-700',
-      badge: 'Multi-Paiement & MoMo',
-      tags: ['paiement', 'encaissement', 'cb', 'especes', 'cheque', 'virement', 'gimac', 'momo', 'orange money', 'mtn'],
-    },
-    {
-      key: 'caisse',
-      orderNumber: 17,
-      sectionCode: '17',
-      sectionNumber: 'Section 17',
-      title: 'Caisse & Clôture Z',
-      category: 'finance',
-      categoryLabel: 'Finance & Caisses',
-      description: 'Fonds de caisse obligatoire, comptage aveugle (blind count), sorties d’espèces et clôtures Z immuables.',
-      icon: Coins,
-      gradient: 'from-emerald-500 to-teal-600',
-      badge: 'Sécurité Z',
-      tags: ['caisse', 'fond', 'cloture', 'rapport z', 'especes', 'ecart', 'blind count'],
-    },
+      // =========================================================================
+      // 5. ÉQUIPE ET ACCÈS
+      // =========================================================================
+      {
+        key: 'permissions',
+        orderNumber: 13,
+        title: 'Permissions RBAC & Référentiel des Rôles',
+        category: 'team_access',
+        categoryLabel: 'Équipe & Accès',
+        description: 'Sécurité anti-fraude, autorisations d’accès par module, référentiel des 11 rôles et plafonds financiers.',
+        icon: ShieldCheck,
+        gradient: 'from-rose-600 to-red-700',
+        badge: 'Anti-Fraude RBAC',
+        tags: ['permission', 'rbac', 'securite', 'pin', 'autorisation', 'superviseur', 'remise', 'plafond', 'roles', 'personnel'],
+      },
+      {
+        key: 'notifications',
+        orderNumber: 14,
+        title: 'Notifications & Alertes Système',
+        category: 'team_access',
+        categoryLabel: 'Équipe & Accès',
+        description: 'Alertes stock critique sous seuil minimum, péremption de lot (J-7), écarts caisse et bips sonores KDS.',
+        icon: Bell,
+        gradient: 'from-amber-600 to-orange-700',
+        badge: 'Alertes Temps Réel',
+        tags: ['notification', 'alerte', 'sms', 'sonore', 'stock', 'caisse', 'peremption'],
+      },
+      {
+        key: 'audit',
+        orderNumber: 15,
+        title: 'Journal d’Audit Immuable',
+        category: 'team_access',
+        categoryLabel: 'Équipe & Accès',
+        description: 'Historique inaltérable de toutes les modifications de configuration et opérations sensibles.',
+        icon: History,
+        gradient: 'from-slate-800 to-slate-950',
+        badge: 'Traçabilité Totale',
+        tags: ['audit', 'journal', 'log', 'tracabilite', 'historique'],
+      },
 
-    // =========================================================================
-    // MATÉRIEL, SÉCURITÉ, PERSONNEL & PWA
-    // =========================================================================
-    {
-      key: 'personnel',
-      orderNumber: 18,
-      sectionCode: '18',
-      sectionNumber: 'Section 18',
-      title: 'Personnel & Gestion des Rôles',
-      category: 'hardware_security',
-      categoryLabel: 'Matériel, Sécurité & Audit',
-      description: 'Fiches employés, matricules, fonctions en salle/cuisine et assignation des postes de travail.',
-      icon: UserCheck,
-      gradient: 'from-blue-600 to-cyan-700',
-      badge: 'Équipes & Rôles',
-      tags: ['personnel', 'employe', 'serveur', 'cuisinier', 'role', 'poste', 'matricule'],
-    },
-    {
-      key: 'permissions',
-      orderNumber: 19,
-      sectionCode: '19',
-      sectionNumber: 'Section 19',
-      title: 'Permissions RBAC & Plafonds Financiers',
-      category: 'hardware_security',
-      categoryLabel: 'Matériel, Sécurité & Audit',
-      description: 'Sécurité anti-fraude, autorisations d’accès par module et plafonds stricts de remises/remboursements par rôle.',
-      icon: ShieldCheck,
-      gradient: 'from-rose-600 to-red-700',
-      badge: 'Anti-Fraude RBAC',
-      tags: ['permission', 'rbac', 'securite', 'pin', 'autorisation', 'superviseur', 'remise', 'remboursement', 'plafond'],
-    },
-    {
-      key: 'impression',
-      orderNumber: 20,
-      sectionCode: '20',
-      sectionNumber: 'Section 20',
-      title: 'Matériel d’Impression ESC/POS',
-      category: 'hardware_security',
-      categoryLabel: 'Matériel, Sécurité & Audit',
-      description: 'Imprimantes thermiques 80mm/58mm caisse, cuisine, bar, réseau IP et tiroir-caisse RJ11.',
-      icon: Printer,
-      gradient: 'from-zinc-700 to-slate-900',
-      badge: 'ESC/POS & Réseau',
-      tags: ['impression', 'imprimante', 'thermique', '80mm', '58mm', 'tiroir', 'reseau', 'escpos'],
-    },
-    {
-      key: 'terminaux',
-      orderNumber: 21,
-      sectionCode: '21',
-      sectionNumber: 'Section 21',
-      title: 'Terminaux & Caisses Enregistreuses',
-      category: 'hardware_security',
-      categoryLabel: 'Matériel, Sécurité & Audit',
-      description: 'Affectation des caisses fixes, tablettes serveurs, afficheur client et écrans tactiles.',
-      icon: Monitor,
-      gradient: 'from-cyan-700 to-blue-800',
-      badge: 'Caisses & Tablettes',
-      tags: ['terminal', 'tablette', 'caisse', 'pos', 'tactile', 'kds'],
-    },
-    {
-      key: 'notifications',
-      orderNumber: 22,
-      sectionCode: '22',
-      sectionNumber: 'Section 22',
-      title: 'Notifications & Alertes SMS/WhatsApp',
-      category: 'hardware_security',
-      categoryLabel: 'Matériel, Sécurité & Audit',
-      description: 'Modèles de SMS clients, confirmations WhatsApp pour réservations et bips sonores KDS.',
-      icon: Bell,
-      gradient: 'from-amber-600 to-orange-700',
-      badge: 'SMS & WhatsApp',
-      tags: ['notification', 'sms', 'whatsapp', 'alerte', 'sonore'],
-    },
-    {
-      key: 'audit',
-      orderNumber: 23,
-      sectionCode: '23',
-      sectionNumber: 'Section 23',
-      title: 'Journal d’Audit Immuable',
-      category: 'hardware_security',
-      categoryLabel: 'Matériel, Sécurité & Audit',
-      description: 'Historique inaltérable de toutes les modifications de configuration et opérations sensibles.',
-      icon: History,
-      gradient: 'from-slate-800 to-slate-950',
-      badge: 'Traçabilité Totale',
-      tags: ['audit', 'journal', 'log', 'tracabilite', 'historique'],
-    },
-    {
-      key: 'offline',
-      orderNumber: 24,
-      sectionCode: '24',
-      sectionNumber: 'Section 24',
-      title: 'Mode Hors Ligne & PWA',
-      category: 'hardware_security',
-      categoryLabel: 'Matériel, Sécurité & Audit',
-      description: 'Fonctionnement garanti 100% hors connexion Internet, synchronisation différée et stockage local.',
-      icon: WifiOff,
-      gradient: 'from-emerald-700 to-teal-800',
-      badge: '100% Hors Ligne',
-      tags: ['offline', 'hors ligne', 'pwa', 'sync', 'stockage local'],
-    },
+      // =========================================================================
+      // 6. MATÉRIEL & SYSTÈME
+      // =========================================================================
+      {
+        key: 'impression',
+        orderNumber: 16,
+        title: 'Matériel d’Impression ESC/POS',
+        category: 'hardware',
+        categoryLabel: 'Matériel',
+        description: 'Imprimantes thermiques 80mm/58mm caisse, cuisine, bar, réseau IP et tiroir-caisse RJ11.',
+        icon: Printer,
+        gradient: 'from-zinc-700 to-slate-900',
+        badge: 'ESC/POS & Réseau',
+        tags: ['impression', 'imprimante', 'thermique', '80mm', '58mm', 'tiroir', 'reseau', 'escpos'],
+      },
+      {
+        key: 'terminaux',
+        orderNumber: 17,
+        title: 'Terminaux & Caisses Enregistreuses',
+        category: 'hardware',
+        categoryLabel: 'Matériel',
+        description: 'Affectation des caisses fixes, tablettes serveurs, afficheur client et écrans tactiles.',
+        icon: Monitor,
+        gradient: 'from-cyan-700 to-blue-800',
+        badge: 'Caisses & Tablettes',
+        tags: ['terminal', 'tablette', 'caisse', 'pos', 'tactile', 'kds'],
+      },
+      {
+        key: 'offline',
+        orderNumber: 18,
+        title: 'Mode Hors Ligne & PWA',
+        category: 'hardware',
+        categoryLabel: 'Matériel',
+        description: 'Fonctionnement garanti 100% hors connexion Internet, synchronisation différée et stockage local.',
+        icon: WifiOff,
+        gradient: 'from-emerald-700 to-teal-800',
+        badge: '100% Hors Ligne',
+        tags: ['offline', 'hors ligne', 'pwa', 'sync', 'stockage local'],
+      },
+    ];
 
-    // =========================================================================
-    // MULTI-ÉTABLISSEMENTS & GROUPE
-    // =========================================================================
-    {
-      key: 'organisation',
-      orderNumber: 25,
-      sectionCode: 'GRP',
-      sectionNumber: 'Groupe',
-      title: 'Organisation & Groupe Multi-Sites',
-      category: 'group',
-      categoryLabel: 'Multi-Établissements & Siège',
-      description: 'Consolidation de chaîne de restaurants, enseignes, succursales et transferts multi-établissements.',
-      icon: Building2,
-      gradient: 'from-slate-700 to-slate-900',
-      badge: 'Multi-Établissements',
-      tags: ['organisation', 'groupe', 'chaine', 'succursale', 'reseau', 'multi-sites', 'groupe'],
-    },
-  ];;
+    // Groupe Multi-Sites : masqué si établissement unique (outlets.length <= 1)
+    if (outlets.length > 1) {
+      list.push({
+        key: 'organisation',
+        orderNumber: 19,
+        title: 'Organisation & Groupe Multi-Sites',
+        category: 'group',
+        categoryLabel: 'Groupe Multi-Sites',
+        description: 'Consolidation de chaîne de restaurants, enseignes, succursales et transferts multi-établissements.',
+        icon: Building2,
+        gradient: 'from-slate-700 to-slate-900',
+        badge: 'Multi-Sites',
+        tags: ['organisation', 'groupe', 'chaine', 'succursale', 'reseau', 'multi-sites'],
+      });
+    }
 
-  // Inconsistency Alerts
+    return list;
+  }, [outlets.length]);
+
+  // Alertes de cohérence opérationnelle
   const computedAlerts = useMemo(() => {
     const list: {
       id: string;
@@ -632,7 +484,7 @@ export const AdminCenterView: React.FC = () => {
         severity: 'warning',
         message: `Numéro d'Identifiant Unique (NIU) manquant pour "${activeRestaurant?.name}". Requis pour facturation conforme DGI.`,
         actionLabel: 'Renseigner NIU',
-        targetMenu: 'etablissement',
+        targetMenu: 'general',
       });
     }
 
@@ -660,7 +512,7 @@ export const AdminCenterView: React.FC = () => {
     return list;
   }, [cashRegisters, tables, activeRestaurant, settings, terminals, selectedOutletId]);
 
-  // Filtering and Sorting for the App Library (Ordre numérique ascendant strict 1 à 31 puis Groupe)
+  // Filtrage et recherche instantanée
   const filteredApps = useMemo(() => {
     return appLibrary
       .filter((app) => {
@@ -671,65 +523,103 @@ export const AdminCenterView: React.FC = () => {
         const q = searchQuery.toLowerCase().trim();
         const matchTitle = app.title.toLowerCase().includes(q);
         const matchDesc = app.description.toLowerCase().includes(q);
-        const matchSection = app.sectionNumber.toLowerCase().includes(q);
-        const matchCode = app.sectionCode.toLowerCase().includes(q);
         const matchCatLabel = app.categoryLabel.toLowerCase().includes(q);
         const matchTags = app.tags.some((t) => t.toLowerCase().includes(q));
 
-        return matchTitle || matchDesc || matchSection || matchCode || matchCatLabel || matchTags;
+        return matchTitle || matchDesc || matchCatLabel || matchTags;
       })
       .sort((a, b) => a.orderNumber - b.orderNumber);
   }, [appLibrary, selectedCategory, searchQuery]);
 
   const activeAppMeta = appLibrary.find((a) => a.key === activeSubMenu);
 
-  // Render the Selected Section Component
+  // Rendu de la section active
   const renderActiveSection = () => {
     switch (activeSubMenu) {
       case 'organisation':
         return <OrganizationSection />;
       case 'general':
-      case 'etablissement':
-        return <GeneralAndOutletsSection subTab={activeSubMenu === 'etablissement' ? 'etablissement' : 'general'} />;
-      case 'features':
-        return <FeatureCatalogSection />;
-      case 'modules':
+        return <GeneralAndOutletsSection subTab="general" />;
+      case 'features_modules':
+        return <FeaturesAndModulesSection />;
       case 'pos':
-      case 'caisse':
       case 'tables':
+      case 'caisse':
       case 'cuisine':
       case 'bar':
-      case 'livraison':
-      case 'reservations':
-      case 'evenements':
         return <OperationsOptionsSection subTab={activeSubMenu} />;
       case 'stock':
       case 'achats':
         return <StockAndPurchasesSection subTab={activeSubMenu} />;
-      case 'clients':
-      case 'fidelite':
-        return <ClientsAndLoyaltySection subTab={activeSubMenu === 'fidelite' ? 'fidelite' : 'clients'} />;
       case 'facturation':
       case 'fiscalite':
       case 'paiements':
-      case 'mobile_money':
-      case 'comptabilite':
         return <FiscalBillingPaymentsSection subTab={activeSubMenu} />;
-      case 'personnel':
+      case 'permissions':
       case 'notifications':
       case 'impression':
       case 'terminaux':
-      case 'integrations':
-      case 'securite':
-      case 'permissions':
       case 'audit':
       case 'offline':
-      case 'avance':
         return <HardwareAndSecuritySection subTab={activeSubMenu} />;
       default:
         return null;
     }
   };
+
+  // Liste dynamique des catégories pour les filtres
+  const availableCategories = useMemo(() => {
+    const cats: { key: AppCategory; label: string; count: number; icon: any }[] = [
+      { key: 'all', label: 'Toutes les Applications', count: appLibrary.length, icon: LayoutGrid },
+      {
+        key: 'identity_fiscal',
+        label: 'Identité & Fiscalité',
+        count: appLibrary.filter((a) => a.category === 'identity_fiscal').length,
+        icon: Building,
+      },
+      {
+        key: 'sales_floor',
+        label: 'Salle & Ventes',
+        count: appLibrary.filter((a) => a.category === 'sales_floor').length,
+        icon: ShoppingBag,
+      },
+      {
+        key: 'kitchen_bar',
+        label: 'Cuisine & Bar',
+        count: appLibrary.filter((a) => a.category === 'kitchen_bar').length,
+        icon: ChefHat,
+      },
+      {
+        key: 'stock_purchases',
+        label: 'Stock & Achats',
+        count: appLibrary.filter((a) => a.category === 'stock_purchases').length,
+        icon: Package,
+      },
+      {
+        key: 'team_access',
+        label: 'Équipe & Accès',
+        count: appLibrary.filter((a) => a.category === 'team_access').length,
+        icon: ShieldCheck,
+      },
+      {
+        key: 'hardware',
+        label: 'Matériel',
+        count: appLibrary.filter((a) => a.category === 'hardware').length,
+        icon: Printer,
+      },
+    ];
+
+    if (outlets.length > 1) {
+      cats.push({
+        key: 'group',
+        label: 'Groupe Multi-Sites',
+        count: appLibrary.filter((a) => a.category === 'group').length,
+        icon: Building2,
+      });
+    }
+
+    return cats;
+  }, [appLibrary, outlets.length]);
 
   return (
     <div className="space-y-6 pb-20">
@@ -743,11 +633,11 @@ export const AdminCenterView: React.FC = () => {
             <div className="flex items-center gap-2 flex-wrap">
               <h1 className="text-base sm:text-lg font-black tracking-tight">Configuration RestoMaster OS</h1>
               <span className="text-[10px] uppercase font-black tracking-wider px-2.5 py-0.5 rounded-full bg-amber-400/20 text-amber-300 border border-amber-400/30">
-                Bibliothèque d'Applications
+                Centre de Pilotage
               </span>
             </div>
             <p className="text-xs text-slate-400 mt-0.5">
-              Centre de pilotage modulaire : 32 applications de gouvernance opérationnelle, fiscale (CGI 2026) et matérielle.
+              Plateforme modulaire : {appLibrary.length} applications de gouvernance opérationnelle, fiscale (CGI 2026) et matérielle.
             </p>
           </div>
         </div>
@@ -844,7 +734,7 @@ export const AdminCenterView: React.FC = () => {
             <p className="text-[11px] text-slate-400 mt-0.5">
               {isSuperAdmin
                 ? 'Activez/désactivez à volonté tous les modules du système et déployez le profil type de votre restaurant en 1 clic.'
-                : 'Connectez-vous avec le rôle Direction pour modifier les modules et déployer des profils.'}
+                : 'Connectez-vous avec le rôle Direction ou Superadmin pour modifier les modules et déployer des profils.'}
             </p>
           </div>
         </div>
@@ -1022,7 +912,7 @@ export const AdminCenterView: React.FC = () => {
               {alt.actionLabel && (
                 <button
                   onClick={() => setActiveSubMenu(alt.targetMenu)}
-                  className="px-3.5 py-1.5 rounded-xl bg-white shadow-xs font-bold text-[11px] text-slate-800 hover:bg-slate-100 transition-colors shrink-0 border border-slate-200"
+                  className="px-3.5 py-1.5 rounded-xl bg-white shadow-xs font-bold text-[11px] text-slate-800 hover:bg-slate-100 transition-colors shrink-0 border border-slate-200 cursor-pointer"
                 >
                   {alt.actionLabel} →
                 </button>
@@ -1065,66 +955,21 @@ export const AdminCenterView: React.FC = () => {
               <div className="flex items-center gap-2 text-xs font-semibold text-slate-500 self-end md:self-auto">
                 <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
                 <span>
-                  {filteredApps.length} application{filteredApps.length > 1 ? 's' : ''} disponible
-                  {filteredApps.length > 1 ? 's' : ''}
+                  {filteredApps.length} application{filteredApps.length > 1 ? 's' : ''} disponible{filteredApps.length > 1 ? 's' : ''}
                 </span>
               </div>
             </div>
 
-            {/* Category Navigation Pills */}
+            {/* Category Navigation Pills (6 parcours logiques + Groupe) */}
             <div className="flex items-center gap-2 overflow-x-auto no-scrollbar scroll-smooth pt-1 pb-1">
-              {[
-                { key: 'all', label: 'Toutes les Applications', count: appLibrary.length, icon: LayoutGrid },
-                {
-                  key: 'system',
-                  label: 'Système & Établissements',
-                  count: appLibrary.filter((a) => a.category === 'system').length,
-                  icon: Building2,
-                },
-                {
-                  key: 'operations',
-                  label: 'Vente, Salle & Cuisine',
-                  count: appLibrary.filter((a) => a.category === 'operations').length,
-                  icon: Utensils,
-                },
-                {
-                  key: 'stocks',
-                  label: 'Stocks & Achats',
-                  count: appLibrary.filter((a) => a.category === 'stocks').length,
-                  icon: Package,
-                },
-                {
-                  key: 'services',
-                  label: 'Clients & Services',
-                  count: appLibrary.filter((a) => a.category === 'services').length,
-                  icon: Users,
-                },
-                {
-                  key: 'finance',
-                  label: 'Finance & Caisses',
-                  count: appLibrary.filter((a) => a.category === 'finance').length,
-                  icon: Coins,
-                },
-                {
-                  key: 'hardware_security',
-                  label: 'Matériel & Sécurité',
-                  count: appLibrary.filter((a) => a.category === 'hardware_security').length,
-                  icon: ShieldCheck,
-                },
-                {
-                  key: 'group',
-                  label: 'Multi-Sites',
-                  count: appLibrary.filter((a) => a.category === 'group').length,
-                  icon: Layers,
-                },
-              ].map((cat) => {
+              {availableCategories.map((cat) => {
                 const isSelected = selectedCategory === cat.key;
                 const CatIcon = cat.icon;
                 return (
                   <button
                     key={cat.key}
                     type="button"
-                    onClick={() => setSelectedCategory(cat.key as AppCategory)}
+                    onClick={() => setSelectedCategory(cat.key)}
                     className={`group flex items-center gap-2 px-3.5 py-2 rounded-2xl text-xs font-bold whitespace-nowrap transition-all shrink-0 cursor-pointer ${
                       isSelected
                         ? 'bg-slate-900 text-white shadow-md shadow-slate-900/15 ring-1 ring-slate-800'
@@ -1152,7 +997,7 @@ export const AdminCenterView: React.FC = () => {
             </div>
           </div>
 
-          {/* Grid of Applications (Style App Store / Launchpad) */}
+          {/* Grid of Applications (Launchpad) */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {filteredApps.map((app) => {
               const Icon = app.icon;
@@ -1163,11 +1008,10 @@ export const AdminCenterView: React.FC = () => {
                   onClick={() => setActiveSubMenu(app.key)}
                   className="group bg-white rounded-3xl border border-slate-200/90 hover:border-amber-400 p-5 shadow-xs hover:shadow-xl hover:-translate-y-1 transition-all duration-200 flex flex-col justify-between cursor-pointer relative overflow-hidden"
                 >
-                  {/* Subtle top corner gradient highlight */}
                   <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-br from-amber-400/5 to-transparent rounded-bl-full pointer-events-none group-hover:scale-125 transition-transform duration-300"></div>
 
                   <div>
-                    {/* Top Row: Icon + Section Badge */}
+                    {/* Top Row: Icon + Badge */}
                     <div className="flex items-start justify-between gap-3">
                       <div
                         className={`w-12 h-12 rounded-2xl bg-gradient-to-tr ${app.gradient} text-white flex items-center justify-center shadow-md shadow-slate-200 group-hover:scale-105 transition-transform duration-200 shrink-0`}
@@ -1175,16 +1019,11 @@ export const AdminCenterView: React.FC = () => {
                         <Icon className="w-6 h-6" />
                       </div>
 
-                      <div className="flex flex-col items-end gap-1">
-                        <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-lg bg-slate-100 text-slate-700 group-hover:bg-amber-50 group-hover:text-amber-900 transition-colors">
-                          {app.sectionNumber}
+                      {app.badge && (
+                        <span className="text-[9px] font-bold px-2 py-0.5 rounded-lg bg-amber-100 text-amber-900 border border-amber-200/60">
+                          {app.badge}
                         </span>
-                        {app.badge && (
-                          <span className="text-[9px] font-bold px-1.5 py-0.2 rounded-md bg-amber-100 text-amber-900 border border-amber-200/60">
-                            {app.badge}
-                          </span>
-                        )}
-                      </div>
+                      )}
                     </div>
 
                     {/* Title & Category */}
@@ -1229,7 +1068,7 @@ export const AdminCenterView: React.FC = () => {
                   setSearchQuery('');
                   setSelectedCategory('all');
                 }}
-                className="px-4 py-2 rounded-xl bg-slate-900 text-white font-bold text-xs hover:bg-slate-800"
+                className="px-4 py-2 rounded-xl bg-slate-900 text-white font-bold text-xs hover:bg-slate-800 cursor-pointer"
               >
                 Réinitialiser la recherche
               </button>
@@ -1241,14 +1080,12 @@ export const AdminCenterView: React.FC = () => {
         /* MODE B : INTERFACE DIRECTE DE CONFIGURATION (AVEC BOUTON RETOUR)          */
         /* ========================================================================= */
         <div className="space-y-6 animate-in fade-in duration-200">
-          {/* Top Bar with Prominent Back Button and Breadcrumbs */}
           <div className="bg-white p-4 sm:p-5 rounded-3xl border border-slate-200 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="flex items-center gap-3">
-              {/* Le bouton retour demandé par l'utilisateur */}
               <button
                 type="button"
                 onClick={() => setActiveSubMenu('library')}
-                className="flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs shadow-md shadow-slate-900/10 transition-all hover:-translate-x-0.5 shrink-0"
+                className="flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs shadow-md shadow-slate-900/10 transition-all hover:-translate-x-0.5 shrink-0 cursor-pointer"
               >
                 <ArrowLeft className="w-4 h-4 text-amber-400" />
                 <span>Bibliothèque d'Applications</span>
@@ -1256,13 +1093,10 @@ export const AdminCenterView: React.FC = () => {
 
               <div className="h-6 w-px bg-slate-200 hidden sm:block"></div>
 
-              {/* Breadcrumb & App Identity */}
               {activeAppMeta && (
                 <div className="min-w-0">
                   <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
                     <span>{activeAppMeta.categoryLabel}</span>
-                    <span>•</span>
-                    <span className="text-amber-800 font-black">{activeAppMeta.sectionNumber}</span>
                   </div>
                   <h2 className="text-sm sm:text-base font-black text-slate-900 truncate">
                     {activeAppMeta.title}
@@ -1281,7 +1115,7 @@ export const AdminCenterView: React.FC = () => {
               >
                 {appLibrary.map((app) => (
                   <option key={app.key} value={app.key}>
-                    {app.sectionNumber} — {app.title}
+                    {app.title}
                   </option>
                 ))}
               </select>
