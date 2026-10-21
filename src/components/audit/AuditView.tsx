@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { PageHeader } from '../ui';
 import { useRestaurant } from '../../context/RestaurantContext';
 import { formatDateTime } from '../../lib/utils';
 import { ShieldAlert, Search, Filter, Clock, User, Layers } from 'lucide-react';
@@ -20,6 +21,18 @@ export const AuditView: React.FC = () => {
 
   return (
     <div className="space-y-6 pb-12">
+      {/* En-tête standardisé de la vue */}
+      <PageHeader
+        icon={<ShieldAlert className="w-5 h-5" />}
+        title="Journal d'Audit & Sécurité"
+        subtitle="Traçabilité immuable de toutes les opérations sensibles, encaissements, annulations et modifications"
+        badge={
+          <span className="text-xs px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 font-bold border border-emerald-200">
+            {auditLogs.length} événement(s) sécurisé(s)
+          </span>
+        }
+      />
+
       {/* Top Header & Search */}
       <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-4">
         <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto">
@@ -61,7 +74,7 @@ export const AuditView: React.FC = () => {
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse text-xs">
             <thead>
-              <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase text-[10px]">
+              <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase text-xs">
                 <th className="py-3 px-4">Date & Heure</th>
                 <th className="py-3 px-4">Utilisateur & Rôle</th>
                 <th className="py-3 px-4">Module</th>
@@ -78,11 +91,11 @@ export const AuditView: React.FC = () => {
 
                   <td className="py-3 px-4">
                     <div className="font-bold text-slate-900">{log.userName}</div>
-                    <div className="text-[10px] text-slate-400 capitalize">{log.userRole}</div>
+                    <div className="text-xs text-slate-400 capitalize">{log.userRole}</div>
                   </td>
 
                   <td className="py-3 px-4">
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700">
+                    <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700">
                       {log.module}
                     </span>
                   </td>

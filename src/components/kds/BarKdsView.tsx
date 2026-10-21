@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { PageHeader } from '../ui';
 import { useRestaurant } from '../../context/RestaurantContext';
 import { useToast } from '../../context/ToastContext';
 import { Order, OrderItem } from '../../types/restaurant';
@@ -318,62 +319,66 @@ export const BarKdsView: React.FC = () => {
 
   return (
     <div className="space-y-6 pb-16">
-      {/* Header */}
-      <div className="bg-slate-900 text-white p-4 sm:p-5 rounded-2xl flex flex-col xl:flex-row xl:items-center justify-between gap-4 shadow-xl border border-slate-800">
-        <div className="flex items-center gap-3">
-          <div className="w-11 h-11 rounded-2xl bg-emerald-500 text-slate-950 flex items-center justify-center font-bold shadow-md shadow-emerald-500/20">
-            <Wine className="w-6 h-6" />
-          </div>
-          <div>
-            <h2 className="text-base sm:text-lg font-black tracking-tight flex items-center gap-2">
-              <span>Écran Bar & Lounge KDS</span>
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
-            </h2>
-            <p className="text-xs text-slate-400">
-              Cocktails signature, vins & boissons fraîches • Traçabilité heure par heure
-            </p>
-          </div>
-        </div>
+      {/* En-tête standardisé de la vue */}
+      <PageHeader
+        icon={<Wine className="w-5 h-5 text-emerald-400" />}
+        title="Écran Bar & Lounge KDS"
+        subtitle="Cocktails signature, vins & boissons fraîches • Traçabilité heure par heure"
+        badge={
+          <span className="flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 font-bold border border-emerald-200">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            En direct
+          </span>
+        }
+        actions={
+          <div className="flex items-center gap-2 flex-wrap">
+            {isBarLossesAllowed && (
+              <button
+                type="button"
+                onClick={() => setLossModalOpen(true)}
+                className="px-3 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-800 border border-rose-200 text-xs font-bold transition-colors flex items-center gap-1.5 shadow-2xs cursor-pointer"
+              >
+                <AlertTriangle className="w-3.5 h-3.5 text-rose-600" />
+                <span>Déclarer Perte / Casse</span>
+              </button>
+            )}
 
-        {/* Action buttons and Tab filters */}
+            {isBarCocktailsAllowed && (
+              <button
+                type="button"
+                onClick={() => setCocktailsModalOpen(true)}
+                className="px-3 py-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 text-xs font-bold transition-colors flex items-center gap-1.5 shadow-2xs cursor-pointer"
+              >
+                <BookOpen className="w-3.5 h-3.5 text-amber-600" />
+                <span>Fiches Cocktails</span>
+              </button>
+            )}
+
+            {/* Sound toggle & chime button */}
+            <button
+              type="button"
+              onClick={() => {
+                const nextState = !soundEnabled;
+                setSoundEnabled(nextState);
+                if (nextState) playAudioChime('kitchen');
+              }}
+              className={`px-3 py-1.5 rounded-xl border transition-colors shadow-2xs flex items-center gap-1.5 text-xs font-bold cursor-pointer ${
+                soundEnabled
+                  ? 'bg-emerald-50 text-emerald-900 border-emerald-300 hover:bg-emerald-100'
+                  : 'bg-white text-slate-500 border-slate-200 hover:text-slate-700'
+              }`}
+              title={soundEnabled ? 'Alerte sonore bar active (Cliquer pour couper)' : 'Alerte sonore bar coupée (Cliquer pour réactiver)'}
+            >
+              {soundEnabled ? <Volume2 className="w-3.5 h-3.5 text-emerald-600" /> : <VolumeX className="w-3.5 h-3.5 text-slate-500" />}
+              <span className="text-xs font-bold hidden sm:inline">{soundEnabled ? 'Sonnette Active' : 'Sonnette Muette'}</span>
+            </button>
+          </div>
+        }
+      />
+
+      {/* Top Main Navigation & KDS Filters Bar */}
+      <div className="bg-slate-900 text-white p-3 sm:p-4 rounded-2xl flex flex-col xl:flex-row xl:items-center justify-between gap-4 shadow-xl border border-slate-800">
         <div className="flex flex-wrap items-center gap-2">
-          {isBarLossesAllowed && (
-            <button
-              onClick={() => setLossModalOpen(true)}
-              className="px-3 py-1.5 rounded-xl bg-rose-950/70 hover:bg-rose-900 text-rose-200 border border-rose-800 text-xs font-bold transition-colors flex items-center gap-1.5 shadow-2xs cursor-pointer"
-            >
-              <AlertTriangle className="w-3.5 h-3.5 text-rose-400" />
-              <span>Déclarer Perte / Casse</span>
-            </button>
-          )}
-
-          {isBarCocktailsAllowed && (
-            <button
-              onClick={() => setCocktailsModalOpen(true)}
-              className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-300 border border-slate-700 text-xs font-bold transition-colors flex items-center gap-1.5 shadow-2xs cursor-pointer"
-            >
-              <BookOpen className="w-3.5 h-3.5 text-amber-400" />
-              <span>Fiches Cocktails</span>
-            </button>
-          )}
-
-          {/* Sound toggle & chime button */}
-          <button
-            onClick={() => {
-              const nextState = !soundEnabled;
-              setSoundEnabled(nextState);
-              if (nextState) playAudioChime('kitchen');
-            }}
-            className={`px-3 py-1.5 rounded-xl border transition-colors shadow-2xs flex items-center gap-1.5 text-xs font-bold cursor-pointer ${
-              soundEnabled
-                ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 hover:bg-emerald-500/30'
-                : 'bg-slate-800 text-slate-500 border-slate-700 hover:text-slate-400'
-            }`}
-            title={soundEnabled ? 'Alerte sonore bar active (Cliquer pour couper)' : 'Alerte sonore bar coupée (Cliquer pour réactiver)'}
-          >
-            {soundEnabled ? <Volume2 className="w-3.5 h-3.5 text-emerald-400" /> : <VolumeX className="w-3.5 h-3.5 text-slate-500" />}
-            <span className="text-[11px] font-bold hidden sm:inline">{soundEnabled ? 'Sonnette Active' : 'Sonnette Muette'}</span>
-          </button>
 
           <div className="flex flex-wrap items-center gap-1.5 bg-slate-800/90 p-1.5 rounded-xl border border-slate-700 text-xs font-semibold">
           <button

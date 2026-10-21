@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { PageHeader, Button } from '../ui';
 import { useRestaurant } from '../../context/RestaurantContext';
 import { Order, PaymentMethod } from '../../types/restaurant';
 import { formatCurrency, formatDateTime } from '../../lib/utils';
@@ -249,11 +250,44 @@ export const ReportsView: React.FC = () => {
 
   return (
     <div className="space-y-6 pb-12">
+      {/* En-tête standardisé de la vue */}
+      <PageHeader
+        icon={<BarChart3 className="w-5 h-5" />}
+        title="Rapports & Statistiques"
+        subtitle="Indicateurs de vente, analyses des marges, palmarès des plats et productivité du personnel"
+        badge={
+          <span className="text-xs px-2.5 py-1 rounded-full bg-blue-100 text-blue-800 font-bold border border-blue-200">
+            Analytique RestoMaster
+          </span>
+        }
+        actions={
+          <div className="flex items-center gap-2 flex-wrap">
+            <Button
+              variant="outline"
+              size="touch"
+              onClick={handleExportCsv}
+              icon={Download}
+            >
+              Exporter CSV
+            </Button>
+            <Button
+              variant="secondary"
+              size="touch"
+              onClick={handlePrint}
+              icon={Printer}
+            >
+              Imprimer Bilan (PDF)
+            </Button>
+          </div>
+        }
+      />
+
       {/* Top Controls Bar */}
       <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-xs flex flex-col lg:flex-row items-center justify-between gap-4">
         {/* Time Range Selector */}
         <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl text-xs font-bold border border-slate-200 w-full lg:w-auto">
           <button
+            type="button"
             onClick={() => setTimeRange('day')}
             className={`flex-1 sm:flex-none px-3.5 py-1.5 rounded-lg transition-all ${
               timeRange === 'day' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
@@ -262,6 +296,7 @@ export const ReportsView: React.FC = () => {
             Aujourd'hui
           </button>
           <button
+            type="button"
             onClick={() => setTimeRange('week')}
             className={`flex-1 sm:flex-none px-3.5 py-1.5 rounded-lg transition-all ${
               timeRange === 'week' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
@@ -270,6 +305,7 @@ export const ReportsView: React.FC = () => {
             Cette semaine
           </button>
           <button
+            type="button"
             onClick={() => setTimeRange('month')}
             className={`flex-1 sm:flex-none px-3.5 py-1.5 rounded-lg transition-all ${
               timeRange === 'month' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
@@ -278,31 +314,13 @@ export const ReportsView: React.FC = () => {
             Ce mois
           </button>
           <button
+            type="button"
             onClick={() => setTimeRange('all')}
             className={`flex-1 sm:flex-none px-3.5 py-1.5 rounded-lg transition-all ${
               timeRange === 'all' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
             }`}
           >
             Tout l'historique
-          </button>
-        </div>
-
-        {/* Export / Print Actions */}
-        <div className="flex items-center gap-2 w-full lg:w-auto justify-end">
-          <button
-            onClick={handleExportCsv}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold border border-slate-200 transition-colors"
-            title="Télécharger les données en tableau Excel CSV"
-          >
-            <Download className="w-4 h-4 text-emerald-600" />
-            <span>Exporter CSV</span>
-          </button>
-          <button
-            onClick={handlePrint}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold shadow-xs transition-colors"
-          >
-            <Printer className="w-4 h-4 text-amber-400" />
-            <span>Imprimer Bilan (PDF)</span>
           </button>
         </div>
       </div>

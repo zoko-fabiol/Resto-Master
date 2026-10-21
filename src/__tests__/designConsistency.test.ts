@@ -11,6 +11,24 @@ import { join } from 'node:path';
 const MIGRATED_VIEWS = [
   'src/components/delivery/DeliveryView.tsx',
   'src/components/stock/StockView.tsx',
+  'src/components/dashboard/DashboardView.tsx',
+  'src/components/events/EventsView.tsx',
+  'src/components/hygiene/HygieneView.tsx',
+  'src/components/fiscal/FiscalCenterView.tsx',
+  'src/components/cash/CashRegisterView.tsx',
+  'src/components/maincourante/MainCouranteView.tsx',
+  'src/components/reservations/ReservationsView.tsx',
+  'src/components/clients/ClientsView.tsx',
+  'src/components/menu/MenuView.tsx',
+  'src/components/purchases/PurchasesView.tsx',
+  'src/components/finance/FinanceView.tsx',
+  'src/components/reports/ReportsView.tsx',
+  'src/components/staff/StaffView.tsx',
+  'src/components/documents/DocumentsView.tsx',
+  'src/components/audit/AuditView.tsx',
+  'src/components/tables/TablesView.tsx',
+  'src/components/kds/KitchenKdsView.tsx',
+  'src/components/kds/BarKdsView.tsx',
 ];
 
 describe('Uniformisation du design — vues migrées', () => {

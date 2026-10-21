@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { PageHeader, Button } from '../ui';
 import { useRestaurant } from '../../context/RestaurantContext';
 import { useToast } from '../../context/ToastContext';
 import { Reservation, ReservationStatus } from '../../types/restaurant';
@@ -172,6 +173,28 @@ export const ReservationsView: React.FC<ReservationsViewProps> = ({ onSeatGuest 
 
   return (
     <div className="space-y-6 pb-12">
+      {/* En-tête standardisé de la vue */}
+      <PageHeader
+        icon={<Calendar className="w-5 h-5" />}
+        title="Réservations"
+        subtitle="Gestion des tables réservées, arrivées des clients et politique d'acomptes"
+        badge={
+          <span className="text-xs px-2.5 py-1 rounded-full bg-blue-100 text-blue-800 font-bold border border-blue-200">
+            {filteredReservations.length} réservation(s)
+          </span>
+        }
+        actions={
+          <Button
+            variant="primary"
+            size="touch"
+            onClick={() => setModalOpen(true)}
+            icon={Plus}
+          >
+            Nouvelle Réservation
+          </Button>
+        }
+      />
+
       {/* Top Header & Filters */}
       <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-4">
         <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto">
@@ -202,13 +225,14 @@ export const ReservationsView: React.FC<ReservationsViewProps> = ({ onSeatGuest 
           </select>
         </div>
 
-        <button
+        <Button
+          variant="primary"
+          size="touch"
           onClick={() => setModalOpen(true)}
-          className="w-full sm:w-auto flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold shadow-xs transition-all"
+          icon={Plus}
         >
-          <Plus className="w-4 h-4" />
-          <span>Nouvelle Réservation</span>
-        </button>
+          Nouvelle Réservation
+        </Button>
       </div>
 
       {/* Reservations List */}
@@ -216,7 +240,7 @@ export const ReservationsView: React.FC<ReservationsViewProps> = ({ onSeatGuest 
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse text-xs">
             <thead>
-              <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase text-[10px]">
+              <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase text-xs">
                 <th className="py-3 px-4">Client & Contact</th>
                 <th className="py-3 px-4">Date & Heure</th>
                 <th className="py-3 px-4">Convives</th>

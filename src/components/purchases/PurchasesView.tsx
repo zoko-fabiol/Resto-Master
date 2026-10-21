@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { PageHeader, Button } from '../ui';
 import { useRestaurant } from '../../context/RestaurantContext';
 import { useToast } from '../../context/ToastContext';
 import { Supplier, PurchaseOrder, PurchaseOrderItem } from '../../types/restaurant';
@@ -175,10 +176,45 @@ export const PurchasesView: React.FC = () => {
 
   return (
     <div className="space-y-6 pb-12">
+      {/* En-tête standardisé de la vue */}
+      <PageHeader
+        icon={<Truck className="w-5 h-5" />}
+        title="Achats & Fournisseurs"
+        subtitle="Bons de commande, réceptions de marchandises, suivi mercuriale et répertoire fournisseurs"
+        badge={
+          <span className="text-xs px-2.5 py-1 rounded-full bg-blue-100 text-blue-800 font-bold border border-blue-200">
+            {purchaseOrders.length} commande(s)
+          </span>
+        }
+        actions={
+          <div className="flex items-center gap-2 flex-wrap">
+            <Button
+              variant="outline"
+              size="touch"
+              onClick={() => setSupplierModalOpen(true)}
+              icon={Plus}
+            >
+              Nouveau Fournisseur
+            </Button>
+            {isRuleEnabled('achats_purchase_orders', true) && (
+              <Button
+                variant="primary"
+                size="touch"
+                onClick={() => setPoModalOpen(true)}
+                icon={Truck}
+              >
+                Créer Bon de Commande
+              </Button>
+            )}
+          </div>
+        }
+      />
+
       {/* Header & Tabs */}
       <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-4">
         <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl text-xs font-bold border border-slate-200 w-full sm:w-auto overflow-x-auto">
           <button
+            type="button"
             onClick={() => setActiveTab('orders')}
             className={`px-3.5 py-1.5 rounded-lg transition-all ${
               activeTab === 'orders' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
@@ -187,6 +223,7 @@ export const PurchasesView: React.FC = () => {
             Bons de Commande ({purchaseOrders.length})
           </button>
           <button
+            type="button"
             onClick={() => setActiveTab('suppliers')}
             className={`px-3.5 py-1.5 rounded-lg transition-all ${
               activeTab === 'suppliers' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
@@ -195,12 +232,12 @@ export const PurchasesView: React.FC = () => {
             Répertoire Fournisseurs ({suppliers.length})
           </button>
           {isRuleEnabled('achats_purchase_requests', true) && (
-            <span className="text-[10px] px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 font-semibold border border-blue-200 shrink-0">
+            <span className="text-xs px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 font-semibold border border-blue-200 shrink-0">
               DA Actives
             </span>
           )}
           {isRuleEnabled('achats_validation', true) && (
-            <span className="text-[10px] px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 font-semibold border border-emerald-200 shrink-0">
+            <span className="text-xs px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 font-semibold border border-emerald-200 shrink-0">
               Circuit Validation
             </span>
           )}
@@ -208,17 +245,18 @@ export const PurchasesView: React.FC = () => {
 
         <div className="flex items-center gap-2 w-full sm:w-auto justify-end flex-wrap">
           {isRuleEnabled('achats_supplier_comparison', true) && (
-            <span className="text-[10px] font-bold text-slate-500 hidden md:inline">
+            <span className="text-xs font-bold text-slate-500 hidden md:inline">
               Mercuriale Active
             </span>
           )}
           {isRuleEnabled('achats_price_history', true) && (
-            <span className="text-[10px] font-bold text-slate-500 hidden md:inline">
+            <span className="text-xs font-bold text-slate-500 hidden md:inline">
               Historique Prix
             </span>
           )}
           {isRuleEnabled('achats_supplier_returns', true) && (
             <button
+              type="button"
               onClick={() => {
                 showToast({
                   type: 'info',
@@ -230,22 +268,6 @@ export const PurchasesView: React.FC = () => {
               title="Gérer les retours et avoirs fournisseurs"
             >
               Retours / Avoirs
-            </button>
-          )}
-          <button
-            onClick={() => setSupplierModalOpen(true)}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-semibold border border-slate-200"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Nouveau Fournisseur</span>
-          </button>
-          {isRuleEnabled('achats_purchase_orders', true) && (
-            <button
-              onClick={() => setPoModalOpen(true)}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold shadow-xs"
-            >
-              <Truck className="w-4 h-4" />
-              <span>Créer Bon de Commande</span>
             </button>
           )}
         </div>

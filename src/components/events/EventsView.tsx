@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { PageHeader, Button } from '../ui';
 import { useRestaurant } from '../../context/RestaurantContext';
 import { useToast } from '../../context/ToastContext';
 import { formatCurrency } from '../../lib/utils';
@@ -121,53 +122,52 @@ export const EventsView: React.FC = () => {
 
   return (
     <div className="space-y-6 pb-12">
-      {/* Top Banner */}
-      <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2">
-            <h2 className="text-base font-bold text-slate-900">Événements, Banquets & Service Traiteur</h2>
-            <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-100 text-purple-800 font-bold">
-              B2B & Cérémonies
-            </span>
-          </div>
-          <p className="text-xs text-slate-500 mt-0.5">
-            Gestion du cycle événementiel : Devis, acomptes, réservations de salons, buffets et soldes de facturation
-          </p>
-        </div>
-
-        <button
-          onClick={() => setModalOpen(true)}
-          className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold shadow-xs transition-colors shrink-0"
-        >
-          <Plus className="w-4 h-4" />
-          <span>Nouvel Événement / Banquet</span>
-        </button>
-      </div>
+      {/* En-tête standardisé de la vue */}
+      <PageHeader
+        icon={<CalendarDays className="w-5 h-5" />}
+        title="Événements & Banquets"
+        subtitle="Gestion du cycle événementiel : devis, acomptes, réservations de salons, buffets et soldes de facturation"
+        badge={
+          <span className="text-xs px-2.5 py-1 rounded-full bg-purple-100 text-purple-800 font-bold border border-purple-200">
+            B2B & Cérémonies
+          </span>
+        }
+        actions={
+          <Button
+            variant="primary"
+            size="touch"
+            onClick={() => setModalOpen(true)}
+            icon={Plus}
+          >
+            Nouvel Événement / Banquet
+          </Button>
+        }
+      />
 
       {/* KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
-          <div className="text-[11px] font-bold uppercase text-slate-400">Total Devis Événements</div>
-          <div className="text-xl font-black text-slate-900 mt-1">
+          <div className="text-xs font-bold uppercase text-slate-400">Total Devis Événements</div>
+          <div className="text-xl font-black text-slate-900 mt-1 tabular-nums">
             {formatCurrency(totalQuotes, settings.currency)}
           </div>
-          <div className="text-[10px] text-slate-500 mt-0.5">{events.length} événements enregistrés</div>
+          <div className="text-xs text-slate-500 mt-0.5">{events.length} événements enregistrés</div>
         </div>
 
         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
-          <div className="text-[11px] font-bold uppercase text-emerald-600">Acomptes Déjà Encaissés</div>
-          <div className="text-xl font-black text-emerald-700 mt-1">
+          <div className="text-xs font-bold uppercase text-emerald-600">Acomptes Déjà Encaissés</div>
+          <div className="text-xl font-black text-emerald-700 mt-1 tabular-nums">
             {formatCurrency(totalDeposits, settings.currency)}
           </div>
-          <div className="text-[10px] text-slate-500 mt-0.5">Fonds sécurisés en caisse ou banque</div>
+          <div className="text-xs text-slate-500 mt-0.5">Fonds sécurisés en caisse ou banque</div>
         </div>
 
         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
-          <div className="text-[11px] font-bold uppercase text-rose-600">Soldes à Recouvrer</div>
-          <div className="text-xl font-black text-rose-600 mt-1">
+          <div className="text-xs font-bold uppercase text-rose-600">Soldes à Recouvrer</div>
+          <div className="text-xl font-black text-rose-600 mt-1 tabular-nums">
             {formatCurrency(totalRemaining, settings.currency)}
           </div>
-          <div className="text-[10px] text-rose-500 mt-0.5">À encaisser le jour J ou à terme</div>
+          <div className="text-xs text-rose-500 mt-0.5">À encaisser le jour J ou à terme</div>
         </div>
       </div>
 

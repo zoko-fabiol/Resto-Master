@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { PageHeader } from '../ui';
 import { useRestaurant } from '../../context/RestaurantContext';
 import { useToast } from '../../context/ToastContext';
 import { Customer } from '../../types/restaurant';
@@ -54,7 +55,38 @@ export const ClientsView: React.FC = () => {
 
   return (
     <div className="space-y-6 pb-12">
-      {/* Top Bar */}
+      {/* En-tête standardisé de la vue */}
+      <PageHeader
+        icon={<Users className="w-5 h-5" />}
+        title="Gestion des Clients"
+        subtitle="Fichier clients, programme de fidélité, historiques de consommation et communications"
+        badge={
+          <span className="text-xs px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 font-bold border border-emerald-200">
+            {customers.length} client(s) fidélisé(s)
+          </span>
+        }
+        actions={
+          <div className="flex items-center gap-2 text-xs text-slate-600 font-medium flex-wrap">
+            {isRuleEnabled('loyalty_active', true) && isRuleEnabled('clients_loyalty', true) && (
+              <span className="px-2.5 py-1 rounded-lg bg-amber-50 text-amber-900 border border-amber-200 font-bold">
+                Fidélité : {isRuleEnabled('loyalty_points_accrual', true) ? 'Acquisition active' : 'Mode standard'}
+              </span>
+            )}
+            {isRuleEnabled('loyalty_promotions', true) && (
+              <span className="px-2 py-0.5 rounded-md bg-purple-50 text-purple-700 font-semibold border border-purple-200">
+                Promos En Cours
+              </span>
+            )}
+            {isRuleEnabled('loyalty_referral', true) && (
+              <span className="px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 font-semibold border border-blue-200">
+                Parrainage
+              </span>
+            )}
+          </div>
+        }
+      />
+
+      {/* Top Search Bar */}
       <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-4">
         <div className="relative w-full sm:w-72">
           <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
@@ -65,25 +97,6 @@ export const ClientsView: React.FC = () => {
             onChange={(e) => setSearch(e.target.value)}
             className="w-full pl-9 pr-3 py-2 text-xs rounded-xl bg-slate-50 border border-slate-200"
           />
-        </div>
-
-        <div className="flex items-center gap-2 text-xs text-slate-500 font-medium flex-wrap">
-          {isRuleEnabled('loyalty_active', true) && isRuleEnabled('clients_loyalty', true) && (
-            <span className="px-2.5 py-1 rounded-lg bg-amber-50 text-amber-900 border border-amber-200 font-bold">
-              Fidélité : {isRuleEnabled('loyalty_points_accrual', true) ? 'Acquisition active' : 'Mode standard'}
-            </span>
-          )}
-          {isRuleEnabled('loyalty_promotions', true) && (
-            <span className="px-2 py-0.5 rounded-md bg-purple-50 text-purple-700 font-semibold border border-purple-200">
-              Promos En Cours
-            </span>
-          )}
-          {isRuleEnabled('loyalty_referral', true) && (
-            <span className="px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 font-semibold border border-blue-200">
-              Parrainage
-            </span>
-          )}
-          <span>{customers.length} clients fidélisés</span>
         </div>
       </div>
 
@@ -115,7 +128,7 @@ export const ClientsView: React.FC = () => {
                       </div>
                     )}
                     {isRuleEnabled('loyalty_tiers', true) && (
-                      <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded border ${tier.style}`}>
+                      <span className={`text-xs font-bold px-2 py-0.5 rounded-md border ${tier.style}`}>
                         {tier.label}
                       </span>
                     )}

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback, useReducer, useRef } from 'react';
+import { PageHeader } from '../ui';
 import { useRestaurant } from '../../context/RestaurantContext';
 import { useToast } from '../../context/ToastContext';
 import { useConfirm, usePrompt } from '../ui/ConfirmDialog';
@@ -641,6 +642,18 @@ export const TablesView: React.FC<TablesViewProps> = ({ onOpenOrder, onPayOrder,
 
   return (
     <div className="space-y-6 pb-12 select-none">
+      {/* En-tête standardisé de la vue */}
+      <PageHeader
+        icon={<Utensils className="w-5 h-5" />}
+        title="Plan de Salle & Tables"
+        subtitle="Plan vectoriel interactif 2D, gestion des zones, statut des tables en temps réel et bornes de table"
+        badge={
+          <span className="text-xs px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 font-bold border border-emerald-200">
+            {tables.length} table(s) configurée(s)
+          </span>
+        }
+      />
+
       {/* TOP NAVIGATION & MODE BAR */}
       <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-xs flex flex-col xl:flex-row xl:items-center justify-between gap-4">
         {/* Left: View Switcher (Plan 2D, Grille, Commandes) & Zone Tabs */}

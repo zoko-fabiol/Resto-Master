@@ -1,4 +1,5 @@
 import React, { useState, useRef } from 'react';
+import { PageHeader, Button } from '../ui';
 import { useRestaurant } from '../../context/RestaurantContext';
 import { useToast } from '../../context/ToastContext';
 import { Product, RecipeIngredient } from '../../types/restaurant';
@@ -172,6 +173,28 @@ export const MenuView: React.FC = () => {
 
   return (
     <div className="space-y-6 pb-12">
+      {/* En-tête standardisé de la vue */}
+      <PageHeader
+        icon={<MenuSquare className="w-5 h-5" />}
+        title="Carte & Menus"
+        subtitle="Gestion des plats, boissons, fiches techniques, tarifs et disponibilité"
+        badge={
+          <span className="text-xs px-2.5 py-1 rounded-full bg-amber-100 text-amber-900 font-bold border border-amber-200">
+            {products.length} référence(s)
+          </span>
+        }
+        actions={
+          <Button
+            variant="primary"
+            size="touch"
+            onClick={() => setModalOpen(true)}
+            icon={Plus}
+          >
+            Créer un Plat / Produit
+          </Button>
+        }
+      />
+
       {/* Header & Filter Controls */}
       <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-xs space-y-3.5 min-w-0">
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 min-w-0">
@@ -195,13 +218,14 @@ export const MenuView: React.FC = () => {
             )}
           </div>
 
-          <button
+          <Button
+            variant="primary"
+            size="touch"
             onClick={() => setModalOpen(true)}
-            className="flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold shadow-xs transition-all shrink-0 w-full sm:w-auto"
+            icon={Plus}
           >
-            <Plus className="w-4 h-4" />
-            <span>Créer un Plat / Produit</span>
-          </button>
+            Créer un Plat / Produit
+          </Button>
         </div>
 
         {/* Scrollable Category Segmented Bar */}

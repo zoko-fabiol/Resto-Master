@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { PageHeader, Button } from '../ui';
 import { useRestaurant } from '../../context/RestaurantContext';
 import { useToast } from '../../context/ToastContext';
 import { Expense, PaymentMethod } from '../../types/restaurant';
@@ -81,6 +82,28 @@ export const FinanceView: React.FC = () => {
 
   return (
     <div className="space-y-6 pb-12">
+      {/* En-tête standardisé de la vue */}
+      <PageHeader
+        icon={<DollarSign className="w-5 h-5" />}
+        title="Finances & Dépenses"
+        subtitle="Suivi des décaissements, charges opérationnelles et résultat d'exploitation prévisionnel"
+        badge={
+          <span className="text-xs px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 font-bold border border-emerald-200">
+            Gestion de Trésorerie
+          </span>
+        }
+        actions={
+          <Button
+            variant="primary"
+            size="touch"
+            onClick={() => setModalOpen(true)}
+            icon={Plus}
+          >
+            Saisir une Dépense
+          </Button>
+        }
+      />
+
       {/* Top Cards Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {/* Recettes Réalisées */}
@@ -92,7 +115,7 @@ export const FinanceView: React.FC = () => {
             </div>
           </div>
           <div className="mt-3">
-            <div className="text-2xl font-black text-emerald-700">
+            <div className="text-2xl font-black text-emerald-700 tabular-nums">
               +{formatCurrency(totalRevenues, settings.currency)}
             </div>
             <div className="text-xs text-slate-500 mt-0.5">
@@ -110,7 +133,7 @@ export const FinanceView: React.FC = () => {
             </div>
           </div>
           <div className="mt-3">
-            <div className="text-2xl font-black text-rose-700">
+            <div className="text-2xl font-black text-rose-700 tabular-nums">
               -{formatCurrency(totalExpenses, settings.currency)}
             </div>
             <div className="text-xs text-slate-500 mt-0.5">
@@ -129,7 +152,7 @@ export const FinanceView: React.FC = () => {
           </div>
           <div className="mt-3">
             <div
-              className={`text-2xl font-black ${
+              className={`text-2xl font-black tabular-nums ${
                 netEstimatedResult >= 0 ? 'text-emerald-700' : 'text-rose-700'
               }`}
             >
@@ -146,6 +169,7 @@ export const FinanceView: React.FC = () => {
       <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-4">
         <div className="flex items-center gap-1.5 overflow-x-auto w-full sm:w-auto">
           <button
+            type="button"
             onClick={() => setSelectedCategory('all')}
             className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all ${
               selectedCategory === 'all'
@@ -166,6 +190,7 @@ export const FinanceView: React.FC = () => {
           ].map((cat) => (
             <button
               key={cat.id}
+              type="button"
               onClick={() => setSelectedCategory(cat.id)}
               className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all ${
                 selectedCategory === cat.id
@@ -178,13 +203,14 @@ export const FinanceView: React.FC = () => {
           ))}
         </div>
 
-        <button
+        <Button
+          variant="primary"
+          size="touch"
           onClick={() => setModalOpen(true)}
-          className="w-full sm:w-auto flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold shadow-xs transition-all"
+          icon={Plus}
         >
-          <Plus className="w-4 h-4" />
-          <span>Saisir une Dépense</span>
-        </button>
+          Saisir une Dépense
+        </Button>
       </div>
 
       {/* Expenses Table */}
@@ -192,7 +218,7 @@ export const FinanceView: React.FC = () => {
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse text-xs">
             <thead>
-              <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase text-[10px]">
+              <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase text-xs">
                 <th className="py-3 px-4">Date</th>
                 <th className="py-3 px-4">Catégorie</th>
                 <th className="py-3 px-4">Bénéficiaire / Fournisseur</th>

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { PageHeader } from '../ui';
 import { useRestaurant } from '../../context/RestaurantContext';
 import { formatCurrency, numberToFrenchWords } from '../../lib/utils';
 import { AccountingExportService } from '../../services/fiscal/accountingExportService';
@@ -205,31 +206,24 @@ export const FiscalCenterView: React.FC = () => {
 
   return (
     <div className="space-y-6 pb-12">
-      {/* Top Banner */}
-      <div className="bg-slate-900 text-white p-5 rounded-2xl shadow-lg flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="w-12 h-12 rounded-xl bg-amber-500 text-slate-950 flex items-center justify-center font-bold shrink-0">
-            <ShieldCheck className="w-6 h-6" />
+      {/* En-tête standardisé de la vue */}
+      <PageHeader
+        icon={<ShieldCheck className="w-5 h-5" />}
+        title="Centre Fiscal & Comptable"
+        subtitle="Conformité Cameroun CGI 2026 : TVA 19,25%, retenues AIR, numérotation légale, journal fiscal et export SYSCOHADA"
+        badge={
+          <span className="text-xs px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 font-bold border border-emerald-200">
+            Cameroun CGI 2026
+          </span>
+        }
+        actions={
+          <div className="flex items-center gap-2 bg-slate-100 px-3 py-1.5 rounded-xl border border-slate-200 text-xs">
+            <Clock className="w-4 h-4 text-amber-600 shrink-0" />
+            <span className="text-slate-500">Dernière vérif. :</span>
+            <span className="font-bold text-slate-900">{settings.lastFiscalCheckDate || '2026-03-01'}</span>
           </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h2 className="text-base font-bold">Centre Fiscal & Comptable (Cameroun CGI 2026)</h2>
-              <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 font-bold border border-emerald-500/30">
-                CONFIGURÉ POUR LE CADRE CAMEROUNAIS
-              </span>
-            </div>
-            <p className="text-xs text-slate-400 mt-0.5">
-              Gestion de la TVA 19,25%, retenues AIR, numérotation légale, journal fiscal et export SYSCOHADA.
-            </p>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2 bg-slate-800/80 px-3 py-1.5 rounded-xl border border-slate-700 text-xs">
-          <Clock className="w-4 h-4 text-amber-400 shrink-0" />
-          <span className="text-slate-400">Dernière vérif. :</span>
-          <span className="font-bold text-white">{settings.lastFiscalCheckDate || '2026-03-01'}</span>
-        </div>
-      </div>
+        }
+      />
 
       {/* Notice de non-certification juridique */}
       <div className="bg-amber-50 border border-amber-200 p-3.5 rounded-xl flex items-start gap-3 text-xs text-amber-900">

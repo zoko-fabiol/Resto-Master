@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { PageHeader, Button, TextInput } from '../ui';
 import { useRestaurant } from '../../context/RestaurantContext';
 import { Order } from '../../types/restaurant';
 import { formatCurrency, formatDateTime } from '../../lib/utils';
@@ -138,87 +139,81 @@ export const MainCouranteView: React.FC = () => {
 
   return (
     <div className="space-y-6 pb-12">
-      {/* Top Banner */}
-      <div className="bg-slate-900 text-white p-4 sm:p-5 rounded-2xl shadow-lg flex flex-col xl:flex-row items-start xl:items-center justify-between gap-4 min-w-0">
-        <div className="flex items-center gap-3 min-w-0">
-          <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-amber-500 text-slate-950 flex items-center justify-center font-bold shrink-0">
-            <FileSpreadsheet className="w-5 h-5 sm:w-6 sm:h-6" />
-          </div>
-          <div className="min-w-0">
-            <h2 className="text-sm sm:text-base font-bold flex flex-wrap items-center gap-2">
-              <span>Main Courante Restauration (Norme Cameroun - HotelPro)</span>
-              <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 font-bold border border-amber-500/30 uppercase">
-                Contrôle Journalier
-              </span>
-            </h2>
-            <p className="text-xs text-slate-400 mt-0.5 truncate">
-              Matrice quotidienne croisant les consommations (PDJ, Déj, Dîner, Bar, Cave) et les encaissements
-            </p>
-          </div>
-        </div>
+      {/* En-tête standardisé de la vue */}
+      <PageHeader
+        icon={<FileSpreadsheet className="w-5 h-5" />}
+        title="Main Courante Restauration"
+        subtitle="Matrice quotidienne croisant les consommations (PDJ, Déj, Dîner, Bar, Cave) et les encaissements"
+        badge={
+          <span className="text-xs px-2.5 py-1 rounded-full bg-amber-100 text-amber-900 font-bold border border-amber-200 uppercase">
+            Norme HotelPro Cameroun
+          </span>
+        }
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-1.5 bg-white px-3 py-1.5 rounded-xl border border-slate-200 text-xs text-slate-700 shadow-xs">
+              <Calendar className="w-4 h-4 text-amber-600 shrink-0" />
+              <input
+                type="date"
+                value={selectedDate}
+                onChange={(e) => setSelectedDate(e.target.value)}
+                className="bg-transparent text-slate-900 focus:outline-hidden font-bold"
+              />
+            </div>
 
-        {/* Date Selector & Export Actions */}
-        <div className="flex flex-wrap items-center gap-2 w-full xl:w-auto">
-          <div className="flex items-center gap-1.5 bg-slate-800 px-3 py-1.5 rounded-xl border border-slate-700 text-xs text-slate-300">
-            <Calendar className="w-4 h-4 text-amber-400 shrink-0" />
-            <input
-              type="date"
-              value={selectedDate}
-              onChange={(e) => setSelectedDate(e.target.value)}
-              className="bg-transparent text-white focus:outline-hidden font-bold"
-            />
+            <Button
+              variant="outline"
+              size="touch"
+              onClick={handleExportCsv}
+              icon={Download}
+            >
+              Excel / CSV
+            </Button>
+
+            <Button
+              variant="primary"
+              size="touch"
+              onClick={handlePrint}
+              icon={Printer}
+            >
+              Imprimer
+            </Button>
           </div>
-
-          <button
-            onClick={handleExportCsv}
-            className="flex items-center gap-1 px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-semibold border border-slate-700 transition-colors"
-          >
-            <Download className="w-3.5 h-3.5" />
-            <span>Excel / CSV</span>
-          </button>
-
-          <button
-            onClick={handlePrint}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold shadow-xs transition-colors shrink-0"
-          >
-            <Printer className="w-3.5 h-3.5" />
-            <span>Imprimer</span>
-          </button>
-        </div>
-      </div>
+        }
+      />
 
       {/* Summary KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 min-w-0">
         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
-          <div className="text-[11px] font-bold uppercase text-slate-400">Total Consommé du Jour</div>
-          <div className="text-xl font-black text-slate-900 mt-1">
+          <div className="text-xs font-bold uppercase text-slate-400">Total Consommé du Jour</div>
+          <div className="text-xl font-black text-slate-900 mt-1 tabular-nums">
             {formatCurrency(sumTotalConsommations, settings.currency)}
           </div>
-          <div className="text-[10px] text-slate-500 mt-0.5">{rows.length} tables & tickets</div>
+          <div className="text-xs text-slate-500 mt-0.5">{rows.length} tables & tickets</div>
         </div>
 
         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
-          <div className="text-[11px] font-bold uppercase text-emerald-600">Total Encaissé en Caisse</div>
-          <div className="text-xl font-black text-emerald-700 mt-1">
+          <div className="text-xs font-bold uppercase text-emerald-600">Total Encaissé en Caisse</div>
+          <div className="text-xl font-black text-emerald-700 mt-1 tabular-nums">
             {formatCurrency(sumTotalPaye, settings.currency)}
           </div>
-          <div className="text-[10px] text-slate-500 mt-0.5">Espèces, Orange Money, MoMo, Cartes</div>
+          <div className="text-xs text-slate-500 mt-0.5">Espèces, Orange Money, MoMo, Cartes</div>
         </div>
 
         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
-          <div className="text-[11px] font-bold uppercase text-rose-600">Solde Débiteur / Non Réglé</div>
-          <div className="text-xl font-black text-rose-600 mt-1">
+          <div className="text-xs font-bold uppercase text-rose-600">Solde Débiteur / Non Réglé</div>
+          <div className="text-xl font-black text-rose-600 mt-1 tabular-nums">
             {formatCurrency(sumSoldeDebiteur, settings.currency)}
           </div>
-          <div className="text-[10px] text-rose-500 mt-0.5">À recouvrer avant la clôture</div>
+          <div className="text-xs text-rose-500 mt-0.5">À recouvrer avant la clôture</div>
         </div>
 
         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
-          <div className="text-[11px] font-bold uppercase text-amber-600">Ventes Bar & Cave</div>
-          <div className="text-xl font-black text-amber-700 mt-1">
+          <div className="text-xs font-bold uppercase text-amber-600">Ventes Bar & Cave</div>
+          <div className="text-xl font-black text-amber-700 mt-1 tabular-nums">
             {formatCurrency(sumBar + sumCave, settings.currency)}
           </div>
-          <div className="text-[10px] text-slate-500 mt-0.5">Bières, vins, spiritueux et cocktails</div>
+          <div className="text-xs text-slate-500 mt-0.5">Bières, vins, spiritueux et cocktails</div>
         </div>
       </div>
 

@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { PageHeader, Button } from '../ui';
 import { useRestaurant } from '../../context/RestaurantContext';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
@@ -170,10 +171,33 @@ export const StaffView: React.FC = () => {
 
   return (
     <div className="space-y-6 pb-12">
+      {/* En-tête standardisé de la vue */}
+      <PageHeader
+        icon={<Users className="w-5 h-5" />}
+        title="Personnel & Ressources Humaines"
+        subtitle="Gestion des collaborateurs, pointages, plannings de service, salaires et contrôle d'accès"
+        badge={
+          <span className="text-xs px-2.5 py-1 rounded-full bg-blue-100 text-blue-800 font-bold border border-blue-200">
+            {employees.length} collaborateur(s)
+          </span>
+        }
+        actions={
+          <Button
+            variant="primary"
+            size="touch"
+            onClick={() => setClockInModalOpen(true)}
+            icon={Clock}
+          >
+            Pointer Arrivée / Départ
+          </Button>
+        }
+      />
+
       {/* Top Header Navigation */}
       <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-4">
         <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-900 p-1 rounded-xl text-xs font-bold border border-slate-200 dark:border-slate-800 overflow-x-auto max-w-full">
           <button
+            type="button"
             onClick={() => setActiveTab('dashboard')}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all whitespace-nowrap ${
               activeTab === 'dashboard' ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-xs font-extrabold' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
@@ -183,6 +207,7 @@ export const StaffView: React.FC = () => {
             <span>Tableau de Bord</span>
           </button>
           <button
+            type="button"
             onClick={() => setActiveTab('employees')}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all whitespace-nowrap ${
               activeTab === 'employees' ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-xs font-extrabold' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
@@ -192,6 +217,7 @@ export const StaffView: React.FC = () => {
             <span>Personnel & Registre ({employees.length})</span>
           </button>
           <button
+            type="button"
             onClick={() => setActiveTab('attendance')}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all whitespace-nowrap ${
               activeTab === 'attendance' ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-xs font-extrabold' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
@@ -201,6 +227,7 @@ export const StaffView: React.FC = () => {
             <span>Pointages & Présences</span>
           </button>
           <button
+            type="button"
             onClick={() => setActiveTab('plannings')}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all whitespace-nowrap ${
               activeTab === 'plannings' ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-xs font-extrabold' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
@@ -210,6 +237,7 @@ export const StaffView: React.FC = () => {
             <span>Planning Hebdo</span>
           </button>
           <button
+            type="button"
             onClick={() => setActiveTab('salaires')}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all whitespace-nowrap ${
               activeTab === 'salaires' ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-xs font-extrabold' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
@@ -219,6 +247,7 @@ export const StaffView: React.FC = () => {
             <span>Salaires & Paie</span>
           </button>
           <button
+            type="button"
             onClick={() => setActiveTab('accounts')}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all whitespace-nowrap ${
               activeTab === 'accounts' ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-xs font-extrabold' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
@@ -226,16 +255,6 @@ export const StaffView: React.FC = () => {
           >
             <ShieldCheck className="w-3.5 h-3.5 text-indigo-600" />
             <span>Comptes & Droits ({userAccounts.length})</span>
-          </button>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setClockInModalOpen(true)}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold shadow-xs transition-all"
-          >
-            <Clock className="w-4 h-4" />
-            <span>Pointer Arrivée / Départ</span>
           </button>
         </div>
       </div>

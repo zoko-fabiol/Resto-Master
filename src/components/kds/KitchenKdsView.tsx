@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { PageHeader } from '../ui';
 import { useRestaurant } from '../../context/RestaurantContext';
 import { useToast } from '../../context/ToastContext';
 import { Order, OrderItem } from '../../types/restaurant';
@@ -405,60 +406,64 @@ export const KitchenKdsView: React.FC = () => {
         </div>
       )}
 
-      {/* Top Main Navigation & KDS Header */}
-      <div className="bg-slate-900 text-white p-4 sm:p-5 rounded-2xl flex flex-col xl:flex-row xl:items-center justify-between gap-4 shadow-xl border border-slate-800">
-        <div className="flex items-center gap-3">
-          <div className="w-11 h-11 rounded-2xl bg-amber-500 text-slate-950 flex items-center justify-center font-bold shadow-md shadow-amber-500/20">
-            <ChefHat className="w-6 h-6" />
-          </div>
-          <div>
-            <h2 className="text-base sm:text-lg font-black tracking-tight flex items-center gap-2">
-              <span>Écran Cuisine KDS (Kitchen Display System)</span>
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
-            </h2>
-            <p className="text-xs text-slate-400">
-              Modes opérationnels : En attente → En préparation → Prêt → Servi & Bon appétit → Historique journalier
-            </p>
-          </div>
-        </div>
+      {/* En-tête standardisé de la vue */}
+      <PageHeader
+        icon={<ChefHat className="w-5 h-5" />}
+        title="Écran Cuisine KDS"
+        subtitle="Kitchen Display System : En attente → En préparation → Prêt → Servi & Bon appétit"
+        badge={
+          <span className="flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 font-bold border border-emerald-200">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            En direct
+          </span>
+        }
+        actions={
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* Quick Règle 86 (Out of Stock / Épuisé) Toggle Button */}
+            <button
+              type="button"
+              onClick={() => setModal86Open(true)}
+              className={`px-3 py-2 rounded-xl text-xs font-bold border transition-all flex items-center gap-1.5 shadow-2xs ${
+                products.filter((p) => !p.available).length > 0
+                  ? 'bg-rose-50 text-rose-700 border-rose-300 hover:bg-rose-100'
+                  : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+              }`}
+              title="Gérer les ruptures instantanées de plats et ingrédients (Règle 86)"
+            >
+              <AlertOctagon className="w-4 h-4 text-rose-500" />
+              <span>Règle 86</span>
+              {products.filter((p) => !p.available).length > 0 && (
+                <span className="text-xs px-1.5 py-0.2 rounded-full bg-rose-600 text-white font-black animate-pulse">
+                  {products.filter((p) => !p.available).length}
+                </span>
+              )}
+            </button>
 
+            {/* Sound toggle & chime button */}
+            <button
+              type="button"
+              onClick={() => {
+                const nextState = !soundEnabled;
+                setSoundEnabled(nextState);
+                if (nextState) playAudioChime('kitchen');
+              }}
+              className={`px-3 py-2 rounded-xl border transition-colors shadow-2xs flex items-center gap-1.5 text-xs font-bold ${
+                soundEnabled
+                  ? 'bg-amber-50 text-amber-900 border-amber-300 hover:bg-amber-100'
+                  : 'bg-white text-slate-500 border-slate-200 hover:text-slate-700'
+              }`}
+              title={soundEnabled ? 'Sonnette de cuisine active (Cliquer pour couper)' : 'Sonnette coupée (Cliquer pour réactiver)'}
+            >
+              {soundEnabled ? <Volume2 className="w-4 h-4 text-amber-600" /> : <VolumeX className="w-4 h-4 text-slate-500" />}
+              <span className="text-xs font-bold hidden sm:inline">{soundEnabled ? 'Sonnette Active' : 'Sonnette Muette'}</span>
+            </button>
+          </div>
+        }
+      />
+
+      {/* Top Main Navigation & KDS Filters Bar */}
+      <div className="bg-slate-900 text-white p-3 sm:p-4 rounded-2xl flex flex-col xl:flex-row xl:items-center justify-between gap-4 shadow-xl border border-slate-800">
         <div className="flex flex-wrap items-center gap-2">
-          {/* Quick Règle 86 (Out of Stock / Épuisé) Toggle Button */}
-          <button
-            onClick={() => setModal86Open(true)}
-            className={`px-3 py-2 rounded-xl text-xs font-bold border transition-all flex items-center gap-1.5 shadow-2xs ${
-              products.filter((p) => !p.available).length > 0
-                ? 'bg-rose-500/20 text-rose-300 border-rose-500/40 hover:bg-rose-500/30'
-                : 'bg-slate-800 text-slate-300 border-slate-700 hover:text-white hover:bg-slate-700'
-            }`}
-            title="Gérer les ruptures instantanées de plats et ingrédients (Règle 86)"
-          >
-            <AlertOctagon className="w-4 h-4 text-rose-400" />
-            <span>Règle 86</span>
-            {products.filter((p) => !p.available).length > 0 && (
-              <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-rose-600 text-white font-black animate-pulse">
-                {products.filter((p) => !p.available).length}
-              </span>
-            )}
-          </button>
-
-          {/* Sound toggle & chime button */}
-          <button
-            onClick={() => {
-              const nextState = !soundEnabled;
-              setSoundEnabled(nextState);
-              if (nextState) playAudioChime('kitchen');
-            }}
-            className={`px-3 py-2 rounded-xl border transition-colors shadow-2xs flex items-center gap-1.5 text-xs font-bold ${
-              soundEnabled
-                ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 hover:bg-amber-500/30'
-                : 'bg-slate-800 text-slate-500 border-slate-700 hover:text-slate-400'
-            }`}
-            title={soundEnabled ? 'Sonnette de cuisine active (Cliquer pour couper)' : 'Sonnette coupée (Cliquer pour réactiver)'}
-          >
-            {soundEnabled ? <Volume2 className="w-4 h-4 text-amber-400" /> : <VolumeX className="w-4 h-4 text-slate-500" />}
-            <span className="text-[11px] font-bold hidden sm:inline">{soundEnabled ? 'Sonnette Active' : 'Sonnette Muette'}</span>
-          </button>
 
           {/* Prep Categories Filter */}
           {isPrepCategoriesAllowed && (

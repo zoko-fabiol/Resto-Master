@@ -15,6 +15,7 @@ export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElemen
   isLoading?: boolean;
   leftIcon?: React.ReactNode;
   rightIcon?: React.ReactNode;
+  icon?: React.ComponentType<{ className?: string }> | React.ReactNode;
   fullWidth?: boolean;
 }
 
@@ -49,6 +50,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
       isLoading = false,
       leftIcon,
       rightIcon,
+      icon,
       fullWidth = false,
       disabled = false,
       className = '',
@@ -58,6 +60,16 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     ref
   ) => {
     const isDisabled = disabled || isLoading;
+
+    const resolvedLeftIcon = leftIcon || (
+      icon ? (
+        typeof icon === 'function' ? (
+          React.createElement(icon as React.ComponentType<{ className?: string }>, { className: 'w-4 h-4 shrink-0' })
+        ) : (
+          (icon as React.ReactNode)
+        )
+      ) : null
+    );
 
     return (
       <button
@@ -84,7 +96,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
           </>
         ) : (
           <>
-            {leftIcon && <span className="shrink-0" aria-hidden="true">{leftIcon}</span>}
+            {resolvedLeftIcon && <span className="shrink-0" aria-hidden="true">{resolvedLeftIcon}</span>}
             {children && <span>{children}</span>}
             {rightIcon && <span className="shrink-0" aria-hidden="true">{rightIcon}</span>}
           </>
