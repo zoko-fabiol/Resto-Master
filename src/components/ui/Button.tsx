@@ -41,6 +41,32 @@ const SIZE_STYLES: Record<ButtonSize, string> = {
   touch: 'text-sm sm:text-base min-h-[48px] min-w-[48px] px-5 py-3 rounded-xl gap-2.5 font-bold',
 };
 
+export function renderIconNode(
+  icon: React.ComponentType<{ className?: string }> | React.ReactNode | null | undefined,
+  defaultClassName: string = 'w-4 h-4 shrink-0'
+): React.ReactNode {
+  if (!icon) return null;
+
+  // 1. Déjà un élément JSX instancié (ex: <Plus className="w-4 h-4" />)
+  if (React.isValidElement(icon)) {
+    return icon;
+  }
+
+  // 2. Composant React fonctionnel OU composant forwardRef / memo (les icônes lucide-react sont des objets forwardRef)
+  if (
+    typeof icon === 'function' ||
+    (typeof icon === 'object' &&
+      icon !== null &&
+      ('$$typeof' in icon || 'render' in icon))
+  ) {
+    const Component = icon as React.ComponentType<{ className?: string }>;
+    return React.createElement(Component, { className: defaultClassName });
+  }
+
+  // 3. Fallback pour tout autre ReactNode valide (texte, nombre, etc.)
+  return icon as React.ReactNode;
+}
+
 export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
   (
     {
@@ -61,15 +87,8 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
   ) => {
     const isDisabled = disabled || isLoading;
 
-    const resolvedLeftIcon = leftIcon || (
-      icon ? (
-        typeof icon === 'function' ? (
-          React.createElement(icon as React.ComponentType<{ className?: string }>, { className: 'w-4 h-4 shrink-0' })
-        ) : (
-          (icon as React.ReactNode)
-        )
-      ) : null
-    );
+    const resolvedLeftIcon = renderIconNode(leftIcon || icon, 'w-4 h-4 shrink-0');
+    const resolvedRightIcon = renderIconNode(rightIcon, 'w-4 h-4 shrink-0');
 
     return (
       <button
@@ -98,7 +117,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
           <>
             {resolvedLeftIcon && <span className="shrink-0" aria-hidden="true">{resolvedLeftIcon}</span>}
             {children && <span>{children}</span>}
-            {rightIcon && <span className="shrink-0" aria-hidden="true">{rightIcon}</span>}
+            {resolvedRightIcon && <span className="shrink-0" aria-hidden="true">{resolvedRightIcon}</span>}
           </>
         )}
       </button>

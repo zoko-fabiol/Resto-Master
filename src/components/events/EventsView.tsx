@@ -59,9 +59,9 @@ export const EventsView: React.FC = () => {
     const matchType = filterType === 'all' || e.type === filterType;
     const matchSearch =
       !searchQuery ||
-      e.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      e.clientName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      e.eventNumber.toLowerCase().includes(searchQuery.toLowerCase());
+      (e.title || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (e.clientName || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (e.eventNumber || '').toLowerCase().includes(searchQuery.toLowerCase());
     return matchType && matchSearch;
   });
 
@@ -116,9 +116,9 @@ export const EventsView: React.FC = () => {
     setNotes('');
   };
 
-  const totalQuotes = events.reduce((sum, e) => sum + e.quoteAmount, 0);
-  const totalDeposits = events.reduce((sum, e) => sum + e.depositAmount, 0);
-  const totalRemaining = events.reduce((sum, e) => sum + e.remainingBalance, 0);
+  const totalQuotes = events.reduce((sum, e) => sum + (e.quoteAmount || 0), 0);
+  const totalDeposits = events.reduce((sum, e) => sum + (e.depositAmount || 0), 0);
+  const totalRemaining = events.reduce((sum, e) => sum + (e.remainingBalance || 0), 0);
 
   return (
     <div className="space-y-6 pb-12">
@@ -237,7 +237,7 @@ export const EventsView: React.FC = () => {
                     : 'bg-amber-100 text-amber-800'
                 }`}
               >
-                {evt.status.replace('_', ' ')}
+                {(evt.status || 'devis_envoye').replace('_', ' ')}
               </span>
             </div>
 

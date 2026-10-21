@@ -28,7 +28,7 @@ export const DocumentsView: React.FC = () => {
     const matchCat = selectedCategory === 'all' || doc.category === selectedCategory;
     const matchSearch =
       !search ||
-      doc.title.toLowerCase().includes(search.toLowerCase()) ||
+      (doc.title || '').toLowerCase().includes(search.toLowerCase()) ||
       (doc.supplierName && doc.supplierName.toLowerCase().includes(search.toLowerCase()));
     return matchCat && matchSearch;
   });
