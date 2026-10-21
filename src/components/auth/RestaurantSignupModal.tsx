@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import {
   Utensils,
   X,
@@ -15,6 +15,8 @@ import {
 import { cloudFunctionsService } from '../../services/functions/cloudFunctionsService';
 import { DEFAULT_PLANS } from '../../../shared/types/plans';
 
+// TEMPORAIRE : ce formulaire public sera remplacé par une création de compte
+// authentifiée avec vérification d'e-mail et App Check.
 interface RestaurantSignupModalProps {
   isOpen: boolean;
   onClose: () => void;

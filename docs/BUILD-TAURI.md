@@ -30,6 +30,12 @@ La configuration de production utilise une CSP explicite dans `src-tauri/tauri.c
 
 `devCsp` est volontairement plus souple pour permettre le serveur Vite local et le diagnostic pendant `tauri dev`. Il ne doit jamais remplacer la CSP de production dans une livraison.
 
+### Avertissement sur `submitSignup`
+
+> **Avertissement temporaire :** `submitSignup` est une fonction publique sans App Check ni limitation robuste par adresse IP. Le contrôle peut être contourné en changeant d'adresse e-mail. Ne pas déployer cette fonction telle quelle en production ; le flux cible est une création de compte authentifiée avec vérification d'e-mail et App Check.
+
+Le client et la fonction utilisent la région `europe-west1`. Les Cloud Functions de deuxième génération nécessitent le forfait Blaze Firebase.
+
 ## Windows
 
 - Microsoft C++ Build Tools avec le workload Desktop C++ ;

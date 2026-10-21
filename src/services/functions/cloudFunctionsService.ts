@@ -1,4 +1,4 @@
-import { httpsCallable } from 'firebase/functions';
+﻿import { httpsCallable } from 'firebase/functions';
 import { functions } from '../../lib/firebase';
 import { UserRole } from '../../types/restaurant';
 
@@ -287,6 +287,8 @@ export class CloudFunctionsService {
     }>('pairDevice', params);
   }
 
+  // TEMPORAIRE : sera remplacé par une création de compte authentifiée,
+  // vérification d'e-mail et App Check.
   // 10. Provisionnement & Gestion Multi-Tenant SaaS
   async submitSignup(data: {
     companyName: string;
