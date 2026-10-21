@@ -238,8 +238,8 @@ export function getOrangeMoneyUssdCode(
     const dialUriPlain = `tel:${raw}`;
     return { code: raw, dialUri, dialUriPlain, type: 'merchant' as const };
   }
-  const targetPhone = cleanPhone || '699887766';
-  const raw = `#150*1*1*${targetPhone}*${roundedAmount}#`;
+  const targetPhone = cleanPhone;
+  const raw = targetPhone ? `#150*1*1*${targetPhone}*${roundedAmount}#` : `#150#`;
   const dialUri = `tel:${encodeURIComponent(raw)}`;
   const dialUriPlain = `tel:${raw}`;
   return { code: raw, dialUri, dialUriPlain, type: 'direct' as const };
@@ -268,8 +268,8 @@ export function getMtnMomoUssdCode(
     const dialUriPlain = `tel:${raw}`;
     return { code: raw, dialUri, dialUriPlain, type: 'merchant' as const };
   }
-  const targetPhone = cleanPhone || '677112233';
-  const raw = `*126*1*${targetPhone}*${roundedAmount}#`;
+  const targetPhone = cleanPhone;
+  const raw = targetPhone ? `*126*1*${targetPhone}*${roundedAmount}#` : `*126#`;
   const dialUri = `tel:${encodeURIComponent(raw)}`;
   const dialUriPlain = `tel:${raw}`;
   return { code: raw, dialUri, dialUriPlain, type: 'direct' as const };

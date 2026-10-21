@@ -159,10 +159,10 @@ export const FiscalCenterView: React.FC = () => {
           time: item.time,
           status: item.status === 'VALIDATED' ? 'ISSUED' : 'CANCELLED',
           emitterRaisonSociale: settings.raisonSociale || settings.name,
-          emitterNiu: settings.niu || 'M012012345678A',
-          emitterRccm: settings.rccm || 'RC/YAO/2024/B/1894',
-          emitterTaxCenter: settings.taxCenter || 'CDI YAOUNDE I',
-          emitterAddress: settings.address || 'Yaoundé',
+          emitterNiu: settings.niu || '',
+          emitterRccm: settings.rccm || '',
+          emitterTaxCenter: settings.taxCenter || '',
+          emitterAddress: settings.address || '',
           emitterPhone: settings.phone || '',
           customerName: 'CLIENT AU COMPTANT',
           items: [
@@ -415,7 +415,7 @@ export const FiscalCenterView: React.FC = () => {
                   />
                 ) : (
                   <div className="p-2.5 bg-slate-50 rounded-lg font-bold text-slate-800">
-                    {settings.taxCenter || 'CIME Yaoundé 1'}
+                    {settings.taxCenter || 'Non renseigné'}
                   </div>
                 )}
               </div>

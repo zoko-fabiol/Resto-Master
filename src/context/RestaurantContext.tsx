@@ -1763,7 +1763,9 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         },
         { merge: true }
       );
-    } catch {}
+    } catch (pinErr) {
+      console.warn('[RestaurantContext] Impossible de synchroniser user_pins dans Firestore:', pinErr);
+    }
     setEmployees((prev) =>
       prev.map((e) => (e.id === employeeId ? { ...e, hasPin: true } : e))
     );
@@ -3478,7 +3480,9 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
           if (profile.assignedTableId) {
             localStorage.setItem('restomaster_tablet_table_id', profile.assignedTableId);
           }
-        } catch {}
+        } catch (storageErr) {
+          console.warn('[RestaurantContext] Impossible d enregistrer le profil appareil en localStorage:', storageErr);
+        }
         setCurrentDeviceProfile(profile);
         addAuditLog('Appairage Réussi (Cloud Function)', 'Paramètres', `Appareil appairé au profil "${t.terminalName}"`);
         return profile;
@@ -3530,7 +3534,9 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       if (profile.assignedTableId) {
         localStorage.setItem('restomaster_tablet_table_id', profile.assignedTableId);
       }
-    } catch {}
+    } catch (storageErr) {
+      console.warn('[RestaurantContext] Impossible d enregistrer le profil appareil direct en localStorage:', storageErr);
+    }
 
     setTerminals((prev) => prev.map((t) => (t.id === found.id ? updatedTerm : t)));
     setCurrentDeviceProfile(profile);

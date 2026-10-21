@@ -234,7 +234,7 @@ export class FiscalInvoicePdfService {
     // 6. BLOC QR CODE FISCAL DGI & SCEAU DE SÉCURITÉ (À GAUCHE)
     const qrResult = await DgiFiscalHelper.generateQrDataUrl(
       {
-        emitterNiu: settings.niu || invoice.emitterNiu || 'M012012345678A',
+        emitterNiu: settings.niu || invoice.emitterNiu || '',
         emitterRccm: settings.rccm || invoice.emitterRccm,
         invoiceNumber: invoice.invoiceNumber,
         dateTimeIso: invoice.validatedAt || new Date().toISOString(),

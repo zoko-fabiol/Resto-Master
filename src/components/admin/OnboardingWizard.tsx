@@ -619,7 +619,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
                     type="text"
                     value={niu}
                     onChange={(e) => setNiu(e.target.value)}
-                    placeholder="Ex: M012012345678A"
+                    placeholder="Ex: M000000000000X"
                     className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-300 focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 font-mono font-bold"
                   />
                 </div>
@@ -1097,7 +1097,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
                           type="text"
                           value={orangeMoneyCode}
                           onChange={(e) => setOrangeMoneyCode(e.target.value)}
-                          placeholder="Ex: 784123"
+                          placeholder="Ex: Code OM"
                           className="w-full px-3 py-2 text-xs rounded-xl border border-orange-300 bg-white font-mono font-bold"
                         />
                       </div>
@@ -1142,7 +1142,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
                           type="text"
                           value={mtnMoMoCode}
                           onChange={(e) => setMtnMoMoCode(e.target.value)}
-                          placeholder="Ex: 456789"
+                          placeholder="Ex: Code MoMo"
                           className="w-full px-3 py-2 text-xs rounded-xl border border-yellow-300 bg-white font-mono font-bold"
                         />
                       </div>

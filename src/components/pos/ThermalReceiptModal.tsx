@@ -72,7 +72,7 @@ export const ThermalReceiptModal: React.FC<ThermalReceiptModalProps> = ({
   useEffect(() => {
     DgiFiscalHelper.generateQrDataUrl(
       {
-        emitterNiu: settings.niu || 'M012012345678A',
+        emitterNiu: settings.niu || '',
         emitterRccm: settings.rccm,
         invoiceNumber: order.orderNumber,
         dateTimeIso: order.createdAt || new Date().toISOString(),
@@ -190,14 +190,23 @@ export const ThermalReceiptModal: React.FC<ThermalReceiptModalProps> = ({
             <div className="text-center space-y-1">
               <div className="font-black text-sm uppercase tracking-wider">{settings.name}</div>
               {settings.slogan && <div className="text-[10px] italic">{settings.slogan}</div>}
-              <div className="text-[10px]">{settings.address} - {settings.city?.toUpperCase() || 'YAOUNDE'}</div>
-              <div className="text-[10px]">Tél : {settings.phone}</div>
+              <div className="text-[10px]">{settings.address}{settings.city ? ` - ${settings.city.toUpperCase()}` : ''}</div>
+              <div className="text-[10px]">Tél : {settings.phone || 'Non renseigné'}</div>
               <div className="text-[10px] font-bold border-y border-dashed border-slate-400 py-1 my-1">
-                NIU : {settings.niu || 'M012012345678A'} • RCCM : {settings.rccm || 'RC/YAO/2024/B/1894'}
+                {settings.niu ? `NIU : ${settings.niu}` : 'NIU : NON RENSEIGNÉ'}
+                {settings.rccm ? ` • RCCM : ${settings.rccm}` : ''}
               </div>
-              <div className="text-[9px] text-slate-600">
-                Centre : {settings.taxCenter || 'CDI YAOUNDE I'} • Régime Réel
-              </div>
+              {settings.taxCenter && (
+                <div className="text-[9px] text-slate-600">
+                  Centre : {settings.taxCenter}
+                  {settings.regimeFiscal ? ` • Régime ${settings.regimeFiscal.toUpperCase()}` : ''}
+                </div>
+              )}
+              {!settings.niu && (
+                <div className="text-[8px] bg-amber-50 text-amber-800 p-1 rounded font-sans border border-amber-200 mt-1">
+                  Mentions fiscales non configurées (Administration)
+                </div>
+              )}
             </div>
 
             {/* Ticket Metadata */}

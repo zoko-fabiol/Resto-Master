@@ -280,7 +280,7 @@ export class AccountingExportService {
         item.documentNumber,
         settings.niu || 'NON_RENSEIGNE',
         `"${(settings.raisonSociale || settings.name).replace(/"/g, '""')}"`,
-        `"${(settings.taxCenter || 'CIME / CDI YAOUNDE').replace(/"/g, '""')}"`,
+        `"${(settings.taxCenter || 'NON_RENSEIGNE').replace(/"/g, '""')}"`,
         `"${clientName.replace(/"/g, '""')}"`,
         clientNiu,
         item.type,

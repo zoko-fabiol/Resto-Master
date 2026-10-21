@@ -160,6 +160,56 @@ const FORBIDDEN_PATTERNS: ForbiddenPattern[] = [
     regex: /DGI-2026-SIM/i,
     category: 'fiscal_simulation',
   },
+  {
+    id: 'fake_niu_hardcoded',
+    name: 'NIU d exemple codé en dur (M012012345678A)',
+    regex: /M012012345678A/i,
+    category: 'fiscal_simulation',
+  },
+  {
+    id: 'fake_rccm_hardcoded',
+    name: 'RCCM d exemple codé en dur (RC/YAO/2024/B/1894)',
+    regex: /RC\/YAO\/2024\/B\/1894/i,
+    category: 'fiscal_simulation',
+  },
+  {
+    id: 'fake_tax_center_cime',
+    name: 'Centre fiscal d exemple codé en dur (CIME Yaoundé 1)',
+    regex: /CIME Yaound[ée] 1/i,
+    category: 'fiscal_simulation',
+  },
+  {
+    id: 'fake_tax_center_cdi',
+    name: 'Centre fiscal d exemple codé en dur (CDI YAOUNDE I)',
+    regex: /CDI YAOUNDE I\b/i,
+    category: 'fiscal_simulation',
+  },
+
+  // 7. Numéros et codes marchands MoMo de test codés en dur
+  {
+    id: 'fake_momo_phone_699887766',
+    name: 'Numéro direct OM de test en dur (699887766)',
+    regex: /\b699887766\b/,
+    category: 'phone',
+  },
+  {
+    id: 'fake_momo_phone_677112233',
+    name: 'Numéro direct MoMo de test en dur (677112233)',
+    regex: /\b677112233\b/,
+    category: 'phone',
+  },
+  {
+    id: 'fake_om_merchant_code_784123',
+    name: 'Code marchand OM de test en dur (784123)',
+    regex: /\b784123\b/,
+    category: 'phone',
+  },
+  {
+    id: 'fake_momo_merchant_code_456789',
+    name: 'Code marchand MoMo de test en dur (456789)',
+    regex: /\b456789\b/,
+    category: 'phone',
+  },
 ];
 
 interface Violation {

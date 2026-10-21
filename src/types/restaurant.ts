@@ -100,33 +100,33 @@ export interface RestaurantSettings {
   raisonSociale: string;
   nomCommercial: string;
   formeJuridique: 'SARL' | 'SA' | 'SAS' | 'ETS' | 'GIC' | 'AUTRE';
-  niu: string; // Numéro d'Identifiant Unique fiscal (ex: M012012345678A)
-  rccm: string; // Registre du Commerce et du Crédit Mobilier (ex: RC/DLA/2024/B/1234)
-  taxCenter: string; // Centre des impôts de rattachement (ex: CIME Yaoundé 1)
+  niu: string; // Numéro d'Identifiant Unique fiscal (13 caractères DGI)
+  rccm: string; // Registre du Commerce et du Crédit Mobilier
+  taxCenter: string; // Centre des impôts de rattachement
   adresseFiscale: string;
-  city: string; // Ville (ex: Yaoundé, Douala, Kribi, Bafoussam)
+  city: string; // Ville
   quartier: string;
-  bp: string; // Boîte Postale (ex: BP 3626)
+  bp: string; // Boîte Postale
   activitePrincipale: string;
   activitesSecondaires?: string;
   regimeFiscal: TaxRegime;
   assujettiTVA: boolean;
   statutContribuable: 'actif' | 'en_sommeil' | 'suspendu' | 'inconnu';
-  exerciceFiscal: string; // ex: 2026
+  exerciceFiscal: string; // ex: Année fiscale en cours
   lastFiscalCheckDate: string; // Date de dernière vérification de la configuration fiscale
 
   // Paramètres Numérotation & Contrôle des Remises
-  invoicePrefix: string; // ex: 2026-RESTO-001
+  invoicePrefix: string; // Préfixe légal de facturation
   nextInvoiceSequence: number;
   /** @deprecated Utiliser roleLimits[role].maxDiscountPercent */
   maxDiscountByRole?: Record<UserRole, number>;
 
   // Paramètres Mobile Money & QR Code Max-it / MoMo Pay
-  orangeMoneyMerchantCode: string; // Code Marchand Orange Money (ex: 789123)
-  orangeMoneyPhone: string; // Numéro de réception direct Orange Money (ex: 699887766)
+  orangeMoneyMerchantCode: string; // Code Marchand Orange Money
+  orangeMoneyPhone: string; // Numéro de réception direct Orange Money
   orangeMaxItQrUrl?: string; // QR code officiel importé Max it / Orange Money
-  mtnMoMoMerchantCode: string; // Code Marchand MTN MoMo (ex: 456789)
-  mtnMoMoPhone: string; // Numéro de réception direct MTN MoMo (ex: 677112233)
+  mtnMoMoMerchantCode: string; // Code Marchand MTN MoMo
+  mtnMoMoPhone: string; // Numéro de réception direct MTN MoMo
   mtnMoMoQrUrl?: string; // QR code officiel importé MTN MoMo
 
   // Mode Opérationnel Cuisine & Stocks

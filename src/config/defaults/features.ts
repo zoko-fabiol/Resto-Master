@@ -322,8 +322,8 @@ export const DEFAULT_FEATURES: FeatureItem[] = [
     activatedAt: '2026-01-15',
     activatedBy: 'Système',
     configuration: {
-      merchantCode: '456789',
-      receiverPhone: '677112233',
+      merchantCode: '',
+      receiverPhone: '',
       manualVerificationRequired: true,
       mode: 'production',
       autoConfirmationApi: false,
@@ -341,8 +341,8 @@ export const DEFAULT_FEATURES: FeatureItem[] = [
     activatedAt: '2026-01-15',
     activatedBy: 'Système',
     configuration: {
-      merchantCode: '784123',
-      receiverPhone: '699887766',
+      merchantCode: '',
+      receiverPhone: '',
       manualVerificationRequired: true,
       mode: 'production',
       autoConfirmationApi: false,

@@ -43,9 +43,9 @@ export const FiscalBillingPaymentsSection: React.FC<Props> = ({ subTab }) => {
   const [activePaymentTab, setActivePaymentTab] = useState<'methods' | 'momo'>('methods');
 
   // Fiscal Form State
-  const [niu, setNiu] = useState(settings.niu || 'M012012345678A');
-  const [rccm, setRccm] = useState(settings.rccm || 'RC/YAO/2024/B/1894');
-  const [taxCenter, setTaxCenter] = useState(settings.taxCenter || 'CIME Yaoundé 1');
+  const [niu, setNiu] = useState(settings.niu || '');
+  const [rccm, setRccm] = useState(settings.rccm || '');
+  const [taxCenter, setTaxCenter] = useState(settings.taxCenter || '');
   const [taxRate, setTaxRate] = useState(settings.taxRate ?? 19.25);
   const [vatBaseRate, setVatBaseRate] = useState(settings.baseVatRate ?? 17.5);
   const [cacRate, setCacRate] = useState(settings.cacRate ?? 10);
@@ -53,15 +53,15 @@ export const FiscalBillingPaymentsSection: React.FC<Props> = ({ subTab }) => {
 
   // Mobile Money Form State
   const [mtnActive, setMtnActive] = useState(settings.mtnActive ?? true);
-  const [mtnMerchantCode, setMtnMerchantCode] = useState(settings.mtnMoMoMerchantCode || '456789');
-  const [mtnPhone, setMtnPhone] = useState(settings.mtnMoMoPhone || '677112233');
+  const [mtnMerchantCode, setMtnMerchantCode] = useState(settings.mtnMoMoMerchantCode || '');
+  const [mtnPhone, setMtnPhone] = useState(settings.mtnMoMoPhone || '');
   const [mtnMode, setMtnMode] = useState<'test' | 'production'>(settings.mtnMode || 'production');
   const [mtnManualVerification, setMtnManualVerification] = useState(settings.mtnManualVerification ?? true);
   const [mtnAutoConfirmApi, setMtnAutoConfirmApi] = useState(settings.mtnAutoConfirmApi ?? false);
 
   const [orangeActive, setOrangeActive] = useState(settings.orangeActive ?? true);
-  const [orangeMerchantCode, setOrangeMerchantCode] = useState(settings.orangeMoneyMerchantCode || '784123');
-  const [orangePhone, setOrangePhone] = useState(settings.orangeMoneyPhone || '699887766');
+  const [orangeMerchantCode, setOrangeMerchantCode] = useState(settings.orangeMoneyMerchantCode || '');
+  const [orangePhone, setOrangePhone] = useState(settings.orangeMoneyPhone || '');
   const [orangeMode, setOrangeMode] = useState<'test' | 'production'>(settings.orangeMode || 'production');
   const [orangeManualVerification, setOrangeManualVerification] = useState(settings.orangeManualVerification ?? true);
   const [orangeAutoConfirmApi, setOrangeAutoConfirmApi] = useState(settings.orangeAutoConfirmApi ?? false);

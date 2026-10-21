@@ -36,7 +36,9 @@ export const ordersFirestoreService = {
       try {
         const cleanOrder = JSON.parse(JSON.stringify(order));
         offlineSyncService.enqueue('orders', 'CREATE', order.id, cleanOrder, `order_create_${order.id}`);
-      } catch {}
+      } catch (offlineErr) {
+        console.warn('[OrdersFirestoreService] Erreur mise en file offline commande:', offlineErr);
+      }
     }
   },
 

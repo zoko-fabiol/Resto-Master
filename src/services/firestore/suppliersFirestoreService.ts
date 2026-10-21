@@ -29,7 +29,9 @@ export const suppliersFirestoreService = {
       try {
         const clean = JSON.parse(JSON.stringify(supplier));
         offlineSyncService.enqueue('suppliers', 'CREATE', supplier.id, clean, `supp_${supplier.id}`);
-      } catch {}
+      } catch (offlineErr) {
+        console.warn('[suppliersFirestoreService] Erreur mise en file offline fournisseur:', offlineErr);
+      }
     }
   },
 
@@ -88,7 +90,9 @@ export const suppliersFirestoreService = {
       try {
         const clean = JSON.parse(JSON.stringify(order));
         offlineSyncService.enqueue('purchase_orders', 'CREATE', order.id, clean, `po_${order.id}`);
-      } catch {}
+      } catch (offlineErr) {
+        console.warn('[suppliersFirestoreService] Erreur mise en file offline bon de commande:', offlineErr);
+      }
     }
   },
 

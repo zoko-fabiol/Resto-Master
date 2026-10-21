@@ -43,9 +43,9 @@ export const CameroonComplianceModal: React.FC<CameroonComplianceModalProps> = (
       status: 'conforme',
       code: 'Réglementation DGI Cameroun',
       description: `Présence systématique sur les additions et factures : Numéro Contribuable (NIU : ${
-        settings.niu || 'M012012345678A'
-      }), RCCM (${settings.rccm || 'RC/YAO/2024/B/1894'}), Centre des Impôts (${
-        settings.taxCenter || 'CIME Yaoundé 1'
+        settings.niu || 'Non configuré'
+      }), RCCM (${settings.rccm || 'Non configuré'}), Centre des Impôts (${
+        settings.taxCenter || 'Non configuré'
       }), Boîte Postale et Ville.`,
       icon: Building,
     },
@@ -193,7 +193,7 @@ export const CameroonComplianceModal: React.FC<CameroonComplianceModalProps> = (
           <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-[11px] text-amber-900 flex items-start gap-2.5">
             <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
             <div>
-              <strong>Recommandation pour le gérant & le comptable :</strong> Ce module fournit une aide au contrôle de gestion et à la conformité technique. Il ne dispense pas des obligations de télédéclaration auprès du Centre des Impôts de rattachement ({settings.taxCenter || 'CIME Yaoundé 1'}) et de conservation décennale des pièces comptables (Acte uniforme OHADA).
+              <strong>Recommandation pour le gérant & le comptable :</strong> Ce module fournit une aide au contrôle de gestion et à la conformité technique. Il ne dispense pas des obligations de télédéclaration auprès du Centre des Impôts de rattachement ({settings.taxCenter || 'Centre compétent'}) et de conservation décennale des pièces comptables (Acte uniforme OHADA).
             </div>
           </div>
         </div>

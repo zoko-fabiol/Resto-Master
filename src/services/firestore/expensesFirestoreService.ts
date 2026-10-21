@@ -29,7 +29,9 @@ export const expensesFirestoreService = {
       try {
         const clean = JSON.parse(JSON.stringify(expense));
         offlineSyncService.enqueue('expenses', 'CREATE', expense.id, clean, `exp_${expense.id}`);
-      } catch {}
+      } catch (offlineErr) {
+        console.warn('[expensesFirestoreService] Erreur mise en file offline dépense:', offlineErr);
+      }
     }
   },
 

@@ -41,7 +41,7 @@ export class DgiFiscalHelper {
     const cleanDate = (params.dateTimeIso || '').slice(0, 19).replace('T', ' ');
     const rawPayload = [
       prev,
-      (params.emitterNiu || 'M012012345678A').trim().toUpperCase(),
+      (params.emitterNiu || 'NON_CONFIGURE').trim().toUpperCase(),
       params.invoiceNumber,
       cleanDate,
       Math.round(params.subtotalHT),
@@ -57,8 +57,8 @@ export class DgiFiscalHelper {
    * Format compact pipe-separated pour scan immédiat par les inspecteurs DGI
    */
   public static buildDgiRawString(params: DgiQrCodeParams, seal: string): string {
-    const cleanNiu = (params.emitterNiu || 'M012012345678A').trim().toUpperCase();
-    const cleanRccm = (params.emitterRccm || 'RC/DLA/2026/B/000').trim().toUpperCase();
+    const cleanNiu = (params.emitterNiu || 'NON_CONFIGURE').trim().toUpperCase();
+    const cleanRccm = (params.emitterRccm || 'NON_CONFIGURE').trim().toUpperCase();
     const clientNiu = (params.clientNiu || 'COMPTOIR').trim().toUpperCase();
     const dateFormatted = params.dateTimeIso.slice(0, 19).replace('T', ' ');
 

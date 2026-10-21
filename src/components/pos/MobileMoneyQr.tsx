@@ -245,7 +245,7 @@ export const MobileMoneyQr: React.FC<MobileMoneyQrProps> = ({
               <div className="relative">
                 <input
                   type="text"
-                  placeholder={isOrange ? 'Ex: 784123' : 'Ex: 456789'}
+                  placeholder="Code marchand"
                   value={currentMerchantCode}
                   onChange={(e) => setCurrentMerchantCode(e.target.value)}
                   className="w-full px-3 py-1.5 text-xs font-mono font-bold rounded-lg border border-slate-300 focus:border-amber-500 bg-white"
@@ -273,7 +273,7 @@ export const MobileMoneyQr: React.FC<MobileMoneyQrProps> = ({
               <div className="relative">
                 <input
                   type="text"
-                  placeholder={isOrange ? 'Ex: 699887766' : 'Ex: 677112233'}
+                  placeholder="Ex: 6XXXXXXXX"
                   value={currentPhone}
                   onChange={(e) => setCurrentPhone(e.target.value)}
                   className="w-full px-3 py-1.5 text-xs font-mono font-bold rounded-lg border border-slate-300 focus:border-amber-500 bg-white"

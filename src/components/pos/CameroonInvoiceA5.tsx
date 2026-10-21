@@ -66,7 +66,7 @@ export const CameroonInvoiceA5: React.FC<CameroonInvoiceA5Props> = ({
   useEffect(() => {
     DgiFiscalHelper.generateQrDataUrl(
       {
-        emitterNiu: settings.niu || 'M012012345678A',
+        emitterNiu: settings.niu || '',
         emitterRccm: settings.rccm,
         invoiceNumber: order.orderNumber,
         dateTimeIso: order.createdAt || new Date().toISOString(),
@@ -160,20 +160,26 @@ export const CameroonInvoiceA5: React.FC<CameroonInvoiceA5Props> = ({
                   </div>
                 )}
                 <div>{settings.slogan}</div>
-                <div>{settings.adresseFiscale || settings.address} — {settings.bp} {settings.city?.toUpperCase() || 'YAOUNDE'} - CAMEROUN</div>
+                <div>{settings.adresseFiscale || settings.address}{settings.city ? ` — ${settings.bp ? `BP ${settings.bp} ` : ''}${settings.city.toUpperCase()}` : ''} - CAMEROUN</div>
                 {settings.activitePrincipale && (
                   <div className="text-[11px] text-slate-600">Activité : {settings.activitePrincipale}</div>
                 )}
                 {settings.activitesSecondaires && (
                   <div className="text-[11px] text-slate-600">Activités secondaires : {settings.activitesSecondaires}</div>
                 )}
-                <div>Tél : {settings.phone} • Email : {settings.email}</div>
+                <div>Tél : {settings.phone || 'Non renseigné'} • Email : {settings.email || 'Non renseigné'}</div>
                 <div className="font-bold text-[11px] text-slate-900">
-                  NIU : {settings.niu || 'M012012345678A'} • RCCM : {settings.rccm || 'RC/YAO/2024/B/1894'}
+                  {settings.niu ? `NIU : ${settings.niu}` : 'NIU : NON RENSEIGNÉ'}
+                  {settings.rccm ? ` • RCCM : ${settings.rccm}` : ''}
                   {settings.taxCenter && ` • Centre : ${settings.taxCenter}`}
                   {settings.regimeFiscal && ` • Régime : ${settings.regimeFiscal.toUpperCase()}`}
                   {settings.statutContribuable && ` • Statut : ${settings.statutContribuable}`}
                 </div>
+                {!settings.niu && (
+                  <div className="text-[10px] font-sans font-bold text-amber-800 bg-amber-50 border border-amber-300 rounded px-2 py-0.5 mt-1 inline-block">
+                    Attention : Établissement non fiscalisé (NIU manquant dans les paramètres)
+                  </div>
+                )}
               </div>
             </div>
 
@@ -310,7 +316,7 @@ export const CameroonInvoiceA5: React.FC<CameroonInvoiceA5Props> = ({
                 <span>Certification Fiscale DGI — République du Cameroun</span>
               </div>
               <div className="text-[10px] text-slate-600">
-                Centre des Impôts : <strong>{settings.taxCenter || 'CDI YAOUNDE I'}</strong> • Statut : <strong>ASSUJETTI TVA (19,25%)</strong>
+                Centre des Impôts : <strong>{settings.taxCenter || 'NON RENSEIGNÉ'}</strong> • Statut : <strong>{settings.regimeFiscal ? settings.regimeFiscal.toUpperCase() : 'ASSUJETTI TVA (19,25%)'}</strong>
               </div>
               <div className="text-[9px] font-mono text-slate-500 break-all">
                 Sceau SHA-256 : <span className="font-bold text-slate-700">{fiscalSeal || 'CALCUL_SCEAU_SHA256...'}</span>

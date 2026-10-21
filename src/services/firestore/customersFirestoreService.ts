@@ -32,7 +32,9 @@ export const customersFirestoreService = {
       try {
         const clean = JSON.parse(JSON.stringify(customer));
         offlineSyncService.enqueue('customers', 'CREATE', customer.id, clean, `customer_${customer.id}`);
-      } catch {}
+      } catch (queueErr) {
+        console.warn('[customersFirestoreService] Échec mise en file hors-ligne:', queueErr);
+      }
     }
   },
 

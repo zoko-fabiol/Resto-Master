@@ -125,7 +125,9 @@ export const saveRhAppData = async (data: RhAppDataPayload): Promise<void> => {
 export const getRhAppData = async (): Promise<RhAppDataPayload | null> => {
   try {
     localStorage.removeItem(RH_STORAGE_KEY);
-  } catch {}
+  } catch (err) {
+    console.warn('[firestoreService] Purge storage:', err);
+  }
 
   try {
     const docRef = doc(db, 'rh', 'app_data');
@@ -133,7 +135,9 @@ export const getRhAppData = async (): Promise<RhAppDataPayload | null> => {
     if (snap.exists()) {
       return snap.data() as RhAppDataPayload;
     }
-  } catch {}
+  } catch (err) {
+    console.error('[firestoreService] Erreur lecture getRhAppData:', err);
+  }
 
   return null;
 };

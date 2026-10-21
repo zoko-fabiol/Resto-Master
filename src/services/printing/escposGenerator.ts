@@ -160,10 +160,14 @@ export function buildClientReceiptEscPos(
   if (settings.slogan) {
     builder.textLine(settings.slogan);
   }
-  builder.textLine(`${settings.address} - ${settings.city?.toUpperCase() || 'YAOUNDE'}`);
-  builder.textLine(`Tel : ${settings.phone}`);
+  builder.textLine(`${settings.address}${settings.city ? ` - ${settings.city.toUpperCase()}` : ''}`);
+  builder.textLine(`Tel : ${settings.phone || 'Non renseigné'}`);
   builder.divider('-');
-  builder.textLine(`NIU : ${settings.niu || 'M012012345678A'}  RCCM : ${settings.rccm || 'RC/YAO/2024/B/1894'}`);
+  if (settings.niu || settings.rccm) {
+    builder.textLine(`NIU : ${settings.niu || 'NON RENSEIGNÉ'}  RCCM : ${settings.rccm || 'NON RENSEIGNÉ'}`);
+  } else {
+    builder.textLine('MENTIONS FISCALES : NON CONFIGURÉES');
+  }
   if (settings.taxCenter) {
     builder.textLine(`Centre des Impots : ${settings.taxCenter}`);
   }
@@ -265,8 +269,8 @@ export function buildSeatPreBillEscPos(
   // 1. Header
   builder.alignCenter().doubleSize(true).bold(true).textLine(settings.name);
   builder.doubleSize(false).bold(false);
-  builder.textLine(`${settings.address} - ${settings.city?.toUpperCase() || 'YAOUNDE'}`);
-  builder.textLine(`Tel : ${settings.phone}`);
+  builder.textLine(`${settings.address}${settings.city ? ` - ${settings.city.toUpperCase()}` : ''}`);
+  builder.textLine(`Tel : ${settings.phone || 'Non renseigné'}`);
   builder.divider('-');
   builder.bold(true).textLine('*** NOTE PRE-ADDITION ***');
   builder.textLine(`COUVERT / PLACE N* ${seatNumber}`);

@@ -23,7 +23,8 @@
     "test:config-phase4": "tsx scripts/verify-phase4-permissions.ts",
     "test:phase-h": "tsx scripts/verify-phase-h-finance.ts",
     "audit:config": "tsx scripts/audit-config.ts",
-    "purge:test-data": "tsx scripts/purge-test-data.ts"
+    "purge:test-data": "tsx scripts/purge-test-data.ts",
+    "release:zip": "tsx scripts/make-release-zip.ts"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.3.3",

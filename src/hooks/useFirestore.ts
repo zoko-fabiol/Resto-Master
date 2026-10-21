@@ -14,7 +14,9 @@ export const useRhAppData = (): RhAppDataPayload => {
   const [data, setData] = useState<RhAppDataPayload>(() => {
     try {
       localStorage.removeItem('rh_app_data');
-    } catch {}
+    } catch (storageErr) {
+      console.warn('[useRhAppData] Impossible de nettoyer localStorage rh_app_data:', storageErr);
+    }
     return {
       employees: [],
       attendance: {},

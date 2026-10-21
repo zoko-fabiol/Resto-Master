@@ -106,7 +106,9 @@ export const tablesFirestoreService = {
       try {
         const cleanPayload = JSON.parse(JSON.stringify(table));
         offlineSyncService.enqueue('tables', 'CREATE', table.id, cleanPayload);
-      } catch {}
+      } catch (offlineErr) {
+        console.warn('[tablesFirestoreService] Erreur mise en file offline table:', offlineErr);
+      }
       throw err;
     }
   },
@@ -138,7 +140,9 @@ export const tablesFirestoreService = {
         try {
           const cleanPayload = JSON.parse(JSON.stringify(table));
           offlineSyncService.enqueue('tables', 'CREATE', table.id, cleanPayload);
-        } catch {}
+        } catch (offlineErr) {
+          console.warn('[tablesFirestoreService] Erreur mise en file offline batch table:', offlineErr);
+        }
       }
       throw err;
     }

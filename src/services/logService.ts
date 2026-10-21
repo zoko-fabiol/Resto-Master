@@ -22,7 +22,9 @@ export const logAction = async (
       userName = parsed.name || userName;
       userRole = parsed.role || userRole;
     }
-  } catch {}
+  } catch (err) {
+    console.warn('[logService] Lecture session locale:', err);
+  }
 
   const logEntry = {
     id: generateSecureId('log'),

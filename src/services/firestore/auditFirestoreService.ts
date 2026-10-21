@@ -31,7 +31,9 @@ export const auditFirestoreService = {
       try {
         const clean = JSON.parse(JSON.stringify(log));
         offlineSyncService.enqueue('audit_logs', 'CREATE', log.id, clean, `audit_${log.id}`);
-      } catch {}
+      } catch (offlineErr) {
+        console.warn('[auditFirestoreService] Erreur mise en file offline trace d audit:', offlineErr);
+      }
     }
   },
 

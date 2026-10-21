@@ -135,7 +135,7 @@ export class TaxEngine {
 
     // Calcul du sceau d'intégrité fiscal DGI
     const securitySignature = DgiFiscalHelper.computeFiscalSeal({
-      emitterNiu: settings.niu || 'M012012345678A',
+      emitterNiu: settings.niu || '',
       invoiceNumber,
       dateTimeIso,
       subtotalHT: fiscalSummary.taxableBaseHT,
@@ -144,8 +144,8 @@ export class TaxEngine {
 
     const qrCodeData = DgiFiscalHelper.buildDgiRawString(
       {
-        emitterNiu: settings.niu || 'M012012345678A',
-        emitterRccm: settings.rccm || 'RC/DLA/2026/B/000',
+        emitterNiu: settings.niu || '',
+        emitterRccm: settings.rccm || '',
         invoiceNumber,
         dateTimeIso,
         subtotalHT: fiscalSummary.taxableBaseHT,
