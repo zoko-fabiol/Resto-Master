@@ -87,6 +87,7 @@ Le nouvel installateur se trouve dans `src-tauri\target\release\bundle\nsis\`. D
 6. Exécuter `npm run build:tauri`, puis `npm run check:tauri`.
 7. Tester avec `npm run tauri:dev`.
 8. Générer ensuite l'installateur avec `npm run tauri:build -- --bundles nsis`.
+9. Installer uniquement le fichier portant la nouvelle version, puis vérifier dans « Détails techniques » du formulaire que le `Build` est récent. Un ancien message `unavailable: Cloud Function ... non configurée ou non déployée` prouve que l'ancien installateur ou un ancien cache est encore utilisé.
 
 Le build Tauri n'embarque aucun service worker PWA. Le contrôle `check:dist` échoue si un ancien chunk, un service worker ou la variable `VITE_USE_CLOUD_FUNCTIONS` incorrecte est détecté.
 
