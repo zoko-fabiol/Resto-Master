@@ -7,6 +7,8 @@ interface AdminHeaderProps {
   setMobileOpen?: (open: boolean) => void;
   isMobileMenuOpen?: boolean;
   onOpenMobileMenu?: () => void;
+  onToggleSidebar?: () => void;
+  isSidebarOpen?: boolean;
 }
 
 export const AdminHeader: React.FC<AdminHeaderProps> = ({
@@ -14,15 +16,18 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({
   setMobileOpen,
   isMobileMenuOpen,
   onOpenMobileMenu,
+  onToggleSidebar,
+  isSidebarOpen,
 }) => {
   const { currentAdmin, logout } = useAdminAuth();
   const [time, setTime] = useState<string>('');
 
-  const isOpen = isMobileMenuOpen ?? mobileOpen ?? false;
-  const hasMobileControl = !!(onOpenMobileMenu || setMobileOpen);
+  const isOpen = isSidebarOpen ?? isMobileMenuOpen ?? mobileOpen ?? false;
 
   const handleToggle = () => {
-    if (onOpenMobileMenu) {
+    if (onToggleSidebar) {
+      onToggleSidebar();
+    } else if (onOpenMobileMenu) {
       onOpenMobileMenu();
     } else if (setMobileOpen) {
       setMobileOpen(!mobileOpen);
@@ -59,18 +64,18 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({
 
   return (
     <header className="h-16 px-3 sm:px-6 bg-slate-900/80 backdrop-blur-md border-b border-slate-800 flex items-center justify-between sticky top-0 z-30">
-      {/* Bouton Hamburger Mobile + Horloge */}
+      {/* Bouton Hamburger & Horloge */}
       <div className="flex items-center gap-2 sm:gap-4">
-        {hasMobileControl && (
-          <button
-            type="button"
-            onClick={handleToggle}
-            aria-label={isOpen ? 'Fermer le menu' : 'Ouvrir le menu'}
-            className="lg:hidden p-2 rounded-xl bg-slate-800/80 hover:bg-slate-800 text-slate-300 hover:text-white transition-colors cursor-pointer touch-manipulation"
-          >
-            {isOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-          </button>
-        )}
+        {/* Bouton Hamburger universel : ouvre le menu mobile ou replie la sidebar desktop */}
+        <button
+          type="button"
+          onClick={handleToggle}
+          aria-label={isOpen ? 'Fermer le menu' : 'Ouvrir le menu'}
+          title="Afficher / Masquer la navigation"
+          className="p-2 sm:p-2.5 rounded-xl bg-slate-800/90 hover:bg-slate-700 text-amber-400 hover:text-amber-300 transition-colors cursor-pointer touch-manipulation border border-slate-700/80 shadow-xs flex items-center justify-center shrink-0"
+        >
+          <Menu className="w-5 h-5 text-amber-400" />
+        </button>
 
         <div className="flex items-center gap-2 px-2.5 sm:px-3 py-1.5 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-400">
           <Clock className="w-3.5 h-3.5 text-amber-400 shrink-0" />

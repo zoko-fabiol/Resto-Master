@@ -20,6 +20,7 @@ interface AdminSidebarProps {
   setMobileOpen?: (open: boolean) => void;
   isMobileOpen?: boolean;
   onCloseMobile?: () => void;
+  isDesktopOpen?: boolean;
 }
 
 export const AdminSidebar: React.FC<AdminSidebarProps> = ({
@@ -31,6 +32,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
   setMobileOpen,
   isMobileOpen,
   onCloseMobile,
+  isDesktopOpen = true,
 }) => {
   const isDrawerOpen = isMobileOpen ?? mobileOpen;
   const handleClose = () => {
@@ -164,10 +166,12 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
 
   return (
     <>
-      {/* 1. Desktop Permanent Sidebar */}
-      <aside className="hidden lg:flex w-64 bg-slate-950 border-r border-slate-800 flex-col shrink-0 min-h-screen sticky top-0 h-screen">
-        {renderSidebarContent(false)}
-      </aside>
+      {/* 1. Desktop Permanent / Collapsible Sidebar */}
+      {isDesktopOpen && (
+        <aside className="hidden lg:flex w-64 bg-slate-950 border-r border-slate-800 flex-col shrink-0 min-h-screen sticky top-0 h-screen transition-all">
+          {renderSidebarContent(false)}
+        </aside>
+      )}
 
       {/* 2. Mobile Drawer & Backdrop */}
       {isDrawerOpen && (

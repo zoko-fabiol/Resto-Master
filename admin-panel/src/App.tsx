@@ -22,6 +22,7 @@ const AdminPanelInner: React.FC = () => {
   const [selectedTenantId, setSelectedTenantId] = useState<string | null>(null);
   const [isCreateTenantOpen, setIsCreateTenantOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isDesktopSidebarOpen, setIsDesktopSidebarOpen] = useState(true);
 
   // Données temps réel de la plateforme
   const [tenants, setTenants] = useState<Tenant[]>([]);
@@ -79,9 +80,17 @@ const AdminPanelInner: React.FC = () => {
     setIsMobileMenuOpen(false);
   };
 
+  const handleToggleSidebar = () => {
+    if (typeof window !== 'undefined' && window.innerWidth < 1024) {
+      setIsMobileMenuOpen((prev) => !prev);
+    } else {
+      setIsDesktopSidebarOpen((prev) => !prev);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-row font-sans antialiased selection:bg-amber-500 selection:text-slate-950">
-      {/* Sidebar Navigation (Desktop sticky + Mobile Drawer) */}
+      {/* Sidebar Navigation (Desktop collapsible + Mobile Drawer) */}
       <AdminSidebar
         currentTab={currentTab}
         setCurrentTab={handleTabChange}
@@ -89,13 +98,16 @@ const AdminPanelInner: React.FC = () => {
         activeSupportSessionsCount={activeSupportSessionsCount}
         isMobileOpen={isMobileMenuOpen}
         onCloseMobile={() => setIsMobileMenuOpen(false)}
+        isDesktopOpen={isDesktopSidebarOpen}
       />
 
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0">
         <AdminHeader
-          onOpenMobileMenu={() => setIsMobileMenuOpen(true)}
+          onToggleSidebar={handleToggleSidebar}
+          isSidebarOpen={isDesktopSidebarOpen}
           isMobileMenuOpen={isMobileMenuOpen}
+          onOpenMobileMenu={() => setIsMobileMenuOpen(true)}
         />
 
         <main className="flex-1 p-3.5 sm:p-5 lg:p-6 max-w-7xl w-full mx-auto min-w-0 pb-24 lg:pb-8">
