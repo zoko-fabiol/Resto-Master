@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+﻿import React, { createContext, useContext, useState, useEffect } from 'react';
 import { UserProfile, UserRole } from '../types/restaurant';
 import { auth, db } from '../lib/firebase';
 import {
@@ -15,6 +15,7 @@ import { DEFAULT_PERMISSIONS } from '../services/permissions/permissionService';
 import { RolePermissionMatrix, PermissionModule, PermissionAction } from '../types/configuration';
 import { cloudFunctionsService } from '../services/functions/cloudFunctionsService';
 import { hashPin, verifyPin } from '../services/security/cryptoService';
+import { offlineSyncService } from '../services/firestore/offlineSyncService';
 
 const MODULE_TO_PERMISSION: Record<string, PermissionModule> = {
   pos: 'pos',
@@ -633,6 +634,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const logout = async () => {
+    const pendingOfflineOperations = offlineSyncService.getPendingCount();
     try {
       await firebaseSignOut(auth);
     } catch {
@@ -641,6 +643,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setFirebaseAuthUser(null);
     setCurrentUser(defaultUnauthenticatedUser);
     setIsSessionLocked(false);
+    if (pendingOfflineOperations > 0 && typeof window !== 'undefined') {
+      window.dispatchEvent(
+        new CustomEvent('restomaster:offline-pending', {
+          detail: { count: pendingOfflineOperations },
+        })
+      );
+    }
   };
 
   // RBAC : Matrice de permissions connectée dynamiquement à Firestore

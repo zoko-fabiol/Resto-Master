@@ -1,4 +1,4 @@
-import React, { useState, useEffect, Suspense, lazy } from 'react';
+﻿import React, { useState, useEffect, Suspense, lazy } from 'react';
 import { BrowserRouter, useLocation, useNavigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { RestaurantProvider, useRestaurant } from './context/RestaurantContext';
@@ -95,6 +95,7 @@ const AppContent: React.FC = () => {
     lockSession,
     logout,
   } = useAuth();
+  const { showToast } = useToast();
   const {
     seatReservation,
     isFeatureEnabled,
@@ -108,6 +109,23 @@ const AppContent: React.FC = () => {
 
   const currentTerminal = terminals.find((t) => t.id === currentDeviceProfile?.terminalId);
   const isTerminalLocked = isSessionLocked || Boolean(currentTerminal?.isLocked);
+
+  useEffect(() => {
+    const handleOfflinePending = (event: Event) => {
+      const count = (event as CustomEvent<{ count?: number }>).detail?.count ?? 0;
+      if (count > 0) {
+        showToast({
+          title: 'Opérations hors ligne en attente',
+          message: `${count} opération${count > 1 ? 's' : ''} n'a pas encore été synchronisée. Reconnectez-vous avant de fermer ou désinstaller l'application.`,
+          type: 'warning',
+          duration: 10000,
+        });
+      }
+    };
+
+    window.addEventListener('restomaster:offline-pending', handleOfflinePending);
+    return () => window.removeEventListener('restomaster:offline-pending', handleOfflinePending);
+  }, [showToast]);
 
   // Route URL synchronisée (ex: /pos -> pos, / -> '')
   const rawPath = location.pathname.replace(/^\/+/, '').split('/')[0] || '';

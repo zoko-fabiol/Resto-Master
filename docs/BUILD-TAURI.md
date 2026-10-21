@@ -36,6 +36,10 @@ La configuration de production utilise une CSP explicite dans `src-tauri/tauri.c
 
 Le client et la fonction utilisent la région `europe-west1`. Les Cloud Functions de deuxième génération nécessitent le forfait Blaze Firebase.
 
+### Réinitialiser le cache WebView en développement
+
+La suppression de `%LOCALAPPDATA%\com.restomaster.os\EBWebView` est strictement réservée aux machines de test. Ce dossier peut contenir le cache Firestore hors ligne, y compris des ventes non synchronisées. Fermez RestoMaster OS et utilisez uniquement le script contrôlé `.\scripts\reset-webview-cache.ps1` après avoir confirmé la synchronisation des opérations ; ne lancez jamais cette procédure sur un poste client.
+
 ## Windows
 
 - Microsoft C++ Build Tools avec le workload Desktop C++ ;
