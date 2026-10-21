@@ -243,3 +243,73 @@ export interface CreateAnnouncementRequest {
   expiresAt?: string;
 }
 
+// ---------------------------------------------------------------------------
+// Phase 5 : Snapshots, Rollback & Diagnostics
+// ---------------------------------------------------------------------------
+export interface SnapshotTenantConfigRequest {
+  orgId: string;
+  label?: string;
+  reason: string;
+}
+
+export interface RollbackTenantConfigRequest {
+  orgId: string;
+  snapshotId: string;
+  reason: string;
+}
+
+export interface RunDiagnosticsRequest {
+  orgId: string;
+}
+
+export interface DiagnosticCheckItem {
+  category: 'fiscalite' | 'caisse' | 'materiel' | 'paiement' | 'securite';
+  name: string;
+  passed: boolean;
+  severity: 'info' | 'warning' | 'error';
+  message: string;
+}
+
+export interface DiagnosticResult {
+  orgId: string;
+  healthScore: number;
+  status: 'healthy' | 'warning' | 'critical';
+  checks: DiagnosticCheckItem[];
+  checkedAt: string;
+}
+
+// ---------------------------------------------------------------------------
+// Phase 6 : Cycle de vie sensible (2-Man Rule), Révocation, Export
+// ---------------------------------------------------------------------------
+export interface RequestTenantDeletionRequest {
+  orgId: string;
+  reason: string;
+}
+
+export interface ApproveTenantDeletionRequest {
+  deletionRequestId: string;
+  reason: string;
+}
+
+export interface ForceSignOutRequest {
+  orgId: string;
+  uid?: string;
+  reason: string;
+}
+
+export interface ResetOwnerPasswordRequest {
+  orgId: string;
+  reason: string;
+}
+
+export interface ChangeTenantPlanRequest {
+  orgId: string;
+  newPlanId: string;
+  reason: string;
+}
+
+export interface ExportTenantDataRequest {
+  orgId: string;
+  reason: string;
+}
+

@@ -344,4 +344,80 @@ export const adminPlatformService = {
     const res = await fn(params);
     return res.data;
   },
+
+  subscribeToTenantSnapshots(orgId: string, callback: (snapshots: any[]) => void): Unsubscribe {
+    if (!orgId) {
+      callback([]);
+      return () => {};
+    }
+    const collRef = collection(db, 'tenants', orgId, 'config_snapshots');
+    const q = query(collRef, orderBy('createdAt', 'desc'));
+    return onSnapshot(
+      q,
+      (snapshot) => {
+        const snaps = snapshot.docs.map((docSnap) => ({
+          id: docSnap.id,
+          ...docSnap.data(),
+        }));
+        callback(snaps);
+      },
+      (err) => {
+        console.error(`[adminPlatformService] Erreur écoute snapshots pour ${orgId}:`, err);
+      }
+    );
+  },
+
+  async snapshotTenantConfig(params: { orgId: string; label?: string; reason: string }): Promise<any> {
+    const fn = httpsCallable(functions, 'snapshotTenantConfig');
+    const res = await fn(params);
+    return res.data;
+  },
+
+  async rollbackTenantConfig(params: { orgId: string; snapshotId: string; reason: string }): Promise<any> {
+    const fn = httpsCallable(functions, 'rollbackTenantConfig');
+    const res = await fn(params);
+    return res.data;
+  },
+
+  async runDiagnostics(params: { orgId: string }): Promise<any> {
+    const fn = httpsCallable(functions, 'runDiagnostics');
+    const res = await fn(params);
+    return res.data;
+  },
+
+  async requestTenantDeletion(params: { orgId: string; reason: string }): Promise<any> {
+    const fn = httpsCallable(functions, 'requestTenantDeletion');
+    const res = await fn(params);
+    return res.data;
+  },
+
+  async approveTenantDeletion(params: { deletionRequestId: string; reason: string }): Promise<any> {
+    const fn = httpsCallable(functions, 'approveTenantDeletion');
+    const res = await fn(params);
+    return res.data;
+  },
+
+  async forceSignOut(params: { orgId: string; uid?: string; reason: string }): Promise<any> {
+    const fn = httpsCallable(functions, 'forceSignOut');
+    const res = await fn(params);
+    return res.data;
+  },
+
+  async resetOwnerPassword(params: { orgId: string; reason: string }): Promise<any> {
+    const fn = httpsCallable(functions, 'resetOwnerPassword');
+    const res = await fn(params);
+    return res.data;
+  },
+
+  async changeTenantPlan(params: { orgId: string; newPlanId: string; reason: string }): Promise<any> {
+    const fn = httpsCallable(functions, 'changeTenantPlan');
+    const res = await fn(params);
+    return res.data;
+  },
+
+  async exportTenantData(params: { orgId: string; reason: string }): Promise<any> {
+    const fn = httpsCallable(functions, 'exportTenantData');
+    const res = await fn(params);
+    return res.data;
+  },
 };

@@ -22,6 +22,15 @@ import {
   handleStartSupportSession,
   handleCloseSupportSession,
   handleCreateAnnouncement,
+  handleSnapshotTenantConfig,
+  handleRollbackTenantConfig,
+  handleRunDiagnostics,
+  handleRequestTenantDeletion,
+  handleApproveTenantDeletion,
+  handleForceSignOut,
+  handleResetOwnerPassword,
+  handleChangeTenantPlan,
+  handleExportTenantData,
 } from './modules/platformAdmin.js';
 
 const FUNCTION_OPTIONS = {
@@ -80,6 +89,19 @@ export const recordTenantPayment = onCall(FUNCTION_OPTIONS, handleRecordTenantPa
 export const startSupportSession = onCall(FUNCTION_OPTIONS, handleStartSupportSession);
 export const closeSupportSession = onCall(FUNCTION_OPTIONS, handleCloseSupportSession);
 export const createAnnouncement = onCall(FUNCTION_OPTIONS, handleCreateAnnouncement);
+
+// 12. Snapshots, Rollback & Diagnostics (Phase 5)
+export const snapshotTenantConfig = onCall(FUNCTION_OPTIONS, handleSnapshotTenantConfig);
+export const rollbackTenantConfig = onCall(FUNCTION_OPTIONS, handleRollbackTenantConfig);
+export const runDiagnostics = onCall(FUNCTION_OPTIONS, handleRunDiagnostics);
+
+// 13. Cycle de Vie Sécurisé, Révocation & Export (Phase 6)
+export const requestTenantDeletion = onCall(FUNCTION_OPTIONS, handleRequestTenantDeletion);
+export const approveTenantDeletion = onCall(FUNCTION_OPTIONS, handleApproveTenantDeletion);
+export const forceSignOut = onCall(FUNCTION_OPTIONS, handleForceSignOut);
+export const resetOwnerPassword = onCall(FUNCTION_OPTIONS, handleResetOwnerPassword);
+export const changeTenantPlan = onCall(FUNCTION_OPTIONS, handleChangeTenantPlan);
+export const exportTenantData = onCall(FUNCTION_OPTIONS, handleExportTenantData);
 
 
 

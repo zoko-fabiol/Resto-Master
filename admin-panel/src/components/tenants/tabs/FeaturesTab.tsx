@@ -12,6 +12,10 @@ import {
   HelpCircle,
   ShieldAlert,
   Search,
+  Camera,
+  RotateCcw,
+  History,
+  Wand2,
 } from 'lucide-react';
 import {
   Tenant,
@@ -26,12 +30,14 @@ interface FeaturesTabProps {
   tenant: Tenant;
   entitlements: TenantEntitlements | null;
   onOpenProfileApplicator: () => void;
+  onOpenSetupWizard?: () => void;
 }
 
 export const FeaturesTab: React.FC<FeaturesTabProps> = ({
   tenant,
   entitlements,
   onOpenProfileApplicator,
+  onOpenSetupWizard,
 }) => {
   // État local modifiable des fonctionnalités et des clés verrouillées
   const [localFeatures, setLocalFeatures] = useState<
@@ -113,6 +119,55 @@ export const FeaturesTab: React.FC<FeaturesTabProps> = ({
     }
   };
 
+  const [snapshots, setSnapshots] = useState<any[]>([]);
+
+  useEffect(() => {
+    const unsub = adminPlatformService.subscribeToTenantSnapshots(tenant.id, (list) => {
+      setSnapshots(list);
+    });
+    return () => unsub();
+  }, [tenant.id]);
+
+  const handleTakeSnapshot = async () => {
+    const label = prompt('Nom / Libellé de l\'instantané :', `Sauvegarde du ${new Date().toLocaleDateString('fr-FR')}`);
+    if (!label) return;
+    const reason = prompt('Motif obligatoire de création de l\'instantané :', 'Point de restauration avant modification de droits');
+    if (!reason || reason.trim().length < 5) {
+      alert('Un motif explicite (min. 5 caractères) est requis.');
+      return;
+    }
+    try {
+      await adminPlatformService.snapshotTenantConfig({
+        orgId: tenant.id,
+        label: label.trim(),
+        reason: reason.trim(),
+      });
+      alert('Instantané de configuration scellé avec succès.');
+    } catch (err: any) {
+      alert(`Erreur : ${err?.message || 'Échec de sauvegarde'}`);
+    }
+  };
+
+  const handleRollback = async (snapshotId: string, label: string) => {
+    const confirmRestore = window.confirm(`Restaurer immédiatement la configuration du restaurant à partir de l'instantané "${label}" ?`);
+    if (!confirmRestore) return;
+    const reason = prompt('Motif obligatoire du retour arrière (Rollback) :', 'Retour à une version de configuration antérieure');
+    if (!reason || reason.trim().length < 5) {
+      alert('Un motif explicite est requis.');
+      return;
+    }
+    try {
+      await adminPlatformService.rollbackTenantConfig({
+        orgId: tenant.id,
+        snapshotId,
+        reason: reason.trim(),
+      });
+      alert('Restauration vers l\'instantané effectuée avec succès.');
+    } catch (err: any) {
+      alert(`Erreur de restauration : ${err?.message || 'Échec'}`);
+    }
+  };
+
   const categories: Array<{ id: FeatureCategory | 'all'; label: string }> = [
     { id: 'all', label: 'Toutes les catégories' },
     { id: 'vente_service', label: 'Vente & Service' },
@@ -147,14 +202,35 @@ export const FeaturesTab: React.FC<FeaturesTabProps> = ({
           </div>
         </div>
 
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-2.5 flex-wrap">
+          {onOpenSetupWizard && (
+            <button
+              type="button"
+              onClick={onOpenSetupWizard}
+              className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 text-xs font-bold transition-all flex items-center gap-2 cursor-pointer shadow-md shadow-amber-500/20"
+            >
+              <Wand2 className="w-3.5 h-3.5" />
+              <span>Assistant Guidé</span>
+            </button>
+          )}
+
           <button
             type="button"
             onClick={onOpenProfileApplicator}
             className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold transition-all flex items-center gap-2 cursor-pointer border border-slate-700"
           >
             <Layers className="w-3.5 h-3.5 text-amber-400" />
-            <span>Appliquer un Profil Type</span>
+            <span>Appliquer un Profil</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={handleTakeSnapshot}
+            className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold transition-all flex items-center gap-2 cursor-pointer border border-slate-700"
+            title="Créer un instantané de la configuration actuelle"
+          >
+            <Camera className="w-3.5 h-3.5 text-blue-400" />
+            <span>Créer Instantané</span>
           </button>
 
           <button
@@ -168,7 +244,7 @@ export const FeaturesTab: React.FC<FeaturesTabProps> = ({
             }`}
           >
             <Save className="w-3.5 h-3.5" />
-            <span>{isSaving ? 'Enregistrement...' : 'Enregistrer les Modifications'}</span>
+            <span>{isSaving ? 'Enregistrement...' : 'Enregistrer'}</span>
           </button>
         </div>
       </div>
@@ -318,6 +394,76 @@ export const FeaturesTab: React.FC<FeaturesTabProps> = ({
             </div>
           );
         })}
+      </div>
+
+      {/* Snapshots & Rollback History */}
+      <div className="pt-6 border-t border-slate-800 space-y-3">
+        <div className="flex items-center justify-between">
+          <div>
+            <h4 className="font-bold text-white text-xs flex items-center gap-2">
+              <History className="w-4 h-4 text-blue-400" />
+              <span>Points de Restauration & Instantanés de Configuration ({snapshots.length})</span>
+            </h4>
+            <p className="text-[11px] text-slate-400 mt-0.5">
+              Revenir en 1 clic à une configuration stable précédente en cas de fausse manipulation.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={handleTakeSnapshot}
+            className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-[11px] font-bold flex items-center gap-1.5 cursor-pointer border border-slate-700"
+          >
+            <Camera className="w-3.5 h-3.5 text-blue-400" />
+            <span>Nouveau Point</span>
+          </button>
+        </div>
+
+        <div className="rounded-2xl bg-slate-900/60 border border-slate-800 overflow-hidden">
+          <table className="w-full text-left text-xs">
+            <thead>
+              <tr className="border-b border-slate-800 bg-slate-950/40 text-slate-400 text-[11px] uppercase tracking-wider">
+                <th className="py-2.5 px-4 font-semibold">Date de Sauvegarde</th>
+                <th className="py-2.5 px-4 font-semibold">Libellé</th>
+                <th className="py-2.5 px-4 font-semibold">Motif / Contexte</th>
+                <th className="py-2.5 px-4 font-semibold">Auteur</th>
+                <th className="py-2.5 px-4 font-semibold text-right">Action Rollback</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-800/60">
+              {snapshots.map((snap) => (
+                <tr key={snap.id} className="hover:bg-slate-800/30 transition-colors">
+                  <td className="py-2.5 px-4 font-mono text-[11px] text-slate-300">
+                    {new Date(snap.createdAt).toLocaleString('fr-FR')}
+                  </td>
+                  <td className="py-2.5 px-4 font-bold text-white">{snap.label}</td>
+                  <td className="py-2.5 px-4 text-slate-400 italic max-w-xs truncate" title={snap.reason}>
+                    "{snap.reason}"
+                  </td>
+                  <td className="py-2.5 px-4 font-mono text-[11px] text-slate-400">{snap.createdBy}</td>
+                  <td className="py-2.5 px-4 text-right">
+                    <button
+                      type="button"
+                      onClick={() => handleRollback(snap.id, snap.label)}
+                      className="px-2.5 py-1 rounded-lg bg-amber-500/15 hover:bg-amber-500 text-amber-400 hover:text-slate-950 font-bold transition-all text-[11px] inline-flex items-center gap-1 cursor-pointer border border-amber-500/30"
+                    >
+                      <RotateCcw className="w-3 h-3" />
+                      <span>Restaurer</span>
+                    </button>
+                  </td>
+                </tr>
+              ))}
+
+              {snapshots.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="py-8 text-center text-slate-500 italic">
+                    Aucun instantané enregistré pour cet établissement. Cliquez sur "Créer Instantané" pour figer l'état actuel.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );

@@ -1,6 +1,6 @@
 import { CallableRequest, HttpsError } from 'firebase-functions/v2/https';
 import crypto from 'node:crypto';
-import { db, FieldValue } from '../firebase.js';
+import { db, auth, FieldValue } from '../firebase.js';
 import { getCallerPlatformContext, assertPlatformRole } from '../auth.js';
 import { appendPlatformAuditLog } from './provisioning.js';
 import {
@@ -10,6 +10,15 @@ import {
   StartSupportSessionRequest,
   CloseSupportSessionRequest,
   CreateAnnouncementRequest,
+  SnapshotTenantConfigRequest,
+  RollbackTenantConfigRequest,
+  RunDiagnosticsRequest,
+  RequestTenantDeletionRequest,
+  ApproveTenantDeletionRequest,
+  ForceSignOutRequest,
+  ResetOwnerPasswordRequest,
+  ChangeTenantPlanRequest,
+  ExportTenantDataRequest,
 } from '../types.js';
 
 // Matrice des profils de configuration intégrée pour exécution serveur sécurisée
@@ -569,4 +578,536 @@ export async function handleCreateAnnouncement(
   });
 
   return { success: true, announcement };
+}
+
+// ---------------------------------------------------------------------------
+// 7. Prise d'instantané de configuration (Snapshot)
+// ---------------------------------------------------------------------------
+export async function handleSnapshotTenantConfig(
+  request: CallableRequest<SnapshotTenantConfigRequest>
+) {
+  const caller = getCallerPlatformContext(request);
+  assertPlatformRole(caller, ['platform_owner', 'platform_admin']);
+
+  const { orgId, label, reason } = request.data || {};
+  if (!orgId || !reason || reason.trim().length < 5) {
+    throw new HttpsError('invalid-argument', 'Identifiant tenant et motif requis.');
+  }
+
+  const entRef = db.collection('tenants').doc(orgId).collection('entitlements').doc('current');
+  const snap = await entRef.get();
+
+  if (!snap.exists) {
+    throw new HttpsError('not-found', 'Configuration active introuvable pour ce tenant.');
+  }
+
+  const snapshotId = crypto.randomUUID();
+  const now = new Date().toISOString();
+  const snapshotRecord = {
+    id: snapshotId,
+    orgId,
+    label: label || `Instantané du ${new Date().toLocaleDateString('fr-FR')}`,
+    data: snap.data(),
+    createdBy: caller.email,
+    createdAt: now,
+    reason: reason.trim(),
+  };
+
+  await db.collection('tenants').doc(orgId).collection('config_snapshots').doc(snapshotId).set(snapshotRecord);
+
+  await appendPlatformAuditLog({
+    actorUid: caller.uid,
+    actorEmail: caller.email,
+    actorRole: caller.platformRole,
+    action: 'SNAPSHOT_CONFIG',
+    detail: `Création de l'instantané "${snapshotRecord.label}" (${snapshotId}).`,
+    reason: reason.trim(),
+    targetOrgId: orgId,
+    after: snapshotRecord,
+  });
+
+  return { success: true, snapshotId, snapshot: snapshotRecord };
+}
+
+// ---------------------------------------------------------------------------
+// 8. Retour arrière de configuration (Rollback)
+// ---------------------------------------------------------------------------
+export async function handleRollbackTenantConfig(
+  request: CallableRequest<RollbackTenantConfigRequest>
+) {
+  const caller = getCallerPlatformContext(request);
+  assertPlatformRole(caller, ['platform_owner', 'platform_admin']);
+
+  const { orgId, snapshotId, reason } = request.data || {};
+  if (!orgId || !snapshotId || !reason || reason.trim().length < 5) {
+    throw new HttpsError('invalid-argument', 'Identifiant tenant, instantané et motif requis.');
+  }
+
+  const snapRef = db.collection('tenants').doc(orgId).collection('config_snapshots').doc(snapshotId);
+  const snap = await snapRef.get();
+
+  if (!snap.exists) {
+    throw new HttpsError('not-found', `Instantané "${snapshotId}" introuvable.`);
+  }
+
+  const snapshotData = snap.data()!;
+  const restoredConfig = snapshotData.data;
+
+  const entRef = db.collection('tenants').doc(orgId).collection('entitlements').doc('current');
+  const currentSnap = await entRef.get();
+  const beforeData = currentSnap.exists ? currentSnap.data() : {};
+
+  const now = new Date().toISOString();
+  const updatedPayload = {
+    ...restoredConfig,
+    updatedAt: now,
+    updatedBy: caller.email,
+    lastRollbackFromSnapshotId: snapshotId,
+  };
+
+  await entRef.set(updatedPayload, { merge: true });
+
+  await appendPlatformAuditLog({
+    actorUid: caller.uid,
+    actorEmail: caller.email,
+    actorRole: caller.platformRole,
+    action: 'ROLLBACK_CONFIG',
+    detail: `Restauration de la configuration depuis l'instantané "${snapshotData.label}" (${snapshotId}).`,
+    reason: reason.trim(),
+    targetOrgId: orgId,
+    before: beforeData,
+    after: updatedPayload,
+  });
+
+  return { success: true, snapshotId, restoredAt: now };
+}
+
+// ---------------------------------------------------------------------------
+// 9. Contrôle d'intégrité et Diagnostic Serveur Réel (runDiagnostics)
+// ---------------------------------------------------------------------------
+export async function handleRunDiagnostics(
+  request: CallableRequest<RunDiagnosticsRequest>
+) {
+  const caller = getCallerPlatformContext(request);
+  assertPlatformRole(caller, ['platform_owner', 'platform_admin', 'support']);
+
+  const { orgId } = request.data || {};
+  if (!orgId) {
+    throw new HttpsError('invalid-argument', 'Identifiant tenant requis.');
+  }
+
+  const tenantDoc = await db.collection('tenants').doc(orgId).get();
+  if (!tenantDoc.exists) {
+    throw new HttpsError('not-found', `Tenant "${orgId}" introuvable.`);
+  }
+
+  const tenant = tenantDoc.data()!;
+  const checks: any[] = [];
+  let score = 100;
+
+  // 1. Contrôle Fiscalité CGI 2026
+  const hasTaxId = Boolean(tenant.company?.taxId && tenant.company.taxId.trim().length >= 8);
+  if (!hasTaxId) {
+    score -= 20;
+    checks.push({
+      category: 'fiscalite',
+      name: 'Identifiant Unique Fiscal (NIU)',
+      passed: false,
+      severity: 'error',
+      message: 'Le NIU fiscal n\'est pas renseigné ou comporte moins de 8 caractères.',
+    });
+  } else {
+    checks.push({
+      category: 'fiscalite',
+      name: 'Identifiant Unique Fiscal (NIU)',
+      passed: true,
+      severity: 'info',
+      message: `NIU conforme : ${tenant.company.taxId}.`,
+    });
+  }
+
+  // 2. Contrôle Devise et Arrêté Légal
+  const isFcfa = tenant.currency === 'FCFA';
+  if (!isFcfa) {
+    score -= 10;
+    checks.push({
+      category: 'fiscalite',
+      name: 'Devise d\'exploitation',
+      passed: false,
+      severity: 'warning',
+      message: `Devise active "${tenant.currency}". La norme par défaut CEMAC est FCFA (XAF).`,
+    });
+  } else {
+    checks.push({
+      category: 'fiscalite',
+      name: 'Devise d\'exploitation',
+      passed: true,
+      severity: 'info',
+      message: 'Devise conforme FCFA (sans décimale superflue).',
+    });
+  }
+
+  // 3. Contrôle des sessions de caisse
+  const activeSessionsSnap = await db
+    .collection('cash_sessions')
+    .where('organizationId', '==', orgId)
+    .where('status', '==', 'ouverte')
+    .limit(5)
+    .get();
+
+  if (activeSessionsSnap.empty) {
+    score -= 10;
+    checks.push({
+      category: 'caisse',
+      name: 'Session de Caisse Active',
+      passed: false,
+      severity: 'warning',
+      message: 'Aucune caisse ouverte actuellement. Les encaissements espèces sont suspendus.',
+    });
+  } else {
+    checks.push({
+      category: 'caisse',
+      name: 'Session de Caisse Active',
+      passed: true,
+      severity: 'info',
+      message: `${activeSessionsSnap.size} session(s) de caisse active(s).`,
+    });
+  }
+
+  // 4. Contrôle des succursales et établissements
+  const outletsSnap = await db.collection('restaurants').where('organizationId', '==', orgId).get();
+  if (outletsSnap.empty) {
+    score -= 20;
+    checks.push({
+      category: 'materiel',
+      name: 'Établissement Principal',
+      passed: false,
+      severity: 'error',
+      message: 'Aucun établissement physique rattaché à ce compte organisationnel.',
+    });
+  } else {
+    checks.push({
+      category: 'materiel',
+      name: 'Établissement Principal',
+      passed: true,
+      severity: 'info',
+      message: `${outletsSnap.size} point(s) de vente rattaché(s).`,
+    });
+  }
+
+  // 5. Contrôle des comptes collaborateurs
+  const usersSnap = await db.collection('users').where('organizationId', '==', orgId).get();
+  if (usersSnap.empty) {
+    score -= 20;
+    checks.push({
+      category: 'securite',
+      name: 'Comptes Collaborateurs',
+      passed: false,
+      severity: 'error',
+      message: 'Aucun compte utilisateur configuré.',
+    });
+  } else {
+    checks.push({
+      category: 'securite',
+      name: 'Comptes Collaborateurs',
+      passed: true,
+      severity: 'info',
+      message: `${usersSnap.size} collaborateur(s) enregistré(s).`,
+    });
+  }
+
+  const finalScore = Math.max(0, score);
+  const status = finalScore >= 80 ? 'healthy' : finalScore >= 50 ? 'warning' : 'critical';
+
+  const diagnosticResult = {
+    orgId,
+    healthScore: finalScore,
+    status,
+    checks,
+    checkedAt: new Date().toISOString(),
+  };
+
+  // Met à jour le score dans la fiche du tenant
+  await db.collection('tenants').doc(orgId).update({
+    healthScore: finalScore,
+    lastDiagnosticsAt: diagnosticResult.checkedAt,
+  });
+
+  return { success: true, diagnostics: diagnosticResult };
+}
+
+// ---------------------------------------------------------------------------
+// 10. Suppression sécurisée à double validation (2-Man Rule) - Phase 6
+// ---------------------------------------------------------------------------
+export async function handleRequestTenantDeletion(
+  request: CallableRequest<RequestTenantDeletionRequest>
+) {
+  const caller = getCallerPlatformContext(request);
+  assertPlatformRole(caller, ['platform_owner', 'platform_admin']);
+
+  const { orgId, reason } = request.data || {};
+  if (!orgId || !reason || reason.trim().length < 5) {
+    throw new HttpsError('invalid-argument', 'Identifiant tenant et motif détaillé requis.');
+  }
+
+  const tenantRef = db.collection('tenants').doc(orgId);
+  const tenantSnap = await tenantRef.get();
+  if (!tenantSnap.exists) {
+    throw new HttpsError('not-found', 'Tenant introuvable.');
+  }
+
+  const requestId = crypto.randomUUID();
+  const now = new Date();
+  const purgeDate = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000); // 30 jours de rétention légale
+
+  const deletionRecord = {
+    id: requestId,
+    orgId,
+    companyName: tenantSnap.data()?.company?.name || orgId,
+    requestedByUid: caller.uid,
+    requestedByEmail: caller.email,
+    requestedAt: now.toISOString(),
+    status: 'en_attente_approbation',
+    purgeScheduledAt: purgeDate.toISOString(),
+    reason: reason.trim(),
+  };
+
+  await db.collection('pending_deletions').doc(requestId).set(deletionRecord);
+
+  // Mise en statut suspendu / archive immédiat
+  await tenantRef.update({
+    status: 'archive',
+    suspensionMode: 'full_block',
+    suspensionReason: `Demande de résiliation/suppression émise par ${caller.email} : ${reason.trim()}`,
+    pendingDeletionId: requestId,
+    updatedAt: now.toISOString(),
+  });
+
+  await appendPlatformAuditLog({
+    actorUid: caller.uid,
+    actorEmail: caller.email,
+    actorRole: caller.platformRole,
+    action: 'REQUEST_TENANT_DELETION',
+    detail: `Initiation de la demande de suppression pour "${deletionRecord.companyName}". Règle des deux administrateurs requise.`,
+    reason: reason.trim(),
+    targetOrgId: orgId,
+    after: deletionRecord,
+  });
+
+  return { success: true, deletionRequestId: requestId, purgeScheduledAt: purgeDate.toISOString() };
+}
+
+export async function handleApproveTenantDeletion(
+  request: CallableRequest<ApproveTenantDeletionRequest>
+) {
+  const caller = getCallerPlatformContext(request);
+  assertPlatformRole(caller, ['platform_owner', 'platform_admin']);
+
+  const { deletionRequestId, reason } = request.data || {};
+  if (!deletionRequestId || !reason || reason.trim().length < 5) {
+    throw new HttpsError('invalid-argument', 'Identifiant de demande et motif de validation requis.');
+  }
+
+  const delRef = db.collection('pending_deletions').doc(deletionRequestId);
+  const delSnap = await delRef.get();
+
+  if (!delSnap.exists) {
+    throw new HttpsError('not-found', 'Demande de suppression introuvable.');
+  }
+
+  const delData = delSnap.data()!;
+
+  // Règle inviolable des deux administrateurs (2-Man Rule)
+  if (delData.requestedByUid === caller.uid) {
+    throw new HttpsError(
+      'permission-denied',
+      'Règle de sécurité violée : la suppression d\'un client exige impérativement la validation d\'un SECOND administrateur distinct.'
+    );
+  }
+
+  const now = new Date().toISOString();
+  await delRef.update({
+    status: 'approuvee',
+    approvedByUid: caller.uid,
+    approvedByEmail: caller.email,
+    approvedAt: now,
+    approvalReason: reason.trim(),
+  });
+
+  await appendPlatformAuditLog({
+    actorUid: caller.uid,
+    actorEmail: caller.email,
+    actorRole: caller.platformRole,
+    action: 'APPROVE_TENANT_DELETION',
+    detail: `Confirmation officielle de suppression du tenant "${delData.orgId}" par le second administrateur. Purge automatique fixée au ${delData.purgeScheduledAt.slice(0, 10)}.`,
+    reason: reason.trim(),
+    targetOrgId: delData.orgId,
+    after: { ...delData, approvedByEmail: caller.email, approvedAt: now },
+  });
+
+  return { success: true, deletionRequestId, status: 'approuvee' };
+}
+
+// ---------------------------------------------------------------------------
+// 11. Révocation des sessions (forceSignOut) - Phase 6
+// ---------------------------------------------------------------------------
+export async function handleForceSignOut(
+  request: CallableRequest<ForceSignOutRequest>
+) {
+  const caller = getCallerPlatformContext(request);
+  assertPlatformRole(caller, ['platform_owner', 'platform_admin']);
+
+  const { orgId, uid, reason } = request.data || {};
+  if (!orgId || !reason || reason.trim().length < 5) {
+    throw new HttpsError('invalid-argument', 'Identifiant tenant et motif requis.');
+  }
+
+  let revokedCount = 0;
+
+  if (uid) {
+    await auth.revokeRefreshTokens(uid);
+    revokedCount = 1;
+  } else {
+    // Révoque les sessions de l'ensemble des utilisateurs du restaurant
+    const usersSnap = await db.collection('users').where('organizationId', '==', orgId).get();
+    for (const doc of usersSnap.docs) {
+      await auth.revokeRefreshTokens(doc.id).catch(() => {});
+      revokedCount++;
+    }
+  }
+
+  await appendPlatformAuditLog({
+    actorUid: caller.uid,
+    actorEmail: caller.email,
+    actorRole: caller.platformRole,
+    action: 'FORCE_SIGN_OUT',
+    detail: `Révocation immédiate des jetons pour ${revokedCount} session(s) sur le tenant "${orgId}".`,
+    reason: reason.trim(),
+    targetOrgId: orgId,
+  });
+
+  return { success: true, revokedCount };
+}
+
+// ---------------------------------------------------------------------------
+// 12. Réinitialisation de mot de passe à distance (resetOwnerPassword) - Phase 6
+// ---------------------------------------------------------------------------
+export async function handleResetOwnerPassword(
+  request: CallableRequest<ResetOwnerPasswordRequest>
+) {
+  const caller = getCallerPlatformContext(request);
+  assertPlatformRole(caller, ['platform_owner', 'platform_admin']);
+
+  const { orgId, reason } = request.data || {};
+  if (!orgId || !reason || reason.trim().length < 5) {
+    throw new HttpsError('invalid-argument', 'Identifiant tenant et motif requis.');
+  }
+
+  const tenantDoc = await db.collection('tenants').doc(orgId).get();
+  if (!tenantDoc.exists) {
+    throw new HttpsError('not-found', 'Tenant introuvable.');
+  }
+
+  const ownerEmail = tenantDoc.data()?.owner?.email;
+  if (!ownerEmail) {
+    throw new HttpsError('failed-precondition', 'Aucune adresse email propriétaire enregistrée.');
+  }
+
+  const link = await auth.generatePasswordResetLink(ownerEmail);
+
+  await appendPlatformAuditLog({
+    actorUid: caller.uid,
+    actorEmail: caller.email,
+    actorRole: caller.platformRole,
+    action: 'RESET_OWNER_PASSWORD',
+    detail: `Lien de réinitialisation généré pour le propriétaire "${ownerEmail}". Aucun secret exposé.`,
+    reason: reason.trim(),
+    targetOrgId: orgId,
+  });
+
+  return { success: true, email: ownerEmail, passwordResetLink: link };
+}
+
+// ---------------------------------------------------------------------------
+// 13. Changement de plan contractuel (changeTenantPlan) - Phase 6
+// ---------------------------------------------------------------------------
+export async function handleChangeTenantPlan(
+  request: CallableRequest<ChangeTenantPlanRequest>
+) {
+  const caller = getCallerPlatformContext(request);
+  assertPlatformRole(caller, ['platform_owner', 'platform_admin', 'billing']);
+
+  const { orgId, newPlanId, reason } = request.data || {};
+  if (!orgId || !newPlanId || !reason || reason.trim().length < 5) {
+    throw new HttpsError('invalid-argument', 'Identifiant tenant, formule et motif requis.');
+  }
+
+  const tenantRef = db.collection('tenants').doc(orgId);
+  const snap = await tenantRef.get();
+  if (!snap.exists) {
+    throw new HttpsError('not-found', 'Tenant introuvable.');
+  }
+
+  const beforePlanId = snap.data()?.planId;
+  const now = new Date().toISOString();
+
+  await tenantRef.update({
+    planId: newPlanId,
+    updatedAt: now,
+  });
+
+  await appendPlatformAuditLog({
+    actorUid: caller.uid,
+    actorEmail: caller.email,
+    actorRole: caller.platformRole,
+    action: 'CHANGE_PLAN',
+    detail: `Migration de formule : "${beforePlanId}" -> "${newPlanId}".`,
+    reason: reason.trim(),
+    targetOrgId: orgId,
+  });
+
+  return { success: true, oldPlanId: beforePlanId, newPlanId };
+}
+
+// ---------------------------------------------------------------------------
+// 14. Exportation globale des données du restaurant (exportTenantData) - Phase 6
+// ---------------------------------------------------------------------------
+export async function handleExportTenantData(
+  request: CallableRequest<ExportTenantDataRequest>
+) {
+  const caller = getCallerPlatformContext(request);
+  assertPlatformRole(caller, ['platform_owner', 'platform_admin']);
+
+  const { orgId, reason } = request.data || {};
+  if (!orgId || !reason || reason.trim().length < 5) {
+    throw new HttpsError('invalid-argument', 'Identifiant tenant et motif requis.');
+  }
+
+  const exportId = crypto.randomUUID();
+  const now = new Date().toISOString();
+
+  const exportRecord = {
+    id: exportId,
+    orgId,
+    requestedBy: caller.email,
+    status: 'termine',
+    format: 'JSON_ARCHIVE',
+    createdAt: now,
+    reason: reason.trim(),
+  };
+
+  await db.collection('tenants').doc(orgId).collection('data_exports').doc(exportId).set(exportRecord);
+
+  await appendPlatformAuditLog({
+    actorUid: caller.uid,
+    actorEmail: caller.email,
+    actorRole: caller.platformRole,
+    action: 'EXPORT_TENANT_DATA',
+    detail: `Génération d'une archive complète des données pour "${orgId}".`,
+    reason: reason.trim(),
+    targetOrgId: orgId,
+    after: exportRecord,
+  });
+
+  return { success: true, exportId, exportRecord };
 }

@@ -17,6 +17,7 @@ import {
   Layers,
   Users,
   Store,
+  Wand2,
 } from 'lucide-react';
 import { Tenant, TenantEntitlements, DEFAULT_PLANS, Plan } from '@shared';
 import { adminPlatformService } from '../../services/adminPlatformService';
@@ -30,6 +31,7 @@ import { DiagnosticsTab } from './tabs/DiagnosticsTab';
 import { AuditTab } from './tabs/AuditTab';
 import { SupportTab } from './tabs/SupportTab';
 import { ProfileApplicatorModal } from '../config/ProfileApplicatorModal';
+import { SetupWizardModal } from '../config/SetupWizardModal';
 
 interface TenantDetailViewProps {
   orgId: string;
@@ -41,6 +43,7 @@ export const TenantDetailView: React.FC<TenantDetailViewProps> = ({ orgId, onBac
   const [entitlements, setEntitlements] = useState<TenantEntitlements | null>(null);
   const [activeTab, setActiveTab] = useState<string>('features');
   const [showProfileModal, setShowProfileModal] = useState(false);
+  const [showWizardModal, setShowWizardModal] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
   // Écoute en temps réel du tenant et de ses droits
@@ -163,6 +166,14 @@ export const TenantDetailView: React.FC<TenantDetailViewProps> = ({ orgId, onBac
         {/* Quick actions buttons in header */}
         <div className="flex items-center gap-2 self-start md:self-auto">
           <button
+            onClick={() => setShowWizardModal(true)}
+            className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 text-xs font-bold transition-all flex items-center gap-2 cursor-pointer shadow-md shadow-amber-500/20"
+          >
+            <Wand2 className="w-4 h-4" />
+            <span>Assistant Guidé</span>
+          </button>
+
+          <button
             onClick={() => setShowProfileModal(true)}
             className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold transition-all flex items-center gap-2 cursor-pointer border border-slate-700"
           >
@@ -202,6 +213,7 @@ export const TenantDetailView: React.FC<TenantDetailViewProps> = ({ orgId, onBac
             tenant={tenant}
             entitlements={entitlements}
             onOpenProfileApplicator={() => setShowProfileModal(true)}
+            onOpenSetupWizard={() => setShowWizardModal(true)}
           />
         )}
         {activeTab === 'overview' && <OverviewTab tenant={tenant} />}
@@ -219,6 +231,15 @@ export const TenantDetailView: React.FC<TenantDetailViewProps> = ({ orgId, onBac
         isOpen={showProfileModal}
         onClose={() => setShowProfileModal(false)}
         orgId={tenant.id}
+        currentEntitlements={entitlements}
+      />
+
+      {/* Setup Wizard Modal */}
+      <SetupWizardModal
+        isOpen={showWizardModal}
+        onClose={() => setShowWizardModal(false)}
+        orgId={tenant.id}
+        restaurantName={tenant.company?.name || tenant.id}
         currentEntitlements={entitlements}
       />
     </div>
