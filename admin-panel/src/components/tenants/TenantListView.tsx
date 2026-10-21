@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { Tenant, TenantStatus, DEFAULT_PLANS, Plan } from '@shared';
 import { adminPlatformService } from '../../services/adminPlatformService';
+import { PendingDeletionsBanner } from './PendingDeletionsBanner';
 
 interface TenantListViewProps {
   tenants: Tenant[];
@@ -117,6 +118,9 @@ export const TenantListView: React.FC<TenantListViewProps> = ({
           <span>Inscrire un Restaurant</span>
         </button>
       </div>
+
+      {/* Bannière d'approbation suppressions en attente (2-man rule) */}
+      <PendingDeletionsBanner />
 
       {/* Barre de Recherche et Filtres */}
       <div className="p-4 rounded-2xl bg-slate-900/60 border border-slate-800 backdrop-blur-sm flex flex-col md:flex-row gap-3">

@@ -30,6 +30,7 @@ import { BillingTab } from './tabs/BillingTab';
 import { DiagnosticsTab } from './tabs/DiagnosticsTab';
 import { AuditTab } from './tabs/AuditTab';
 import { SupportTab } from './tabs/SupportTab';
+import { DangerZoneTab } from './tabs/DangerZoneTab';
 import { ProfileApplicatorModal } from '../config/ProfileApplicatorModal';
 import { SetupWizardModal } from '../config/SetupWizardModal';
 
@@ -108,6 +109,7 @@ export const TenantDetailView: React.FC<TenantDetailViewProps> = ({ orgId, onBac
     { id: 'diagnostics', label: 'Santé & Diagnostics', icon: Activity },
     { id: 'audit', label: 'Journal d’Audit Crypté', icon: ShieldCheck },
     { id: 'support', label: 'Télémaintenance Support', icon: Headphones },
+    { id: 'danger', label: 'Zone Critique & Cycle de Vie', icon: AlertTriangle },
   ];
 
   return (
@@ -224,6 +226,7 @@ export const TenantDetailView: React.FC<TenantDetailViewProps> = ({ orgId, onBac
         {activeTab === 'diagnostics' && <DiagnosticsTab tenant={tenant} />}
         {activeTab === 'audit' && <AuditTab tenant={tenant} />}
         {activeTab === 'support' && <SupportTab tenant={tenant} />}
+        {activeTab === 'danger' && <DangerZoneTab tenant={tenant} />}
       </div>
 
       {/* Profile Applicator Modal */}

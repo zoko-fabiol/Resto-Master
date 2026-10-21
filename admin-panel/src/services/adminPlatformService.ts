@@ -18,6 +18,7 @@ import {
   SupportSession,
   PlatformAdmin,
   Plan,
+  PendingDeletion,
 } from '@shared';
 
 export interface PlatformAnnouncement {
@@ -114,6 +115,24 @@ export const adminPlatformService = {
       },
       (err) => {
         console.error('[adminPlatformService] Erreur écoute tenant_signups:', err);
+      }
+    );
+  },
+
+  subscribeToPendingDeletions(callback: (deletions: PendingDeletion[]) => void): Unsubscribe {
+    const collRef = collection(db, 'pending_deletions');
+    const q = query(collRef, orderBy('requestedAt', 'desc'));
+    return onSnapshot(
+      q,
+      (snapshot) => {
+        const deletions = snapshot.docs.map((docSnap) => ({
+          id: docSnap.id,
+          ...docSnap.data(),
+        })) as PendingDeletion[];
+        callback(deletions);
+      },
+      (err) => {
+        console.error('[adminPlatformService] Erreur écoute pending_deletions:', err);
       }
     );
   },

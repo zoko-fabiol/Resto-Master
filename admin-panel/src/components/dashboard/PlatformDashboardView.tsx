@@ -13,6 +13,7 @@ import {
   Building2,
 } from 'lucide-react';
 import { Tenant, TenantSignupRequest, PlatformAuditLog, DEFAULT_PLANS, Plan } from '@shared';
+import { PendingDeletionsBanner } from '../tenants/PendingDeletionsBanner';
 
 interface PlatformDashboardViewProps {
   tenants: Tenant[];
@@ -130,6 +131,9 @@ export const PlatformDashboardView: React.FC<PlatformDashboardViewProps> = ({
           </button>
         </div>
       </div>
+
+      {/* Bannière Règle des 2 Administrateurs (Suppressions en attente) */}
+      <PendingDeletionsBanner />
 
       {/* KPI Cards Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">

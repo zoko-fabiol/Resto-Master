@@ -81,7 +81,7 @@ describe('RestoMaster Admin Panel — Architecture, Sécurité & Multi-Tenant (P
     const mockRawUserFromFirestore = {
       id: 'user-789',
       name: 'Jean Serveur',
-      email: 'jean@resto.cm',
+      email: 'jean@restomaster.test',
       role: 'serveur',
       organizationId: 'org-test',
       active: true,

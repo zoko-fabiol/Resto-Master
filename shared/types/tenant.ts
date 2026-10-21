@@ -63,6 +63,7 @@ export interface Tenant {
   status: TenantStatus;
   suspensionMode?: TenantSuspensionMode;
   suspensionReason?: string;
+  pendingDeletionId?: string;
   planId: string;
   trialEndsAt?: string;
   company: TenantCompanyInfo;
@@ -77,4 +78,20 @@ export interface Tenant {
   currency: 'FCFA' | 'EUR' | 'USD' | 'CAD' | 'GBP';
   createdAt: string;
   updatedAt: string;
+}
+
+export interface PendingDeletion {
+  id: string;
+  orgId: string;
+  companyName: string;
+  requestedByUid: string;
+  requestedByEmail: string;
+  requestedAt: string;
+  status: 'en_attente_approbation' | 'approuvee' | 'rejetee';
+  purgeScheduledAt: string;
+  reason: string;
+  approvedByUid?: string;
+  approvedByEmail?: string;
+  approvedAt?: string;
+  approvalReason?: string;
 }

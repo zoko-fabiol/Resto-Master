@@ -144,6 +144,11 @@ service cloud.firestore {
       allow write: if false; // Soumission sécurisée via Cloud Function submitSignup
     }
 
+    match /pending_deletions/{deletionId} {
+      allow read: if isPlatformAdmin();
+      allow write: if false; // Requête et approbation exclusives par Cloud Functions
+    }
+
     match /plans/{planId} {
       allow read: if isAuthenticated();
       allow write: if isPlatformWriter();
