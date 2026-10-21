@@ -32,11 +32,18 @@ export const tauriPlatform: Platform = {
     },
   },
   printing: {
-    printRaw: async (data, printerId) => {
+    printRaw: async (data, target) => {
       const { invoke } = await loadCore();
+      if (target?.host) {
+        return invoke<{ target: 'native' }>('print_tcp', {
+          host: target.host,
+          port: target.port ?? 9100,
+          bytes: Array.from(data),
+        });
+      }
       return invoke<{ target: 'native' }>('platform_print_raw', {
         data: Array.from(data),
-        printerId,
+        printerId: target?.printerId,
       });
     },
     printDocument: async (options: PrintDocumentOptions = {}) => {

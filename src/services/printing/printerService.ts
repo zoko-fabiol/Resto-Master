@@ -1,4 +1,4 @@
-import { Order, OrderItem, RestaurantSettings } from '../../types/restaurant';
+﻿import { Order, OrderItem, RestaurantSettings } from '../../types/restaurant';
 import { Peripheral } from '../../types/configuration';
 import {
   buildClientReceiptEscPos,
@@ -7,6 +7,7 @@ import {
   buildTestTicketEscPos,
   EscPosBuilder,
 } from './escposGenerator';
+import { isTauri, platform } from '../../platform';
 
 export interface PrinterDiscoveryResult {
   name: string;
@@ -128,6 +129,13 @@ export class PrinterService {
       };
     }
 
+    if (data.length === 0) {
+      return {
+        success: false,
+        message: `Le ticket d'impression est vide. Aucun octet n'a été transmis.`,
+      };
+    }
+
     // 1. WebUSB Direct Print
     if (peripheral.connectionType === 'usb') {
       if (!this.isWebUsbSupported()) {
@@ -167,6 +175,26 @@ export class PrinterService {
 
     // 2. Network IP (Ethernet / Wi-Fi) TCP Port 9100 / Local Print Bridge
     if (peripheral.connectionType === 'reseau_ip') {
+      if (isTauri()) {
+        try {
+          await platform.printing.printRaw(data, {
+            host: peripheral.address,
+            port: peripheral.port || 9100,
+            printerId: peripheral.id,
+          });
+          return {
+            success: true,
+            message: `Ticket transmis à l'imprimante réseau ${peripheral.address}:${peripheral.port || 9100} (${data.length} octets).`,
+          };
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          return {
+            success: false,
+            message: `Échec de l'impression réseau vers ${peripheral.address}:${peripheral.port || 9100} : ${message}`,
+          };
+        }
+      }
+
       const bridgeUrl = `http://${peripheral.address}:${peripheral.port || 9100}/print`;
       try {
         const res = await fetch(bridgeUrl, {

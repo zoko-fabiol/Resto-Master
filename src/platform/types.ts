@@ -22,7 +22,10 @@ export interface PlatformFiles {
 }
 
 export interface PlatformPrinting {
-  printRaw(data: Uint8Array, printerId?: string): Promise<PrintResult>;
+  printRaw(
+    data: Uint8Array,
+    target?: { printerId?: string; host?: string; port?: number }
+  ): Promise<PrintResult>;
   printDocument(options?: PrintDocumentOptions): Promise<PrintResult>;
 }
 
