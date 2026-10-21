@@ -1,4 +1,4 @@
-# Construire RestoMaster OS avec Tauri 2
+﻿# Construire RestoMaster OS avec Tauri 2
 
 Ce document décrit les prérequis du portage desktop Windows/macOS/Linux et Android. Le navigateur reste la cible de référence tant que les phases de parité ne sont pas validées.
 
@@ -16,6 +16,19 @@ npm run check:tauri
 ```
 
 Le diagnostic distingue les outils obligatoires pour le projet web et les outils nécessaires uniquement pour Tauri. Il ne considère pas une absence de Rust ou d’Android comme une réussite de build Tauri.
+
+### CSP Tauri
+
+La configuration de production utilise une CSP explicite dans `src-tauri/tauri.conf.json` :
+
+- `script-src` n'autorise que les scripts embarqués (`'self'`) ;
+- `connect-src` autorise uniquement les domaines Firebase, Cloud Functions, Cloudinary et les protocoles IPC nécessaires ;
+- `img-src` autorise les images locales, les données générées, les blobs, Cloudinary et Firebase Storage ;
+- `object-src 'none'`, `base-uri 'self'` et `frame-ancestors 'none'` réduisent les surfaces d'injection ;
+- `unsafe-eval` est interdit en production ;
+- `style-src 'unsafe-inline'` est conservé car l'interface existante utilise des styles React inline pour des dimensions et positions calculées ; ce n'est pas requis par Tailwind lui-même.
+
+`devCsp` est volontairement plus souple pour permettre le serveur Vite local et le diagnostic pendant `tauri dev`. Il ne doit jamais remplacer la CSP de production dans une livraison.
 
 ## Windows
 
