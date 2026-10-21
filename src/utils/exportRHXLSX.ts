@@ -4,10 +4,11 @@
 // ============================================================
 
 import XLSXStyle from 'xlsx-js-style';
-const { utils, writeFile } = XLSXStyle;
+const { utils, write } = XLSXStyle;
 
 import { showToast } from '../components/ui/Toast';
 import { getDateSuffix, getExportFileSuffix, MONTHS_FR, removeAccents } from './exportRHHelpers';
+import { platform } from '../platform';
 
 import type { RhEmployee } from '../types/restaurant';
 
@@ -109,6 +110,22 @@ interface StyledRow {
   aligns?: Record<number, 'left' | 'center' | 'right'>;
   colors?: Record<number, string>;
   bgs?: Record<number, string>;
+}
+
+async function saveWorkbook(workbook: Parameters<typeof write>[0], filename: string): Promise<boolean> {
+  try {
+    const bytes = write(workbook, { bookType: 'xlsx', type: 'array' }) as ArrayBuffer;
+    await platform.files.save({
+      filename,
+      mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      data: new Uint8Array(bytes),
+    });
+    return true;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    showToast(`Échec de l'export Excel : ${message}`, 'error');
+    return false;
+  }
 }
 
 const buildStyledSheet = (title: string, subtitle: string, cols: ColDef[], styledRows: StyledRow[]): any => {
@@ -225,10 +242,10 @@ interface PersonnelFilters {
   type?: string;
 }
 
-export const exportPersonnelXLSX = (
+export const exportPersonnelXLSX = async (
   employees: RhEmployee[],
   filters: PersonnelFilters = {}
-): void => {
+): Promise<void> => {
   const isDismissedFilter = filters.statut === 'renvoye';
 
   // Par défaut, seuls les employés actifs apparaissent sauf si 'renvoye' est explicitement demandé
@@ -311,19 +328,19 @@ export const exportPersonnelXLSX = (
   const wb = utils.book_new();
   utils.book_append_sheet(wb, ws, isDismissedFilter ? 'Licencies' : 'Personnel');
   const filePrefix = isDismissedFilter ? 'echos_personnel_licencies' : 'echos_personnel';
-  writeFile(wb, `${filePrefix}_${getExportFileSuffix()}.xlsx`);
+  await saveWorkbook(wb, `${filePrefix}_${getExportFileSuffix()}.xlsx`);
   showToast(isDismissedFilter ? 'Liste des licenciés exportée en Excel !' : 'Registre du personnel exporté en Excel !', 'success');
 };
 
 // ================================================================
 // 2. EXPORT POINTAGE MENSUEL EXCEL – Stylisé avec légende
 // ================================================================
-export const exportAttendanceXLSX = (
+export const exportAttendanceXLSX = async (
   employees: RhEmployee[],
   attendance: Record<string, number>,
   filters: { year: number; month: number },
   attendanceDetails?: Record<string, any>
-): void => {
+): Promise<void> => {
   const { year, month } = filters;
 
   // Filtrer uniquement les employés actifs
@@ -629,6 +646,6 @@ export const exportAttendanceXLSX = (
   const wb = utils.book_new();
   utils.book_append_sheet(wb, ws, 'Pointage');
   const monthNum = String(month + 1).padStart(2, '0');
-  writeFile(wb, `echos_pointage_${year}_${monthNum}_${getExportFileSuffix()}.xlsx`);
+  await saveWorkbook(wb, `echos_pointage_${year}_${monthNum}_${getExportFileSuffix()}.xlsx`);
   showToast('Pointage exporté en Excel !', 'success');
 };
