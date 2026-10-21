@@ -93,7 +93,6 @@ const AppContent: React.FC = () => {
     setCurrentUser,
     lockSession,
     logout,
-    claimInitialSuperadmin,
   } = useAuth();
   const {
     seatReservation,
@@ -121,7 +120,6 @@ const AppContent: React.FC = () => {
   const [isDisplayTvOpen, setIsDisplayTvOpen] = useState(false);
   const [isUserGuideOpen, setIsUserGuideOpen] = useState(false);
   const [isOnboardingOpen, setIsOnboardingOpen] = useState(false);
-  const [isClaimingSuperadmin, setIsClaimingSuperadmin] = useState(false);
 
   // Auto-launch OnboardingWizard for Superadmin on fresh install if not yet certified and no outlets configured
   useEffect(() => {
@@ -285,28 +283,16 @@ const AppContent: React.FC = () => {
           <div className="w-16 h-16 rounded-2xl bg-amber-500/20 text-amber-400 flex items-center justify-center mb-4">
             <ShieldAlert className="w-8 h-8" />
           </div>
-          <h2 className="text-xl font-bold text-white mb-2">Compte en attente d'activation</h2>
+          <h2 className="text-xl font-bold text-white mb-2">Compte en attente d'affectation</h2>
           <p className="text-xs text-slate-400 mb-6 leading-relaxed">
-            Votre compte <span className="text-slate-200 font-semibold">{currentUser.email}</span> est authentifié. Aucun administrateur n'ayant encore été configuré sur cette base, vous pouvez activer immédiatement votre profil en tant que <strong>Super Administrateur</strong>.
+            Votre compte <span className="text-slate-200 font-semibold">{currentUser.email}</span> est authentifié mais n'a pas encore de rôle actif sur cet établissement. Veuillez contacter le propriétaire de votre restaurant ou l'administrateur de la plateforme pour activer vos accès.
           </p>
-          <div className="flex flex-col sm:flex-row gap-3 w-full">
-            <button
-              disabled={isClaimingSuperadmin}
-              onClick={async () => {
-                setIsClaimingSuperadmin(true);
-                await claimInitialSuperadmin();
-                setIsClaimingSuperadmin(false);
-              }}
-              className="flex-1 px-5 py-3 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 disabled:opacity-50 text-slate-950 font-bold rounded-xl text-xs transition shadow-lg shadow-amber-500/20 active:scale-95 cursor-pointer flex items-center justify-center gap-2"
-            >
-              <ShieldCheck className="w-4 h-4" />
-              {isClaimingSuperadmin ? 'Activation en cours...' : 'Activer en Super Administrateur'}
-            </button>
+          <div className="flex justify-center w-full">
             <button
               onClick={() => logout()}
-              className="px-5 py-3 bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-300 rounded-xl text-xs font-semibold transition cursor-pointer"
+              className="px-6 py-3 bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-200 rounded-xl text-xs font-semibold transition cursor-pointer flex items-center gap-2"
             >
-              Se déconnecter
+              <span>Se déconnecter</span>
             </button>
           </div>
         </div>

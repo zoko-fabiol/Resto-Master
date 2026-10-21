@@ -67,7 +67,6 @@ export interface AuthContextType {
   verifySupervisorPin: (pin: string, action?: string, entityId?: string) => Promise<{ success: boolean; supervisorToken?: string; supervisorName?: string; supervisorRole?: UserRole; message?: string }>;
   updateCurrentUserPin: (newPin: string) => Promise<boolean>;
   verifyCurrentUserPin: (pin: string) => Promise<boolean>;
-  claimInitialSuperadmin: () => Promise<boolean>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -749,54 +748,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return hasPermission(module, act);
   };
 
-  const claimInitialSuperadmin = async (): Promise<boolean> => {
-    if (!firebaseAuthUser || !firebaseAuthUser.email) return false;
-    try {
-      const superadminsSnap = await getDocs(
-        query(
-          collection(db, 'users'),
-          where('role', '==', 'superadmin'),
-          where('active', '==', true),
-          limit(2)
-        )
-      );
-
-      const hasOther = superadminsSnap.docs.some((d) => d.id !== firebaseAuthUser.uid);
-      if (hasOther) {
-        console.warn('[AuthContext] Un Super Administrateur est déjà enregistré.');
-        return false;
-      }
-
-      const userDocRef = doc(db, 'users', firebaseAuthUser.uid);
-      const superProfile: UserProfile = {
-        id: firebaseAuthUser.uid,
-        email: firebaseAuthUser.email,
-        name: firebaseAuthUser.displayName || firebaseAuthUser.email.split('@')[0] || 'Super Administrateur',
-        role: 'superadmin',
-        active: true,
-        accessibleRestaurantIds: ['*'],
-        organizationId: 'org-main',
-        mustChangePassword: false,
-      };
-
-      await setDoc(
-        userDocRef,
-        {
-          ...superProfile,
-          updatedAt: new Date().toISOString(),
-          createdAt: new Date().toISOString(),
-        },
-        { merge: true }
-      );
-
-      setCurrentUser(superProfile);
-      return true;
-    } catch (err) {
-      console.error('[AuthContext] Échec de l\'initialisation Superadmin:', err);
-      return false;
-    }
-  };
-
   return (
     <AuthContext.Provider
       value={{
@@ -817,7 +768,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         verifySupervisorPin,
         updateCurrentUserPin,
         verifyCurrentUserPin,
-        claimInitialSuperadmin,
       }}
     >
       {children}

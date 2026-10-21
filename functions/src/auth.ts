@@ -62,6 +62,64 @@ export function assertRoles(caller: CallerContext, allowedRoles: UserRole[]): vo
   }
 }
 
+/**
+ * Valide que l'appelant possède un rôle d'administration de plateforme
+ */
+export function getCallerPlatformContext(request: CallableRequest): import('./types.js').CallerPlatformContext {
+  if (!request.auth) {
+    throw new HttpsError(
+      'unauthenticated',
+      'Authentification requise pour accéder aux fonctions de la plateforme.'
+    );
+  }
+
+  const token = request.auth.token;
+  const platformRole = token.platformRole as import('./types.js').PlatformRole | undefined;
+
+  if (!platformRole) {
+    throw new HttpsError(
+      'permission-denied',
+      'Accès refusé. Privilèges de plateforme RestoMaster requis.'
+    );
+  }
+
+  const active = token.active !== false;
+
+  return {
+    uid: request.auth.uid,
+    email: request.auth.token.email || '',
+    platformRole,
+    name: (token.name as string) || (token.email as string)?.split('@')[0] || 'Admin Plateforme',
+    active,
+  };
+}
+
+/**
+ * Exige qu'un administrateur plateforme possède l'un des rôles de plateforme spécifiés
+ */
+export function assertPlatformRole(
+  caller: import('./types.js').CallerPlatformContext,
+  allowedRoles: import('./types.js').PlatformRole[]
+): void {
+  if (!caller.active) {
+    throw new HttpsError(
+      'permission-denied',
+      'Votre compte d\'administration de plateforme est inactif.'
+    );
+  }
+
+  if (caller.platformRole === 'platform_owner') {
+    return; // Le propriétaire de la plateforme possède un accès universel
+  }
+
+  if (!allowedRoles.includes(caller.platformRole)) {
+    throw new HttpsError(
+      'permission-denied',
+      `Accès refusé. Rôle plateforme "${caller.platformRole}" insuffisant pour cette action.`
+    );
+  }
+}
+
 // -----------------------------------------------------------------------------
 // Sécurité PIN : Hachage PBKDF2 avec Sel par Utilisateur
 // -----------------------------------------------------------------------------

@@ -14,6 +14,26 @@ export type UserRole =
   | 'tablette'
   | 'aucun';
 
+export type PlatformRole =
+  | 'platform_owner'
+  | 'platform_admin'
+  | 'support'
+  | 'billing'
+  | 'viewer';
+
+export interface PlatformCustomClaims {
+  platformRole: PlatformRole;
+  active?: boolean;
+}
+
+export interface CallerPlatformContext {
+  uid: string;
+  email: string;
+  platformRole: PlatformRole;
+  name: string;
+  active: boolean;
+}
+
 export interface UserCustomClaims {
   role: UserRole;
   outlets?: string[];

@@ -67,42 +67,133 @@ service cloud.firestore {
       );
     }
 
+    // -------------------------------------------------------------------------
+    // RÔLES ET CONTRÔLE D'ACCÈS PLATEFORME SAAS (SUPER ADMINS)
+    // -------------------------------------------------------------------------
+    function isPlatformAdmin() {
+      return isAuthenticated() && (
+        request.auth.token.platformRole != null
+      );
+    }
+
+    function isPlatformOwner() {
+      return isAuthenticated() && (
+        request.auth.token.platformRole == 'platform_owner'
+      );
+    }
+
+    function isPlatformWriter() {
+      return isAuthenticated() && (
+        request.auth.token.platformRole == 'platform_owner' ||
+        request.auth.token.platformRole == 'platform_admin'
+      );
+    }
+
+    // Identifiant d'organisation effectif de l'appelant
+    function callerOrgId() {
+      return request.auth.token.organizationId != null 
+        ? request.auth.token.organizationId 
+        : (request.auth.token.orgId != null ? request.auth.token.orgId : '');
+    }
+
+    function isTenantMember(orgId) {
+      return isAuthenticated() && (
+        callerOrgId() == orgId
+      );
+    }
+
+    function isTenantOwner(orgId) {
+      return isTenantMember(orgId) && (
+        request.auth.token.role == 'superadmin' ||
+        request.auth.token.role == 'direction'
+      );
+    }
+
     // Vérifie l'accès à un restaurant/outlet donné via les custom claims
     function hasOutletAccess(outletId) {
       return isAuthenticated() && (
+        isPlatformAdmin() ||
         isDirection() ||
         (request.auth.token.outlets != null && (outletId in request.auth.token.outlets || '*' in request.auth.token.outlets))
       );
     }
 
     function hasDocRestaurantAccess() {
-      return resource.data.restaurantId == null || hasOutletAccess(resource.data.restaurantId);
+      return isPlatformAdmin() || resource.data.restaurantId == null || hasOutletAccess(resource.data.restaurantId);
     }
 
     function hasIncomingRestaurantAccess() {
-      return request.resource.data.restaurantId != null && hasOutletAccess(request.resource.data.restaurantId);
+      return isPlatformAdmin() || (request.resource.data.restaurantId != null && hasOutletAccess(request.resource.data.restaurantId));
+    }
+
+    // =========================================================================
+    // A. PLATEFORME SAAS (GESTION MULTI-CLIENTS & SUPER ADMINS)
+    // =========================================================================
+    match /platform_admins/{adminId} {
+      allow read: if isPlatformAdmin();
+      allow write: if isPlatformOwner();
+    }
+
+    match /platform_audit_logs/{logId} {
+      allow read: if isPlatformAdmin();
+      allow write: if false; // Écriture exclusive par Cloud Functions serveur
+    }
+
+    match /tenant_signups/{signupId} {
+      allow read: if isPlatformAdmin();
+      allow write: if false; // Soumission sécurisée via Cloud Function submitSignup
+    }
+
+    match /plans/{planId} {
+      allow read: if isAuthenticated();
+      allow write: if isPlatformWriter();
+    }
+
+    match /config_profiles/{profileId} {
+      allow read: if isAuthenticated();
+      allow write: if isPlatformWriter();
+    }
+
+    match /feature_catalog/{featureId} {
+      allow read: if isAuthenticated();
+      allow write: if isPlatformWriter();
+    }
+
+    match /support_sessions/{sessionId} {
+      allow read: if isPlatformAdmin() || (isAuthenticated() && resource.data.orgId == callerOrgId());
+      allow write: if false; // Cloud Functions exclusivement
+    }
+
+    match /tenants/{orgId} {
+      allow read: if isPlatformAdmin() || isTenantMember(orgId);
+      allow write: if isPlatformWriter(); // Jamais d'écriture directe par le client restaurant
+
+      match /entitlements/current {
+        allow read: if isPlatformAdmin() || isTenantMember(orgId);
+        allow write: if false; // Mis à jour exclusivement par Cloud Functions serveur
+      }
     }
 
     // =========================================================================
     // 1. ORGANISATIONS & GROUPES
     // =========================================================================
     match /organizations/{orgId} {
-      allow read: if isAuthenticated();
-      allow write: if isDirection();
+      allow read: if isPlatformAdmin() || isTenantMember(orgId);
+      allow write: if isPlatformWriter() || isTenantOwner(orgId);
     }
 
     // =========================================================================
     // 2. RESTAURANTS & ÉTABLISSEMENTS
     // =========================================================================
     match /restaurants/{restaurantId} {
-      allow read: if isAuthenticated();
-      allow create, update: if isDirection();
-      allow delete: if isSuperadmin();
+      allow read: if isPlatformAdmin() || (isAuthenticated() && hasOutletAccess(restaurantId));
+      allow create, update: if isPlatformWriter() || (isDirection() && (resource == null || isTenantMember(resource.data.organizationId)));
+      allow delete: if isPlatformWriter() || isSuperadmin();
     }
 
     match /settings/{docId} {
-      allow read: if isAuthenticated();
-      allow write: if isSuperadmin() || (
+      allow read: if isPlatformAdmin() || isAuthenticated();
+      allow write: if isPlatformWriter() || isSuperadmin() || (
         isDirection() && (
           resource == null ||
           !('configurationVerrouillee' in resource.data) ||
@@ -113,38 +204,38 @@ service cloud.firestore {
     }
 
     match /system_config/{configId} {
-      allow read: if isAuthenticated();
-      allow write: if isDirection();
+      allow read: if isPlatformAdmin() || (isAuthenticated() && (isDirection() || isManager()));
+      allow write: if isPlatformWriter() || isDirection();
     }
 
     match /config_history/{historyId} {
-      allow read: if isDirection() || isManager() || isAuditeur();
+      allow read: if isPlatformAdmin() || isDirection() || isManager() || isAuditeur();
       allow create: if isDirection() || isManager();
       allow update, delete: if false;
     }
-
 
     // =========================================================================
     // 3. UTILISATEURS & PROFILS (RBAC STRICT)
     // Protection contre l'auto-attribution de rôle, modif de pinHash ou d'établissements
     // =========================================================================
     match /users/{userId} {
-      allow read: if isAuthenticated() && (
+      allow read: if isPlatformAdmin() || (isAuthenticated() && (
         isDirection() ||
         isManager() ||
         request.auth.uid == userId
-      );
-      allow create: if isDirection() && !('pinCode' in request.resource.data);
-      allow delete: if isDirection();
-      allow update: if (isDirection() || (
-        isAuthenticated() && request.auth.uid == userId
-        // L'utilisateur ne peut pas modifier ses privilèges critiques
-        && (!('role' in request.resource.data) || request.resource.data.role == resource.data.role)
-        && (!('active' in request.resource.data) || request.resource.data.active == resource.data.active)
-        && (!('pinHash' in request.resource.data) || request.resource.data.pinHash == resource.data.pinHash)
-        && (!('accessibleRestaurantIds' in request.resource.data) || request.resource.data.accessibleRestaurantIds == resource.data.accessibleRestaurantIds)
+      ));
+      allow create: if isPlatformWriter() || (isDirection() && !('pinCode' in request.resource.data) && (!('organizationId' in request.resource.data) || request.resource.data.organizationId == callerOrgId()));
+      allow delete: if isPlatformWriter() || isDirection();
+      allow update: if isPlatformWriter() || (
+        (isDirection() || (isAuthenticated() && request.auth.uid == userId))
         && (!('organizationId' in request.resource.data) || request.resource.data.organizationId == resource.data.organizationId)
-      )) && !('pinCode' in request.resource.data);
+        && (isDirection() || (
+          (!('role' in request.resource.data) || request.resource.data.role == resource.data.role)
+          && (!('active' in request.resource.data) || request.resource.data.active == resource.data.active)
+          && (!('pinHash' in request.resource.data) || request.resource.data.pinHash == resource.data.pinHash)
+          && (!('accessibleRestaurantIds' in request.resource.data) || request.resource.data.accessibleRestaurantIds == resource.data.accessibleRestaurantIds)
+        ))
+      ) && !('pinCode' in request.resource.data);
     }
 
     match /user_pins/{userId} {
