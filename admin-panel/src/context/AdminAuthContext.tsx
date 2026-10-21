@@ -2,11 +2,12 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import { auth, db } from '../../../src/lib/firebase';
 import {
   signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
   signOut,
   onAuthStateChanged,
   User as FirebaseUser,
 } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { PlatformAdmin, PlatformRole } from '@shared';
 
 interface AdminAuthContextType {
@@ -17,6 +18,7 @@ interface AdminAuthContextType {
   mfaPending: boolean;
   loginStep1: (email: string, pass: string) => Promise<{ requiresMfa: boolean }>;
   verifyMfa: (code: string) => Promise<void>;
+  registerInitialSuperadmin: (email: string, pass: string, name?: string) => Promise<void>;
   logout: () => Promise<void>;
   hasRole: (roles: PlatformRole | PlatformRole[]) => boolean;
 }
@@ -35,7 +37,7 @@ export const AdminAuthProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       const tokenResult = await user.getIdTokenResult(true);
       const platformRole = tokenResult.claims.platformRole as PlatformRole | undefined;
 
-      // 1. Priorité aux Custom Claims Firebase Auth
+      // 1. Priorité aux Custom Claims Firebase Auth (platformRole)
       if (platformRole) {
         return {
           uid: user.uid,
@@ -49,22 +51,70 @@ export const AdminAuthProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         } as PlatformAdmin;
       }
 
-      // 2. Repli sur le document Firestore platform_admins
-      const adminDoc = await getDoc(doc(db, 'platform_admins', user.uid));
-      if (adminDoc.exists()) {
-        const data = adminDoc.data();
-        if (data.active !== false) {
-          return {
-            uid: user.uid,
-            email: user.email || data.email,
-            name: data.name || user.email?.split('@')[0] || 'Admin Plateforme',
-            role: data.role || 'platform_admin',
-            active: true,
-            mfaEnabled: Boolean(data.mfaEnabled),
-            createdAt: data.createdAt || new Date().toISOString(),
-            updatedAt: data.updatedAt || new Date().toISOString(),
-          } as PlatformAdmin;
+      // 2. Si le compte possède le rôle superadmin dans les Claims
+      if (tokenResult.claims.role === 'superadmin') {
+        const ownerAdmin: PlatformAdmin = {
+          uid: user.uid,
+          email: user.email || '',
+          name: (tokenResult.claims.name as string) || user.email?.split('@')[0] || 'Superadmin Fondateur',
+          role: 'platform_owner',
+          active: true,
+          mfaEnabled: true,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+        try {
+          await setDoc(doc(db, 'platform_admins', user.uid), ownerAdmin, { merge: true });
+        } catch {}
+        return ownerAdmin;
+      }
+
+      // 3. Repli sur le document Firestore platform_admins
+      try {
+        const adminDoc = await getDoc(doc(db, 'platform_admins', user.uid));
+        if (adminDoc.exists()) {
+          const data = adminDoc.data();
+          if (data.active !== false) {
+            return {
+              uid: user.uid,
+              email: user.email || data.email,
+              name: data.name || user.email?.split('@')[0] || 'Admin Plateforme',
+              role: data.role || 'platform_admin',
+              active: true,
+              mfaEnabled: Boolean(data.mfaEnabled),
+              createdAt: data.createdAt || new Date().toISOString(),
+              updatedAt: data.updatedAt || new Date().toISOString(),
+            } as PlatformAdmin;
+          }
         }
+      } catch (err) {
+        console.warn('[AdminAuthContext] Lecture platform_admins non autorisée ou échouée:', err);
+      }
+
+      // 4. Repli sur le document users/{uid} : si role == 'superadmin' ou 'direction'
+      try {
+        const userDoc = await getDoc(doc(db, 'users', user.uid));
+        if (userDoc.exists()) {
+          const udata = userDoc.data();
+          if (udata.role === 'superadmin' || udata.role === 'direction') {
+            const ownerAdmin: PlatformAdmin = {
+              uid: user.uid,
+              email: user.email || udata.email,
+              name: udata.name || user.email?.split('@')[0] || 'Superadmin Fondateur',
+              role: 'platform_owner',
+              active: true,
+              mfaEnabled: true,
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+            };
+            try {
+              await setDoc(doc(db, 'platform_admins', user.uid), ownerAdmin, { merge: true });
+            } catch {}
+            return ownerAdmin;
+          }
+        }
+      } catch (err) {
+        console.warn('[AdminAuthContext] Lecture users non autorisée ou échouée:', err);
       }
 
       return null;
@@ -142,6 +192,34 @@ export const AdminAuthProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     }
   };
 
+  const registerInitialSuperadmin = async (email: string, pass: string, name?: string): Promise<void> => {
+    setIsLoading(true);
+    try {
+      const cred = await createUserWithEmailAndPassword(auth, email.trim(), pass);
+      const adminName = name?.trim() || email.split('@')[0] || 'Superadmin Fondateur';
+      const now = new Date().toISOString();
+
+      const newAdmin: PlatformAdmin = {
+        uid: cred.user.uid,
+        email: cred.user.email || email.trim(),
+        name: adminName,
+        role: 'platform_owner',
+        active: true,
+        mfaEnabled: true,
+        createdAt: now,
+        updatedAt: now,
+      };
+
+      await setDoc(doc(db, 'platform_admins', cred.user.uid), newAdmin);
+      setCurrentAdmin(newAdmin);
+      setFirebaseUser(cred.user);
+      setIsLoading(false);
+    } catch (err) {
+      setIsLoading(false);
+      throw err;
+    }
+  };
+
   const logout = async (): Promise<void> => {
     await signOut(auth);
     setCurrentAdmin(null);
@@ -167,6 +245,7 @@ export const AdminAuthProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         mfaPending,
         loginStep1,
         verifyMfa,
+        registerInitialSuperadmin,
         logout,
         hasRole,
       }}

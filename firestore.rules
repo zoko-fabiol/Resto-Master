@@ -130,8 +130,9 @@ service cloud.firestore {
     // A. PLATEFORME SAAS (GESTION MULTI-CLIENTS & SUPER ADMINS)
     // =========================================================================
     match /platform_admins/{adminId} {
-      allow read: if isPlatformAdmin();
-      allow write: if isPlatformOwner();
+      allow read: if isPlatformAdmin() || (isAuthenticated() && (request.auth.uid == adminId || isSuperadmin()));
+      allow create: if isAuthenticated() && (request.auth.uid == adminId || isPlatformOwner() || isSuperadmin());
+      allow update, delete: if isPlatformOwner();
     }
 
     match /platform_audit_logs/{logId} {
