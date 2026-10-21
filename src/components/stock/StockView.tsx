@@ -20,6 +20,7 @@ import {
   X,
   ChefHat,
 } from 'lucide-react';
+import { PageHeader, Button } from '../ui';
 
 export const StockView: React.FC = () => {
   const {
@@ -195,6 +196,57 @@ export const StockView: React.FC = () => {
 
   return (
     <div className="space-y-6 pb-12">
+      <PageHeader
+        icon={<Package className="w-5 h-5" aria-hidden="true" />}
+        title="Stocks"
+        subtitle="Inventaire, fiches techniques, réapprovisionnement et traçabilité des mouvements."
+        className="!mb-0"
+        actions={
+          <>
+            <Button
+              variant="primary"
+              size="touch"
+              leftIcon={<Truck className="w-4 h-4" />}
+              onClick={() => handleOpenQuickReceive()}
+              title="Enregistrer l'arrivée d'un livreur ou une facture fournisseur"
+            >
+              Réception livraison
+            </Button>
+            {isRuleEnabled('stock_transfers', true) && (
+              <Button
+                variant="outline"
+                size="touch"
+                leftIcon={<ArrowDownRight className="w-4 h-4" />}
+                onClick={() => setTransferModalOpen(true)}
+                title="Effectuer un transfert interne de stock entre zones"
+              >
+                Transfert interne
+              </Button>
+            )}
+            {isRuleEnabled('stock_adjustments', true) && (
+              <Button
+                variant="outline"
+                size="touch"
+                leftIcon={<Plus className="w-4 h-4" />}
+                onClick={() => setMovementModalOpen(true)}
+              >
+                Mouvement de stock
+              </Button>
+            )}
+            {isRuleEnabled('stock_inventory', true) && (
+              <Button
+                variant="secondary"
+                size="touch"
+                leftIcon={<Calculator className="w-4 h-4 text-amber-400" />}
+                onClick={() => setInventoryModalOpen(true)}
+              >
+                Faire l'inventaire
+              </Button>
+            )}
+          </>
+        }
+      />
+
       {/* Top Metric Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {/* Total Stock Value */}
@@ -310,45 +362,6 @@ export const StockView: React.FC = () => {
           </button>
         </div>
 
-        {/* Action Buttons */}
-        <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
-          <button
-            onClick={() => handleOpenQuickReceive()}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold shadow-xs transition-colors"
-            title="Enregistrer l'arrivée d'un livreur ou une facture fournisseur (Section 8)"
-          >
-            <Truck className="w-4 h-4" />
-            <span>+ Réception Livraison</span>
-          </button>
-          {isRuleEnabled('stock_transfers', true) && (
-            <button
-              onClick={() => setTransferModalOpen(true)}
-              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold border border-indigo-200 shadow-xs transition-colors"
-              title="Effectuer un transfert interne de stock entre zones"
-            >
-              <ArrowDownRight className="w-4 h-4 text-indigo-600" />
-              <span>Transfert Interne</span>
-            </button>
-          )}
-          {isRuleEnabled('stock_adjustments', true) && (
-            <button
-              onClick={() => setMovementModalOpen(true)}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-semibold border border-slate-200 transition-colors"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Mouvement de Stock</span>
-            </button>
-          )}
-          {isRuleEnabled('stock_inventory', true) && (
-            <button
-              onClick={() => setInventoryModalOpen(true)}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold shadow-xs transition-colors"
-            >
-              <Calculator className="w-4 h-4 text-amber-400" />
-              <span>Faire l'Inventaire</span>
-            </button>
-          )}
-        </div>
       </div>
 
       {/* Tab 1: Current Stock Inventory Table */}
