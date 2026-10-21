@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { requestDocumentPrint } from '../../platform/printing';
 import { PageHeader, Button, TextInput } from '../ui';
 import { useRestaurant } from '../../context/RestaurantContext';
 import { Order } from '../../types/restaurant';
@@ -86,7 +87,7 @@ export const MainCouranteView: React.FC = () => {
   const sumSoldeDebiteur = rows.reduce((s, r) => s + Math.max(0, r.solde), 0);
 
   const handlePrint = () => {
-    window.print();
+    void requestDocumentPrint({ title: 'Main courante' });
   };
 
   const handleExportCsv = () => {

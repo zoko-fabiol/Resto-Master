@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { requestDocumentPrint } from '../../platform/printing';
 import {
   BookOpen,
   X,
@@ -508,7 +509,7 @@ export const UserGuideModal: React.FC<UserGuideModalProps> = ({
             <span className="text-slate-400">Système Intégré de Gestion de Restaurant</span>
           </div>
           <button
-            onClick={() => window.print()}
+            onClick={() => void requestDocumentPrint({ title: 'Guide utilisateur' })}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 rounded-xl font-bold transition-all"
           >
             <Printer className="w-3.5 h-3.5" />

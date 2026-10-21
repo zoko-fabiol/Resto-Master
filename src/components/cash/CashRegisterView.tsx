@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { requestDocumentPrint } from '../../platform/printing';
 import { PageHeader, Button } from '../ui';
 import { useRestaurant } from '../../context/RestaurantContext';
 import { useToast } from '../../context/ToastContext';
@@ -322,7 +323,7 @@ export const CashRegisterView: React.FC<CashRegisterViewProps> = ({ onOpenPaymen
         message: `Ticket pré-addition imprimé pour ${order.tableName || 'la commande'}.`,
       });
     } catch {
-      window.print();
+      await requestDocumentPrint({ title: 'Note de table' });
     }
   };
 

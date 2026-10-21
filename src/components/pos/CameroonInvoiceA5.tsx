@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { requestDocumentPrint } from '../../platform/printing';
 import { useRestaurant } from '../../context/RestaurantContext';
 import { Order, RestaurantSettings, Invoice } from '../../types/restaurant';
 import { formatCurrency, formatDateTime, numberToFrenchWords, calculateCameroonTaxes } from '../../lib/utils';
@@ -85,7 +86,7 @@ export const CameroonInvoiceA5: React.FC<CameroonInvoiceA5Props> = ({
   }, [order, settings, taxes]);
 
   const handlePrint = () => {
-    window.print();
+    void requestDocumentPrint({ title: 'Facture A5' });
   };
 
   const handleDownloadPdf = async () => {

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { requestDocumentPrint } from '../../platform/printing';
 import {
   ShieldCheck,
   Printer,
@@ -68,7 +69,7 @@ export const CredentialHandoverModal: React.FC<CredentialHandoverModalProps> = (
   };
 
   const handlePrint = () => {
-    window.print();
+    void requestDocumentPrint({ title: 'Remise des identifiants' });
   };
 
   return (

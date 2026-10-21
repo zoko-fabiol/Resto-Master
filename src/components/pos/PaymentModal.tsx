@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { requestDocumentPrint } from '../../platform/printing';
 import { useRestaurant } from '../../context/RestaurantContext';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
@@ -375,7 +376,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, onClose }) 
   };
 
   const handlePrintReceipt = () => {
-    window.print();
+    void requestDocumentPrint({ title: 'Reçu de paiement' });
   };
 
   return (

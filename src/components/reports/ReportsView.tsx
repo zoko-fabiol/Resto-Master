@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { requestDocumentPrint } from '../../platform/printing';
 import { PageHeader, Button } from '../ui';
 import { useRestaurant } from '../../context/RestaurantContext';
 import { Order, PaymentMethod } from '../../types/restaurant';
@@ -245,7 +246,7 @@ export const ReportsView: React.FC = () => {
   };
 
   const handlePrint = () => {
-    window.print();
+    void requestDocumentPrint({ title: 'Rapports' });
   };
 
   return (

@@ -1,4 +1,5 @@
 import React from 'react';
+import { requestDocumentPrint } from '../../platform/printing';
 import { useRestaurant } from '../../context/RestaurantContext';
 import {
   ShieldCheck,
@@ -115,7 +116,7 @@ export const CameroonComplianceModal: React.FC<CameroonComplianceModalProps> = (
 
           <div className="flex items-center gap-2">
             <button
-              onClick={() => window.print()}
+              onClick={() => void requestDocumentPrint({ title: 'Contrôle fiscal' })}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900 text-white text-xs font-bold hover:bg-slate-800 transition-all shadow-xs"
             >
               <Printer className="w-3.5 h-3.5 text-amber-400" />

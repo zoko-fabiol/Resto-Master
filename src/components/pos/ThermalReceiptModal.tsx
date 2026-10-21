@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { requestDocumentPrint } from '../../platform/printing';
 import { Order, RestaurantSettings, PaymentMethod } from '../../types/restaurant';
 import { formatCurrency, formatDateTime, numberToFrenchWords, calculateCameroonTaxes } from '../../lib/utils';
 import { Printer, X, QrCode, Usb, DollarSign, ShieldCheck } from 'lucide-react';
@@ -93,7 +94,7 @@ export const ThermalReceiptModal: React.FC<ThermalReceiptModalProps> = ({
   }, [order, settings, taxes, finalTotal]);
 
   const handlePrintSystem = () => {
-    window.print();
+    void requestDocumentPrint({ title: 'Ticket de caisse' });
   };
 
   const handlePrintHardware = async () => {

@@ -1,4 +1,5 @@
-import React, { useState, useMemo } from 'react';
+﻿import React, { useState, useMemo } from 'react';
+import { requestDocumentPrint } from '../../platform/printing';
 import {
   Building2,
   Receipt,
@@ -1702,7 +1703,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
               <button
                 type="button"
                 onClick={() => {
-                  window.print();
+                  void requestDocumentPrint({ title: 'Fiche de mise en service' });
                 }}
                 className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-900 text-white text-xs font-bold hover:bg-slate-800 transition cursor-pointer"
               >

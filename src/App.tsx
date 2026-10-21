@@ -96,6 +96,7 @@ const AppContent: React.FC = () => {
     logout,
   } = useAuth();
   const { showToast } = useToast();
+  const { showToast } = useToast();
   const {
     seatReservation,
     isFeatureEnabled,
@@ -109,6 +110,21 @@ const AppContent: React.FC = () => {
 
   const currentTerminal = terminals.find((t) => t.id === currentDeviceProfile?.terminalId);
   const isTerminalLocked = isSessionLocked || Boolean(currentTerminal?.isLocked);
+
+  useEffect(() => {
+    const handlePlatformError = (event: Event) => {
+      const detail = (event as CustomEvent<{ operation?: string; message?: string }>).detail;
+      showToast({
+        title: `Échec de l'${detail?.operation || 'opération'}`,
+        message: detail?.message || 'La plateforme n’a pas confirmé cette opération.',
+        type: 'error',
+        duration: 10000,
+      });
+    };
+
+    window.addEventListener('restomaster:platform-error', handlePlatformError);
+    return () => window.removeEventListener('restomaster:platform-error', handlePlatformError);
+  }, [showToast]);
 
   useEffect(() => {
     const handleOfflinePending = (event: Event) => {
