@@ -8,6 +8,13 @@ import { handleOpenCashSession, handleCloseCashSession } from './modules/cash.js
 import { handleIssueInvoice } from './modules/invoices.js';
 import { handleAppendAuditLog } from './modules/audit.js';
 import { handleGeneratePairingCode, handlePairDevice } from './modules/terminals.js';
+import {
+  handleSubmitSignup,
+  handleApproveSignup,
+  handleRejectSignup,
+  handleCreateTenant,
+  handleSetTenantStatus,
+} from './modules/provisioning.js';
 
 const FUNCTION_OPTIONS = {
   region: 'europe-west1',
@@ -50,4 +57,12 @@ export const appendAuditLog = onCall(FUNCTION_OPTIONS, handleAppendAuditLog);
 // 9. Appairage Sécurisé des Terminaux
 export const generatePairingCode = onCall(FUNCTION_OPTIONS, handleGeneratePairingCode);
 export const pairDevice = onCall(FUNCTION_OPTIONS, handlePairDevice);
+
+// 10. Provisionnement & Administration Plateforme SaaS Multi-Tenant
+export const submitSignup = onCall(FUNCTION_OPTIONS, handleSubmitSignup);
+export const approveSignup = onCall(FUNCTION_OPTIONS, handleApproveSignup);
+export const rejectSignup = onCall(FUNCTION_OPTIONS, handleRejectSignup);
+export const createTenant = onCall(FUNCTION_OPTIONS, handleCreateTenant);
+export const setTenantStatus = onCall(FUNCTION_OPTIONS, handleSetTenantStatus);
+
 

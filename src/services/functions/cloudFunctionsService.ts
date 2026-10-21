@@ -286,6 +286,75 @@ export class CloudFunctionsService {
       };
     }>('pairDevice', params);
   }
+
+  // 10. Provisionnement & Gestion Multi-Tenant SaaS
+  async submitSignup(data: {
+    companyName: string;
+    legalForm?: string;
+    city: string;
+    country: string;
+    phone: string;
+    email: string;
+    applicantName: string;
+    desiredPlanId: string;
+    estimatedTables?: number;
+  }) {
+    return this.call<
+      typeof data,
+      { success: boolean; signupId: string; message: string }
+    >('submitSignup', data);
+  }
+
+  async approveSignup(data: { signupId: string; planId?: string; reason: string; profileType?: string }) {
+    return this.call<
+      typeof data,
+      { success: boolean; orgId: string; passwordResetLink?: string; message: string }
+    >('approveSignup', data);
+  }
+
+  async rejectSignup(data: { signupId: string; reason: string }) {
+    return this.call<typeof data, { success: boolean; message: string }>('rejectSignup', data);
+  }
+
+  async createTenant(data: {
+    companyName: string;
+    legalName?: string;
+    legalForm?: 'SARL' | 'SA' | 'SAS' | 'ETS' | 'GIC' | 'AUTRE';
+    taxId?: string;
+    rccm?: string;
+    taxCenter?: string;
+    city: string;
+    country?: string;
+    address: string;
+    phone: string;
+    email: string;
+    ownerName: string;
+    ownerEmail: string;
+    ownerPhone?: string;
+    planId: 'plan_starter' | 'plan_pro' | 'plan_enterprise';
+    profileType?: string;
+    channel?: 'stable' | 'beta';
+    currency?: 'FCFA' | 'EUR' | 'USD' | 'CAD' | 'GBP';
+    reason: string;
+    ticketNumber?: string;
+  }) {
+    return this.call<
+      typeof data,
+      { success: boolean; orgId: string; restaurantId: string; ownerUid: string; passwordResetLink?: string }
+    >('createTenant', data);
+  }
+
+  async setTenantStatus(data: {
+    orgId: string;
+    status: 'inscription_en_attente' | 'onboarding' | 'essai' | 'actif' | 'impaye' | 'suspendu' | 'resilie' | 'archive';
+    suspensionMode?: 'read_only' | 'full_block';
+    reason: string;
+  }) {
+    return this.call<
+      typeof data,
+      { success: boolean; orgId: string; oldStatus: string; newStatus: string; suspensionMode?: string }
+    >('setTenantStatus', data);
+  }
 }
 
 export const cloudFunctionsService = new CloudFunctionsService();

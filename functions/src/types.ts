@@ -142,3 +142,57 @@ export interface AppendAuditLogRequest {
   entityId?: string;
   restaurantId?: string;
 }
+
+export interface SubmitSignupRequest {
+  companyName: string;
+  legalForm?: string;
+  city: string;
+  country: string;
+  phone: string;
+  email: string;
+  applicantName: string;
+  desiredPlanId: string;
+  estimatedTables?: number;
+}
+
+export interface ApproveSignupRequest {
+  signupId: string;
+  planId?: string;
+  reason: string;
+  profileType?: string;
+}
+
+export interface RejectSignupRequest {
+  signupId: string;
+  reason: string;
+}
+
+export interface CreateTenantRequest {
+  companyName: string;
+  legalName?: string;
+  legalForm?: 'SARL' | 'SA' | 'SAS' | 'ETS' | 'GIC' | 'AUTRE';
+  taxId?: string;
+  rccm?: string;
+  taxCenter?: string;
+  city: string;
+  country?: string;
+  address: string;
+  phone: string;
+  email: string;
+  ownerName: string;
+  ownerEmail: string;
+  ownerPhone?: string;
+  planId: 'plan_starter' | 'plan_pro' | 'plan_enterprise';
+  profileType?: string;
+  channel?: 'stable' | 'beta';
+  currency?: 'FCFA' | 'EUR' | 'USD' | 'CAD' | 'GBP';
+  reason: string;
+  ticketNumber?: string;
+}
+
+export interface SetTenantStatusRequest {
+  orgId: string;
+  status: 'inscription_en_attente' | 'onboarding' | 'essai' | 'actif' | 'impaye' | 'suspendu' | 'resilie' | 'archive';
+  suspensionMode?: 'read_only' | 'full_block';
+  reason: string;
+}

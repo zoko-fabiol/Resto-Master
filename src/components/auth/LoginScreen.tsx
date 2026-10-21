@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { Utensils, Lock, Mail, Eye, EyeOff, AlertCircle, CheckCircle2, ArrowLeft, Loader2, ShieldCheck } from 'lucide-react';
+import { RestaurantSignupModal } from './RestaurantSignupModal';
 
 export const LoginScreen: React.FC = () => {
   const { loginWithEmail, sendPasswordReset } = useAuth();
@@ -17,6 +18,8 @@ export const LoginScreen: React.FC = () => {
   const [resetSuccess, setResetSuccess] = useState(false);
   const [resetLoading, setResetLoading] = useState(false);
   const [resetError, setResetError] = useState('');
+  // Mode inscription restaurant
+  const [isSignupOpen, setIsSignupOpen] = useState(false);
 
   const getFrenchAuthErrorMessage = (error: any): string => {
     const code = error?.code || '';
@@ -286,12 +289,28 @@ export const LoginScreen: React.FC = () => {
           )}
         </div>
 
-        {/* Mentions de sécurité et absence d'inscription publique */}
-        <div className="mt-6 text-center text-xs text-slate-500">
+        {/* Inscription & Ouverture d'établissement */}
+        <div className="mt-4 text-center">
+          <button
+            type="button"
+            onClick={() => setIsSignupOpen(true)}
+            className="text-xs text-amber-400 hover:text-amber-300 font-semibold transition underline underline-offset-4 cursor-pointer"
+          >
+            Nouveau restaurant ? Demandez l'ouverture de votre établissement
+          </button>
+        </div>
+
+        {/* Mentions de sécurité */}
+        <div className="mt-4 text-center text-xs text-slate-500">
           <p>
             Plateforme réservée au personnel autorisé. Tout accès non habilité est consigné dans le journal d'audit.
           </p>
         </div>
+
+        <RestaurantSignupModal
+          isOpen={isSignupOpen}
+          onClose={() => setIsSignupOpen(false)}
+        />
       </div>
     </div>
   );
