@@ -6,7 +6,11 @@
   "scripts": {
     "dev": "vite --port=3000 --host=0.0.0.0",
     "dev:admin": "vite --config admin-panel/vite.config.ts",
+    "build:tauri": "npm run build",
+    "tauri:dev": "tauri dev",
+    "tauri:build": "tauri build",
     "prebuild": "tsx scripts/check-build-env.ts && tsx scripts/check-no-demo.ts",
+    "check:tauri": "tsx scripts/check-tauri-env.ts",
     "check:demo": "tsx scripts/check-no-demo.ts",
     "create:superadmin": "tsx scripts/create-superadmin.ts",
     "build": "vite build",
@@ -28,6 +32,7 @@
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.3.3",
+    "@tauri-apps/api": "^2.12.4",
     "@types/canvas-confetti": "^1.9.0",
     "@types/qrcode": "^1.5.6",
     "@vercel/analytics": "^2.0.1",
@@ -50,6 +55,7 @@
     "xlsx-js-style": "^1.2.0"
   },
   "devDependencies": {
+    "@tauri-apps/cli": "^2.12.4",
     "@types/node": "^22.14.0",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",

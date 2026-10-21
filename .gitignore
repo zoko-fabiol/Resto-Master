@@ -17,6 +17,13 @@ functions/lib/
 functions/node_modules/
 admin-panel/dist/
 
+# Tauri
+src-tauri/target/
+src-tauri/gen/android/app/build/
+src-tauri/gen/android/local.properties
+*.keystore
+*.jks
+
 # Identifiants et clés de service Firebase Admin (ne JAMAIS commiter)
 serviceAccountKey.json
 *serviceAccount*.json
