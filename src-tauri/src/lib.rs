@@ -49,6 +49,103 @@ fn print_tcp(
     Ok(())
 }
 
+#[cfg(windows)]
+fn utf16z(value: &str) -> Vec<u16> {
+    value.encode_utf16().chain(std::iter::once(0)).collect()
+}
+
+#[cfg(windows)]
+#[tauri::command]
+fn print_windows(printer_name: String, bytes: Vec<u8>) -> Result<(), String> {
+    use windows::Win32::Graphics::Printing::{
+        ClosePrinter, DOC_INFO_1W, EndDocPrinter, EndPagePrinter, OpenPrinterW, PRINTER_HANDLE,
+        StartDocPrinterW, StartPagePrinter, WritePrinter,
+    };
+    use windows::core::{PCWSTR, PWSTR};
+
+    if printer_name.trim().is_empty() {
+        return Err("Le nom de l’imprimante Windows est vide.".to_string());
+    }
+    if bytes.is_empty() {
+        return Err("Le ticket d’impression est vide.".to_string());
+    }
+
+    let printer_name_w = utf16z(printer_name.trim());
+    let document_name_w = utf16z("RestoMaster OS");
+    let raw_type_w = utf16z("RAW");
+    let mut printer = PRINTER_HANDLE::default();
+
+    unsafe {
+        OpenPrinterW(PCWSTR(printer_name_w.as_ptr()), &mut printer, None).map_err(|error| {
+            format!(
+                "Impossible d’ouvrir l’imprimante « {} » : {error}",
+                printer_name
+            )
+        })?;
+
+        let close_result = (|| {
+            let document = DOC_INFO_1W {
+                pDocName: PWSTR(document_name_w.as_ptr() as *mut _),
+                pOutputFile: PWSTR::null(),
+                pDatatype: PWSTR(raw_type_w.as_ptr() as *mut _),
+            };
+            let job = StartDocPrinterW(printer, 1, &document);
+            if job == 0 {
+                return Err(format!(
+                    "Le spouleur n’a pas accepté le document : {:?}",
+                    windows::core::Error::from_thread()
+                ));
+            }
+            if !StartPagePrinter(printer).as_bool() {
+                return Err(format!(
+                    "Impossible de démarrer la page d’impression : {:?}",
+                    windows::core::Error::from_thread()
+                ));
+            }
+
+            let mut written = 0u32;
+            let write_result = WritePrinter(
+                printer,
+                bytes.as_ptr().cast(),
+                bytes.len().try_into().map_err(|_| {
+                    "Le ticket est trop volumineux pour le spouleur Windows.".to_string()
+                })?,
+                &mut written,
+            );
+            let end_page_result = EndPagePrinter(printer).as_bool();
+            let end_doc_result = EndDocPrinter(printer).as_bool();
+
+            if !write_result.as_bool() {
+                return Err(format!(
+                    "Écriture vers le spouleur impossible : {:?}",
+                    windows::core::Error::from_thread()
+                ));
+            }
+            if written as usize != bytes.len() {
+                return Err(format!(
+                    "Écriture incomplète vers le spouleur : {written}/{} octets.",
+                    bytes.len()
+                ));
+            }
+            if !end_page_result || !end_doc_result {
+                return Err(format!(
+                    "Le spouleur n’a pas finalisé le document : {:?}",
+                    windows::core::Error::from_thread()
+                ));
+            }
+            Ok(())
+        })();
+        let _ = ClosePrinter(printer);
+        close_result
+    }
+}
+
+#[cfg(not(windows))]
+#[tauri::command]
+fn print_windows(_printer_name: String, _bytes: Vec<u8>) -> Result<(), String> {
+    Err("L’impression par spouleur Windows n’est disponible que sur Windows.".to_string())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -66,7 +163,7 @@ pub fn run() {
             }
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![print_tcp])
+        .invoke_handler(tauri::generate_handler![print_tcp, print_windows])
         .run(tauri::generate_context!())
         .expect("error while building tauri application");
 }

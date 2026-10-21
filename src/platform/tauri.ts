@@ -51,11 +51,14 @@ export const tauriPlatform: Platform = {
           bytes: Array.from(data),
         });
       }
-      throw new Error(
-        target?.printerId
-          ? `L’impression brute par nom d’imprimante (${target.printerId}) n’est pas encore disponible dans cette version.`
-          : 'Aucune cible d’impression native n’est configurée.'
-      );
+      if (target?.printerId) {
+        await invoke('print_windows', {
+          printerName: target.printerId,
+          bytes: Array.from(data),
+        });
+        return { target: 'native' };
+      }
+      throw new Error('Aucune cible d’impression native n’est configurée.');
     },
     printDocument: async (options: PrintDocumentOptions = {}) => {
       if (typeof window === 'undefined' || typeof window.print !== 'function') {
