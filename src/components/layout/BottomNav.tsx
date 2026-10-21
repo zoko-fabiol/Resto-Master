@@ -102,7 +102,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({ currentTab, onSelectTab })
   return (
     <nav
       aria-label="Navigation mobile principale"
-      className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-slate-900/98 backdrop-blur-md border-t border-slate-800/80 shadow-2xl safe-area-pb"
+      className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-slate-900/98 backdrop-blur-md border-t border-slate-800/80 shadow-2xl pb-safe"
     >
       <div className="flex items-center justify-around h-16 px-1 max-w-md mx-auto">
         {items.map((item) => {
@@ -116,7 +116,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({ currentTab, onSelectTab })
               onClick={() => onSelectTab(item.id)}
               aria-label={item.label}
               className={`
-                relative flex-1 flex flex-col items-center justify-center h-full py-1 px-1 transition-all select-none cursor-pointer
+                relative flex-1 flex flex-col items-center justify-center h-full py-1 px-1 transition-[color,transform] duration-150 ease-out select-none cursor-pointer touch-manipulation
                 ${isActive ? 'text-amber-400 font-bold' : 'text-slate-400 hover:text-slate-200 font-medium'}
               `}
               aria-current={isActive ? 'page' : undefined}

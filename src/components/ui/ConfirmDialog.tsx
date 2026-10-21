@@ -168,7 +168,7 @@ export const ConfirmProvider: React.FC<{ children: React.ReactNode }> = ({ child
             aria-modal="true"
             aria-labelledby="confirm-dialog-title"
             aria-describedby="confirm-dialog-description"
-            className="relative w-full max-w-md bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden z-10 animate-in fade-in zoom-in-95 duration-150"
+            className="relative w-full max-w-md bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden z-10 animate-fade-scale"
           >
             <div className="p-5 sm:p-6">
               <div className="flex items-start gap-3.5">
@@ -204,7 +204,7 @@ export const ConfirmProvider: React.FC<{ children: React.ReactNode }> = ({ child
                 <button
                   type="button"
                   onClick={() => handleConfirmClose(false)}
-                  className="px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold text-slate-600 hover:text-slate-800 hover:bg-slate-100 transition-colors cursor-pointer"
+                  className="px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold text-slate-600 hover:text-slate-800 hover:bg-slate-100 transition-colors cursor-pointer touch-manipulation"
                 >
                   {confirmOpts.cancelLabel || confirmOpts.cancelText || 'Annuler'}
                 </button>
@@ -212,7 +212,7 @@ export const ConfirmProvider: React.FC<{ children: React.ReactNode }> = ({ child
                   ref={confirmButtonRef}
                   type="button"
                   onClick={() => handleConfirmClose(true)}
-                  className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold text-white shadow-xs transition-all active:scale-98 cursor-pointer ${
+                  className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold text-white shadow-xs transition-[background-color,transform] duration-100 ease-out active:scale-98 cursor-pointer touch-manipulation ${
                     isDanger
                       ? 'bg-rose-600 hover:bg-rose-700'
                       : 'bg-slate-900 hover:bg-slate-800'
@@ -288,7 +288,7 @@ export const ConfirmProvider: React.FC<{ children: React.ReactNode }> = ({ child
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 rounded-xl text-xs sm:text-sm font-bold text-white bg-slate-900 hover:bg-slate-800 shadow-xs transition-all active:scale-98 cursor-pointer"
+                  className="px-4 py-2 rounded-xl text-xs sm:text-sm font-bold text-white bg-slate-900 hover:bg-slate-800 shadow-xs transition-[background-color,transform] duration-100 ease-out active:scale-98 cursor-pointer touch-manipulation"
                 >
                   {promptState.options.confirmLabel || promptState.options.confirmText || 'Valider'}
                 </button>

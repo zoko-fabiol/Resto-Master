@@ -197,7 +197,7 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
               key={toast.id}
               role="status"
               aria-live={toast.type === 'error' ? 'assertive' : 'polite'}
-              className={`pointer-events-auto flex items-start gap-3 p-3.5 rounded-2xl border shadow-xl backdrop-blur-md transition-all animate-in slide-in-from-bottom-3 duration-200 ${typeConfig.bg} ${typeConfig.border}`}
+              className={`pointer-events-auto flex items-start gap-3 p-3.5 rounded-2xl border shadow-xl backdrop-blur-md animate-toast-slide-in ${typeConfig.bg} ${typeConfig.border}`}
             >
               {typeConfig.icon}
               <div className="flex-1 min-w-0 pr-1">

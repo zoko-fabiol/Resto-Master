@@ -67,7 +67,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         aria-busy={isLoading}
         aria-disabled={isDisabled}
         className={`
-          inline-flex items-center justify-center transition-all select-none
+          inline-flex items-center justify-center transition-[color,background-color,border-color,box-shadow,transform] duration-150 ease-out select-none touch-manipulation
           focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-offset-2
           active:scale-98 cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 disabled:active:scale-100
           ${VARIANT_STYLES[variant]}

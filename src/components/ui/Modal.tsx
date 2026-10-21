@@ -109,7 +109,7 @@ export const Modal: React.FC<ModalProps> = ({
       {/* Modal Dialog Card */}
       <div
         ref={modalRef}
-        className={`relative w-full ${widthClass} bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh] z-10 transition-all animate-fade-scale ${className}`}
+        className={`relative w-full ${widthClass} bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[92dvh] z-10 animate-fade-scale ${className}`}
         role="dialog"
         aria-modal="true"
         aria-labelledby="modal-dialog-title"
@@ -156,7 +156,7 @@ export const Modal: React.FC<ModalProps> = ({
         )}
 
         {/* Content Body */}
-        <div className="p-5 sm:p-6 overflow-y-auto flex-1">{children}</div>
+        <div className="p-5 sm:p-6 overflow-y-auto overscroll-contain flex-1">{children}</div>
       </div>
     </div>
   );

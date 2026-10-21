@@ -349,7 +349,7 @@ const AppContent: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-slate-100 text-slate-900 flex font-sans antialiased selection:bg-amber-500 selection:text-white max-w-full overflow-x-hidden">
+    <div className="min-h-screen min-h-[100dvh] bg-slate-100 text-slate-900 flex font-sans antialiased selection:bg-amber-500 selection:text-white max-w-full overflow-x-hidden">
       {/* Sidebar Navigation */}
       <Sidebar
         currentTab={currentTab}
@@ -362,7 +362,7 @@ const AppContent: React.FC = () => {
 
       {/* Main Content Area */}
       <div
-        className={`flex-1 flex flex-col min-w-0 max-w-full overflow-x-hidden transition-all duration-200 ${
+        className={`flex-1 flex flex-col min-w-0 max-w-full overflow-x-hidden transition-[padding] duration-200 ease-out ${
           sidebarCollapsed ? 'lg:pl-[76px]' : 'lg:pl-72'
         }`}
       >
@@ -383,7 +383,7 @@ const AppContent: React.FC = () => {
         />
 
         {/* Dynamic View Body avec padding inférieur sur mobile pour BottomNav */}
-        <main className="flex-1 p-3 sm:p-5 lg:p-7 max-w-7xl w-full mx-auto min-w-0 pb-20 lg:pb-7">
+        <main className="flex-1 p-3 sm:p-5 lg:p-7 max-w-7xl w-full mx-auto min-w-0 pb-[calc(5rem+env(safe-area-inset-bottom,0px))] lg:pb-7">
           <ModuleErrorBoundary key={currentTab} moduleName={currentTab}>
             <Suspense fallback={<ModuleSkeleton moduleName={currentTab} />}>
               {currentTab === 'dashboard' && <DashboardView navigateTo={handleSelectTab} />}

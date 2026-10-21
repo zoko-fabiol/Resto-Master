@@ -838,9 +838,9 @@ export const VectorFloorPlan: React.FC<VectorFloorPlanProps> = ({
           <>
             <button
               onClick={() => setActiveTool((t) => (t === 'select' ? 'hand' : 'select'))}
-              className={`p-2 rounded-xl transition-colors ${
+              className={`min-w-[44px] min-h-[44px] flex items-center justify-center rounded-xl transition-colors touch-manipulation ${
                 activeTool === 'hand' || isSpacePressed
-                  ? 'bg-amber-500 text-slate-950'
+                  ? 'bg-amber-500 text-slate-950 font-bold'
                   : 'hover:bg-slate-800 text-slate-300 hover:text-white'
               }`}
               title={activeTool === 'hand' ? 'Outil Sélection' : 'Outil Main / Pan (Espace)'}
@@ -851,38 +851,38 @@ export const VectorFloorPlan: React.FC<VectorFloorPlanProps> = ({
                 <MousePointer className="w-4 h-4" />
               )}
             </button>
-            <div className="w-px h-4 bg-slate-700 mx-0.5" />
+            <div className="w-px h-5 bg-slate-700 mx-0.5" />
           </>
         )}
 
         <button
           onClick={() => setZoom((z) => Math.min(ZOOM_MAX, Math.round((z + 0.15) * 100) / 100))}
-          className="p-2 rounded-xl hover:bg-slate-800 text-slate-300 hover:text-white transition-colors"
+          className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-xl hover:bg-slate-800 text-slate-300 hover:text-white transition-colors touch-manipulation"
           title="Zoom avant (+)"
         >
           <ZoomIn className="w-4 h-4" />
         </button>
-        <span className="text-xs font-mono font-bold px-1.5 tabular-nums text-slate-300">
+        <span className="text-xs font-mono font-bold px-1 tabular-nums text-slate-300">
           {Math.round(zoom * 100)}%
         </span>
         <button
           onClick={() => setZoom((z) => Math.max(ZOOM_MIN, Math.round((z - 0.15) * 100) / 100))}
-          className="p-2 rounded-xl hover:bg-slate-800 text-slate-300 hover:text-white transition-colors"
+          className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-xl hover:bg-slate-800 text-slate-300 hover:text-white transition-colors touch-manipulation"
           title="Zoom arrière (-)"
         >
           <ZoomOut className="w-4 h-4" />
         </button>
-        <div className="w-px h-4 bg-slate-700 mx-0.5" />
+        <div className="w-px h-5 bg-slate-700 mx-0.5" />
         <button
           onClick={handleFitToScreen}
-          className="p-2 rounded-xl hover:bg-slate-800 text-slate-300 hover:text-white transition-colors"
+          className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-xl hover:bg-slate-800 text-slate-300 hover:text-white transition-colors touch-manipulation"
           title="Ajuster à l'écran (cadrage optimal)"
         >
           <Maximize2 className="w-4 h-4" />
         </button>
         <button
           onClick={handleResetZoomPan}
-          className="p-2 rounded-xl hover:bg-slate-800 text-slate-300 hover:text-white transition-colors"
+          className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-xl hover:bg-slate-800 text-slate-300 hover:text-white transition-colors touch-manipulation"
           title="Réinitialiser zoom et cadrage (100%)"
         >
           <RotateCcw className="w-4 h-4" />

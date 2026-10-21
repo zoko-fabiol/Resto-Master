@@ -13,7 +13,7 @@ export interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
 const VARIANT_CLASSES = {
   default: 'bg-white border border-slate-200/80 shadow-xs',
   flat: 'bg-slate-50 border border-slate-200/60 shadow-none',
-  interactive: 'bg-white border border-slate-200 hover:border-slate-300 hover:shadow-md transition-all cursor-pointer',
+  interactive: 'bg-white border border-slate-200 hover:border-slate-300 hover:shadow-md transition-[border-color,box-shadow,transform] duration-150 ease-out active:scale-[0.99] touch-manipulation cursor-pointer',
   danger: 'bg-rose-50/50 border border-rose-200 text-rose-900',
   brand: 'bg-amber-50/40 border border-amber-200/80',
 };

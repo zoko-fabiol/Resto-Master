@@ -64,6 +64,47 @@
     font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+
+    /* Safe Area Insets pour encoches et Dynamic Island */
+    --sat: env(safe-area-inset-top, 0px);
+    --sar: env(safe-area-inset-right, 0px);
+    --sab: env(safe-area-inset-bottom, 0px);
+    --sal: env(safe-area-inset-left, 0px);
+  }
+
+  html {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  html, body {
+    overscroll-behavior: none;
+  }
+
+  button, a, [role="button"], .tappable {
+    touch-action: manipulation;
+  }
+
+  button, [role="button"], .tab, .chip, .drag-handle {
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+  }
+
+  /* Évite le zoom intempestif iOS sur focus d'input (< 16px) */
+  @media (pointer: coarse) {
+    input, textarea, select {
+      font-size: 16px;
+    }
+  }
+
+  /* Respect de l'accessibilité : réduction des animations */
+  @media (prefers-reduced-motion: reduce) {
+    *, ::before, ::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
   }
 
   /* Chiffres tabulaires systématiques pour les montants, compteurs et tableaux financiers */
@@ -77,6 +118,51 @@
 }
 
 @layer utilities {
+  /* Animations performantes composite-only (Emil Kowalski standards) */
+  @keyframes fade-scale-in {
+    from {
+      opacity: 0;
+      transform: scale(0.96);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+
+  @keyframes toast-slide-in {
+    from {
+      opacity: 0;
+      transform: translateY(12px) scale(0.98);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+
+  .animate-fade-scale {
+    animation: fade-scale-in 180ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
+
+  .animate-toast-slide-in {
+    animation: toast-slide-in 200ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
+
+  /* Utilitaires Safe Area */
+  .pt-safe {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  .pl-safe {
+    padding-left: env(safe-area-inset-left, 0px);
+  }
+  .pr-safe {
+    padding-right: env(safe-area-inset-right, 0px);
+  }
+
   .custom-scrollbar::-webkit-scrollbar {
     width: 5px;
     height: 5px;
@@ -92,7 +178,7 @@
     background: #94a3b8;
   }
 
-  /* Masquage complet de la barre de défilement (invisibilisation demandée) */
+  /* Masquage complet de la barre de défilement */
   .no-scrollbar::-webkit-scrollbar {
     display: none;
     width: 0;

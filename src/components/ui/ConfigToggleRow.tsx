@@ -63,7 +63,7 @@ export const ConfigToggleRow: React.FC<ConfigToggleRowProps> = ({
 
   return (
     <div
-      className={`rounded-2xl border transition-all duration-200 ${
+      className={`rounded-2xl border transition-[background-color,border-color,box-shadow] duration-150 ease-out touch-manipulation ${
         disabled
           ? 'opacity-50 bg-slate-50 border-slate-200 pointer-events-none'
           : checked
@@ -73,13 +73,13 @@ export const ConfigToggleRow: React.FC<ConfigToggleRowProps> = ({
       title={disabled && disabledReason ? disabledReason : undefined}
     >
       <div
-        className="flex items-center justify-between gap-3.5 p-4 cursor-pointer select-none"
+        className="flex items-center justify-between gap-3.5 p-4 cursor-pointer select-none active:scale-[0.99] transition-transform duration-100 ease-out"
         onClick={() => !disabled && handleToggle(!checked)}
       >
         <div className="flex items-center gap-3.5 min-w-0">
           {Icon && (
             <div
-              className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-all duration-200 ${
+              className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-[background-color,color,border-color] duration-150 ease-out ${
                 checked
                   ? 'bg-emerald-500/10 text-emerald-600 border border-emerald-500/20'
                   : 'bg-slate-200/70 text-slate-400'

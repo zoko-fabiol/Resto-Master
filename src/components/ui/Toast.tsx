@@ -68,7 +68,7 @@ export const ToastContainer: React.FC = () => {
           key={t.id}
           role="status"
           aria-live={t.type === 'error' ? 'assertive' : 'polite'}
-          className={`pointer-events-auto flex items-center gap-3 px-4 py-3 rounded-2xl shadow-xl text-xs sm:text-sm font-semibold border backdrop-blur-md transition-all animate-fade-scale ${
+          className={`pointer-events-auto flex items-center gap-3 px-4 py-3 rounded-2xl shadow-xl text-xs sm:text-sm font-semibold border backdrop-blur-md animate-toast-slide-in ${
             t.type === 'success'
               ? 'bg-emerald-950/90 text-emerald-100 border-emerald-600/40 shadow-emerald-950/20'
               : t.type === 'error'
