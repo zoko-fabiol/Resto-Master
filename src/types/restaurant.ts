@@ -240,6 +240,7 @@ export interface RestaurantTable {
   width?: number; // Logical width in px (default 100)
   height?: number; // Logical height in px (default 100)
   rotation?: number; // Angle 0..360
+  layoutLocked?: boolean; // Verrouillage géométrique contre les déplacements accidentels
   currentOrderId?: string;
   currentReservationId?: string;
   assignedServerId?: string;

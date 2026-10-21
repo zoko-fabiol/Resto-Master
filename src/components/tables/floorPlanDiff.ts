@@ -2,7 +2,7 @@ import { RestaurantTable, DecorElement } from '../../types/restaurant';
 
 export type TableLayoutPayload = Pick<
   RestaurantTable,
-  'id' | 'x' | 'y' | 'width' | 'height' | 'rotation' | 'shape' | 'number' | 'zoneId' | 'zone' | 'capacity' | 'coordVersion' | 'layoutVersion' | 'active'
+  'id' | 'x' | 'y' | 'width' | 'height' | 'rotation' | 'shape' | 'number' | 'zoneId' | 'zone' | 'capacity' | 'coordVersion' | 'layoutVersion' | 'active' | 'layoutLocked'
 >;
 
 /**
@@ -25,6 +25,7 @@ export function extractTableLayoutFields(table: RestaurantTable): TableLayoutPay
     coordVersion: 2,
     layoutVersion: 2,
     active: table.active !== false,
+    layoutLocked: table.layoutLocked === true,
   };
 }
 
@@ -75,6 +76,7 @@ export function computeFloorPlanDiff(
         draft.zoneId !== initial.zoneId ||
         draft.capacity !== initial.capacity ||
         draft.active !== initial.active ||
+        draft.layoutLocked !== initial.layoutLocked ||
         initial.layoutVersion !== 2 ||
         initial.coordVersion !== 2;
 

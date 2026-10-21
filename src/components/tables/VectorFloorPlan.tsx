@@ -29,7 +29,9 @@ import {
   RotateCw,
   Plus,
   Box,
+  Maximize,
   Maximize2,
+  Minimize2,
   Magnet,
   Trash2,
   Copy,
@@ -134,8 +136,36 @@ export const VectorFloorPlan: React.FC<VectorFloorPlanProps> = ({
   onAutoSeparate,
   onCollisionsChange,
 }) => {
+  const containerRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const contentGroupRef = useRef<SVGGElement>(null);
+
+  // Mode Plein Écran (Fullscreen API)
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
+  }, []);
+
+  const handleToggleFullscreen = async () => {
+    try {
+      if (!document.fullscreenElement) {
+        if (containerRef.current?.requestFullscreen) {
+          await containerRef.current.requestFullscreen();
+        }
+      } else {
+        if (document.exitFullscreen) {
+          await document.exitFullscreen();
+        }
+      }
+    } catch (err) {
+      console.warn('Mode plein écran non disponible ou restreint:', err);
+    }
+  };
 
   // Zoom & Pan state (bornes strictes unifiées 0.5 à 3.0)
   const [zoom, setZoom] = useState(1);
@@ -343,6 +373,13 @@ export const VectorFloorPlan: React.FC<VectorFloorPlanProps> = ({
       }
       setInternalSelectedIds(next);
       onSelectTable(table, true);
+      return;
+    }
+
+    // Si la table est verrouillée géométriquement, autoriser la sélection mais interdire le glissement
+    if (table.layoutLocked) {
+      setInternalSelectedIds(new Set([table.id]));
+      onSelectTable(table, false);
       return;
     }
 
@@ -831,8 +868,13 @@ export const VectorFloorPlan: React.FC<VectorFloorPlanProps> = ({
   }, [tables]);
 
   return (
-    <div className="relative w-full rounded-3xl bg-slate-950 border-4 border-slate-900 overflow-hidden shadow-2xl select-none">
-      {/* Top Floating Control Bar (Zoom, Pan, Fit, Snapping) */}
+    <div
+      ref={containerRef}
+      className={`relative w-full rounded-3xl bg-slate-950 border-4 border-slate-900 overflow-hidden shadow-2xl select-none ${
+        isFullscreen ? 'fixed inset-0 z-50 rounded-none border-none max-h-screen' : ''
+      }`}
+    >
+      {/* Top Floating Control Bar (Zoom, Pan, Fit, Snapping, Fullscreen) */}
       <div className="absolute top-4 right-4 z-20 flex items-center gap-1.5 p-1.5 rounded-2xl bg-slate-900/85 backdrop-blur-md border border-slate-800 text-white shadow-xl">
         {isEditMode && (
           <>
@@ -886,6 +928,19 @@ export const VectorFloorPlan: React.FC<VectorFloorPlanProps> = ({
           title="Réinitialiser zoom et cadrage (100%)"
         >
           <RotateCcw className="w-4 h-4" />
+        </button>
+        <div className="w-px h-5 bg-slate-700 mx-0.5" />
+        <button
+          onClick={handleToggleFullscreen}
+          className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-xl hover:bg-slate-800 text-slate-300 hover:text-white transition-colors touch-manipulation"
+          title={isFullscreen ? 'Quitter le plein écran' : 'Passer en plein écran'}
+          aria-label="Mode Plein Écran"
+        >
+          {isFullscreen ? (
+            <Minimize2 className="w-4 h-4 text-amber-400" />
+          ) : (
+            <Maximize className="w-4 h-4" />
+          )}
         </button>
       </div>
 
@@ -1127,6 +1182,29 @@ export const VectorFloorPlan: React.FC<VectorFloorPlanProps> = ({
                 className="w-full accent-amber-500"
               />
             </div>
+          </div>
+
+          <div className="pt-2 border-t border-slate-800 flex items-center justify-between">
+            <label className="text-[11px] text-slate-300 font-semibold flex items-center gap-2 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={!!primarySelectedTable.layoutLocked}
+                onChange={(e) => {
+                  const val = e.target.checked;
+                  onUpdateDraftTables(
+                    tables.map((t) => (t.id === primarySelectedTable.id ? { ...t, layoutLocked: val } : t))
+                  );
+                  onPushHistory();
+                }}
+                className="rounded accent-amber-500 w-3.5 h-3.5"
+              />
+              <span>Verrouiller la position (fixe)</span>
+            </label>
+            {primarySelectedTable.layoutLocked && (
+              <span className="text-[10px] text-amber-400 font-bold bg-amber-500/10 px-2 py-0.5 rounded-md border border-amber-500/30">
+                Fixée
+              </span>
+            )}
           </div>
         </div>
       )}
@@ -1607,8 +1685,8 @@ export const VectorFloorPlan: React.FC<VectorFloorPlanProps> = ({
               strokeColor = '#f43f5e';
             }
 
-            // Calcul des 8 poignées pour la table sélectionnée (1.5)
-            const handles = isSelected ? compute8Handles(0, 0, width, height, 0, 6) : [];
+            // Calcul des 8 poignées pour la table sélectionnée (1.5, sauf si verrouillée)
+            const handles = isSelected && !table.layoutLocked ? compute8Handles(0, 0, width, height, 0, 6) : [];
 
             return (
               <g
@@ -1621,7 +1699,13 @@ export const VectorFloorPlan: React.FC<VectorFloorPlanProps> = ({
                     onEditTableProps?.(table);
                   }
                 }}
-                className={`select-none ${isEditMode ? 'cursor-move' : 'cursor-pointer'}`}
+                className={`select-none ${
+                  isEditMode
+                    ? table.layoutLocked
+                      ? 'cursor-pointer'
+                      : 'cursor-move'
+                    : 'cursor-pointer'
+                }`}
               >
                 {/* ROTATED SHAPE CONTAINER */}
                 <g transform={`rotate(${rotation})`}>
@@ -1775,8 +1859,18 @@ export const VectorFloorPlan: React.FC<VectorFloorPlanProps> = ({
                     </g>
                   )}
 
+                  {/* Layout Locked Badge (Position fixe) */}
+                  {table.layoutLocked && (
+                    <g transform={`translate(${width / 2 - 14}, ${height / 2 - 14})`}>
+                      <circle cx="0" cy="0" r="10" fill="#0f172a" stroke="#f59e0b" strokeWidth="1.5" />
+                      <text x="0" y="3.5" textAnchor="middle" fill="#f59e0b" fontSize="10">
+                        🔒
+                      </text>
+                    </g>
+                  )}
+
                   {/* 8 RESIZE HANDLES & ROTATION HANDLE IN LOCAL AXES (1.4, 1.5, 1.14) */}
-                  {isEditMode && isSelected && (
+                  {isEditMode && isSelected && !table.layoutLocked && (
                     <g>
                       {/* Bounding box outline */}
                       <rect
