@@ -15,6 +15,14 @@ import {
   handleCreateTenant,
   handleSetTenantStatus,
 } from './modules/provisioning.js';
+import {
+  handleUpdateTenantEntitlements,
+  handleApplyProfileToTenant,
+  handleRecordTenantPayment,
+  handleStartSupportSession,
+  handleCloseSupportSession,
+  handleCreateAnnouncement,
+} from './modules/platformAdmin.js';
 
 const FUNCTION_OPTIONS = {
   region: 'europe-west1',
@@ -64,5 +72,14 @@ export const approveSignup = onCall(FUNCTION_OPTIONS, handleApproveSignup);
 export const rejectSignup = onCall(FUNCTION_OPTIONS, handleRejectSignup);
 export const createTenant = onCall(FUNCTION_OPTIONS, handleCreateTenant);
 export const setTenantStatus = onCall(FUNCTION_OPTIONS, handleSetTenantStatus);
+
+// 11. Configuration Distante, Abonnements & Support
+export const updateTenantEntitlements = onCall(FUNCTION_OPTIONS, handleUpdateTenantEntitlements);
+export const applyProfileToTenant = onCall(FUNCTION_OPTIONS, handleApplyProfileToTenant);
+export const recordTenantPayment = onCall(FUNCTION_OPTIONS, handleRecordTenantPayment);
+export const startSupportSession = onCall(FUNCTION_OPTIONS, handleStartSupportSession);
+export const closeSupportSession = onCall(FUNCTION_OPTIONS, handleCloseSupportSession);
+export const createAnnouncement = onCall(FUNCTION_OPTIONS, handleCreateAnnouncement);
+
 
 

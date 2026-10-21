@@ -196,3 +196,50 @@ export interface SetTenantStatusRequest {
   suspensionMode?: 'read_only' | 'full_block';
   reason: string;
 }
+
+export interface UpdateTenantEntitlementsRequest {
+  orgId: string;
+  features?: Record<string, { status: 'ACTIVÉ' | 'SUSPENDU' | 'DÉSACTIVÉ'; reason?: string; expiresAt?: string }>;
+  modules?: Record<string, boolean>;
+  operationRules?: Record<string, boolean>;
+  lockedConfigKeys?: string[];
+  reason: string;
+  ticketNumber?: string;
+}
+
+export interface ApplyProfileToTenantRequest {
+  orgId: string;
+  profileId: 'fast_food' | 'restaurant_classique' | 'bar_lounge' | 'hotel_complexe' | 'snack_takeaway';
+  reason: string;
+  ticketNumber?: string;
+}
+
+export interface RecordTenantPaymentRequest {
+  orgId: string;
+  amountFcfa: number;
+  periodMonths: number;
+  paymentMethod: 'especes' | 'virement_bancaire' | 'orange_money' | 'mtn_momo' | 'cheque';
+  reference?: string;
+  notes?: string;
+}
+
+export interface StartSupportSessionRequest {
+  orgId: string;
+  mode: 'read_only' | 'read_write';
+  reason: string;
+  durationMinutes?: number;
+}
+
+export interface CloseSupportSessionRequest {
+  sessionId: string;
+  summary?: string;
+}
+
+export interface CreateAnnouncementRequest {
+  title: string;
+  message: string;
+  type: 'info' | 'maintenance' | 'nouveaute' | 'urgent';
+  targetPlanIds?: string[];
+  expiresAt?: string;
+}
+

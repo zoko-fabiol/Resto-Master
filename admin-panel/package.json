@@ -1,0 +1,12 @@
+{
+  "name": "restomaster-admin-panel",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "RestoMaster OS — Console Super Admin Multi-Tenant Sécurisée",
+  "scripts": {
+    "dev": "vite --port=3001 --host=0.0.0.0",
+    "build": "vite build",
+    "preview": "vite preview"
+  }
+}

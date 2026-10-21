@@ -5,10 +5,12 @@
   "type": "module",
   "scripts": {
     "dev": "vite --port=3000 --host=0.0.0.0",
+    "dev:admin": "vite --config admin-panel/vite.config.ts",
     "prebuild": "tsx scripts/check-build-env.ts && tsx scripts/check-no-demo.ts",
     "check:demo": "tsx scripts/check-no-demo.ts",
     "create:superadmin": "tsx scripts/create-superadmin.ts",
     "build": "vite build",
+    "build:admin": "vite build --config admin-panel/vite.config.ts",
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
