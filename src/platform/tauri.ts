@@ -20,16 +20,26 @@ async function loadEvent(): Promise<TauriEvent> {
   return import('@tauri-apps/api/event');
 }
 
+async function saveWithNativeDialog({ filename, mimeType, data }: SaveFileOptions) {
+  const [{ save }, { writeFile }] = await Promise.all([
+    import('@tauri-apps/plugin-dialog'),
+    import('@tauri-apps/plugin-fs'),
+  ]);
+  const extension = filename.includes('.') ? filename.split('.').pop() ?? '' : '';
+  const path = await save({
+    defaultPath: filename,
+    filters: extension ? [{ name: mimeType, extensions: [extension] }] : undefined,
+  });
+  if (!path) {
+    throw new Error('Enregistrement annulé par l’utilisateur.');
+  }
+  await writeFile(path, data);
+  return { path };
+}
+
 export const tauriPlatform: Platform = {
   files: {
-    save: async ({ filename, mimeType, data }: SaveFileOptions) => {
-      const { invoke } = await loadCore();
-      return invoke<{ path: string }>('platform_save_file', {
-        filename,
-        mimeType,
-        data: Array.from(data),
-      });
-    },
+    save: saveWithNativeDialog,
   },
   printing: {
     printRaw: async (data, target) => {
@@ -41,35 +51,43 @@ export const tauriPlatform: Platform = {
           bytes: Array.from(data),
         });
       }
-      return invoke<{ target: 'native' }>('platform_print_raw', {
-        data: Array.from(data),
-        printerId: target?.printerId,
-      });
+      throw new Error(
+        target?.printerId
+          ? `L’impression brute par nom d’imprimante (${target.printerId}) n’est pas encore disponible dans cette version.`
+          : 'Aucune cible d’impression native n’est configurée.'
+      );
     },
     printDocument: async (options: PrintDocumentOptions = {}) => {
-      const { invoke } = await loadCore();
-      return invoke<{ target: 'native' }>('platform_print_document', {
-        title: options.title,
-        html: options.html,
-      });
+      if (typeof window === 'undefined' || typeof window.print !== 'function') {
+        throw new Error('L’impression système n’est pas disponible dans cette fenêtre Tauri.');
+      }
+      const previousTitle = document.title;
+      if (options.title) document.title = options.title;
+      try {
+        window.print();
+      } finally {
+        document.title = previousTitle;
+      }
+      return { target: 'system' };
     },
   },
   clipboard: {
     write: async (text) => {
-      const { invoke } = await loadCore();
-      await invoke('platform_clipboard_write', { text });
+      const { writeText } = await import('@tauri-apps/plugin-clipboard-manager');
+      await writeText(text);
     },
   },
   screen: {
     keepAwake: async (enabled) => {
-      const { invoke } = await loadCore();
-      await invoke('platform_keep_awake', { enabled });
+      if (!enabled || !('wakeLock' in navigator)) return;
+      const lock = await navigator.wakeLock.request('screen');
+      lock.addEventListener('release', () => undefined, { once: true });
     },
   },
   links: {
     open: async (url) => {
-      const { invoke } = await loadCore();
-      await invoke('platform_open_link', { url });
+      const { openUrl } = await import('@tauri-apps/plugin-opener');
+      await openUrl(url);
     },
   },
   backButton: {
