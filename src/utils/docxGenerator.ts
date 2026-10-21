@@ -15,6 +15,7 @@ import { RhEmployee } from '../types/restaurant';
 
 import defaultLogo from '../assets/company_logo.png';
 import { getExportFileSuffix } from './exportRHHelpers';
+import { platform } from '../platform';
 
 /** Charge une image sous forme de Uint8Array (gère les URLs relatives Vite, les blobs, et les data URLs) */
 async function loadLogoBytes(src: string | null): Promise<{ bytes: Uint8Array; type: 'png' | 'jpg' } | null> {
@@ -352,19 +353,12 @@ export async function generateAndDownloadDOCX({
   });
 
   // 9. Génération et Téléchargement du Blob .docx
-  const rawBlob = await Packer.toBlob(doc);
-  const blob = new Blob([rawBlob], {
-    type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+  const rawBuffer = await Packer.toBuffer(doc);
+  await platform.files.save({
+    filename: filename.endsWith('.docx') ? filename : `${filename}.docx`,
+    mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    data: new Uint8Array(rawBuffer),
   });
-
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename.endsWith('.docx') ? filename : `${filename}.docx`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  setTimeout(() => URL.revokeObjectURL(url), 5000);
 }
 
 /**
