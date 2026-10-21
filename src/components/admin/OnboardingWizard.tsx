@@ -1,5 +1,6 @@
-﻿import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { requestDocumentPrint } from '../../platform/printing';
+import { platform } from '../../platform';
 import {
   Building2,
   Receipt,
@@ -33,6 +34,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { useConfirm } from '../ui/ConfirmDialog';
 import { formatCurrency } from '../../lib/utils';
+import { cloudFunctionsService } from '../../services/functions/cloudFunctionsService';
 import { Outlet, Terminal, Peripheral } from '../../types/configuration';
 import { RestaurantTable, Zone, CashRegister, Category, Product } from '../../types/restaurant';
 
@@ -41,6 +43,63 @@ interface OnboardingWizardProps {
   onClose: () => void;
   onCompleted?: () => void;
 }
+
+const configurationSlides = [
+  { id: 1, title: 'Identité légale', description: 'Présentons votre établissement et ses informations officielles.', icon: Building2 },
+  { id: 2, title: 'Fiscalité & finances', description: 'Préparons les règles fiscales et les moyens de paiement.', icon: Receipt },
+  { id: 3, title: 'Établissement principal', description: 'Définissons le lieu où votre activité va démarrer.', icon: Store },
+  { id: 4, title: 'Salle & tables', description: 'Organisons vos espaces de service et vos tables.', icon: LayoutGrid },
+  { id: 5, title: 'Caisses & paiements', description: 'Mettons en place votre caisse et vos encaissements.', icon: Coins },
+  { id: 6, title: 'Matériel & appareils', description: 'Connectons les terminaux et les périphériques utiles.', icon: Printer },
+  { id: 7, title: 'Carte & catalogue', description: 'Créons la première structure de votre carte.', icon: UtensilsCrossed },
+  { id: 8, title: 'Accès opérationnels', description: 'Préparons les accès de votre équipe.', icon: Users },
+  { id: 9, title: 'Contrôle & certification', description: 'Vérifions tout avant de mettre le système en service.', icon: ShieldCheck },
+];
+
+const launchSlide = {
+  id: 0,
+  title: 'Configuration initiale',
+  description: 'Préparons votre appareil et votre système restaurant avec un parcours simple, clair et guidé.',
+  icon: Rocket,
+};
+
+interface ConfigurationToggleProps {
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+  label: string;
+  description?: string;
+  tone?: 'emerald' | 'blue' | 'orange' | 'amber';
+}
+
+const ConfigurationToggle: React.FC<ConfigurationToggleProps> = ({
+  checked,
+  onChange,
+  label,
+  description,
+  tone = 'emerald',
+}) => (
+  <div className="configuration-toggle-row">
+    <div className="min-w-0">
+      <div className="text-sm font-extrabold text-slate-900">{label}</div>
+      {description && <div className="mt-1 text-sm leading-5 text-slate-500">{description}</div>}
+    </div>
+    <div className="configuration-toggle-control">
+      <button
+        type="button"
+        role="switch"
+        aria-checked={checked}
+        aria-label={`${label}: ${checked ? 'Activé' : 'Désactivé'}`}
+        onClick={() => onChange(!checked)}
+        className={`configuration-toggle configuration-toggle-${tone} ${checked ? 'is-on' : 'is-off'}`}
+      >
+        <span className="configuration-toggle-thumb" />
+      </button>
+      <span className={`configuration-toggle-state ${checked ? 'is-on' : 'is-off'}`}>
+        {checked ? 'Activé' : 'Désactivé'}
+      </span>
+    </div>
+  </div>
+);
 
 export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
   isOpen,
@@ -73,8 +132,12 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
   const confirm = useConfirm();
 
   const [currentStep, setCurrentStep] = useState<number>(1);
+  const [slideDirection, setSlideDirection] = useState<'forward' | 'backward'>('forward');
+  const [isLaunchScreen, setIsLaunchScreen] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [showHandoverSlip, setShowHandoverSlip] = useState(false);
+  const [restaurantCode, setRestaurantCode] = useState<string | null>(null);
+  const [setupSessionId] = useState(() => `setup_${crypto.randomUUID()}`);
 
   // -------------------------------------------------------------
   // STEP 1 : Identité Légale
@@ -270,11 +333,26 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
   ]);
 
   const allChecksPassed = checklist.every((c) => c.isValid);
+  const currentSlide = isLaunchScreen ? launchSlide : configurationSlides[currentStep - 1];
+  const CurrentSlideIcon = currentSlide.icon;
+
+  useEffect(() => {
+    if (isOpen) {
+      setIsLaunchScreen(true);
+      setCurrentStep(1);
+      setSlideDirection('forward');
+    }
+  }, [isOpen]);
+
+  const goToStep = (nextStep: number) => {
+    setSlideDirection(nextStep >= currentStep ? 'forward' : 'backward');
+    setCurrentStep(nextStep);
+  };
 
   // -------------------------------------------------------------
   // ACTIONS DU WIZARD
   // -------------------------------------------------------------
-  const handleDownloadCsvTemplate = () => {
+  const handleDownloadCsvTemplate = async () => {
     const csvContent =
       'Reference;Nom;Categorie;Prix_Vente_TTC_FCFA;Taux_TVA;Unite;Destination;Actif\n' +
       'PL-001;Poulet DG Traditionnel;Plats Chauds;4500;19.25;portion;cuisine;true\n' +
@@ -285,26 +363,29 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
       'BV-003;Jus Naturel Pressé 33cl;Boissons;1500;19.25;verre;bar;true\n' +
       'DS-001;Salade de Fruits Frais;Desserts;1500;19.25;portion;bar;true\n';
 
-    const blob = new Blob([new Uint8Array([0xef, 0xbb, 0xbf]), csvContent], {
-      type: 'text/csv;charset=utf-8;',
-    });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.setAttribute('download', 'modele_catalogue_restomaster_os.csv');
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-
-    showToast({
-      title: 'Modèle CSV Téléchargé',
-      message: 'Le fichier modèle UTF-8 pour importer votre carte a été téléchargé.',
-      type: 'success',
-    });
+    try {
+      const csvData = new TextEncoder().encode(`\uFEFF${csvContent}`);
+      await platform.files.save({
+        filename: 'modele_catalogue_restomaster_os.csv',
+        mimeType: 'text/csv;charset=utf-8',
+        data: csvData,
+      });
+      showToast({
+        title: 'Modèle CSV enregistré',
+        message: 'Le fichier modèle UTF-8 pour importer votre carte a été enregistré.',
+        type: 'success',
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      showToast({
+        title: 'Échec de l’enregistrement',
+        message: `Le modèle CSV n’a pas pu être enregistré : ${message}`,
+        type: 'error',
+      });
+    }
   };
 
-  const handleApplyConfiguration = async () => {
+  const handleApplyConfiguration = async (): Promise<boolean> => {
     setIsSaving(true);
     try {
       // 1. Sauvegarde des paramètres et identité
@@ -442,13 +523,18 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
         message: 'Toutes les données ont été enregistrées avec succès dans Firestore.',
         type: 'success',
       });
-    } catch (err: any) {
+      return true;
+    } catch (err: unknown) {
       console.error('[OnboardingWizard] Erreur enregistrement:', err);
+      const message = err instanceof Error
+        ? err.message
+        : 'Une erreur est survenue lors de la synchronisation.';
       showToast({
         title: 'Erreur d’Enregistrement',
-        message: err?.message || 'Une erreur est survenue lors de la synchronisation.',
+        message,
         type: 'error',
       });
+      return false;
     } finally {
       setIsSaving(false);
     }
@@ -467,9 +553,17 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
     setIsSaving(true);
     try {
       // Exécuter l'enregistrement complet d'abord
-      await handleApplyConfiguration();
+    const configurationSaved = await handleApplyConfiguration();
+    if (!configurationSaved) {
+      return;
+    }
 
-      // Appliquer le verrouillage formel de livraison
+    // Appliquer le verrouillage formel de livraison
+    const setupResult = await cloudFunctionsService.completeRestaurantSetup(
+        setupSessionId,
+        'Configuration initiale certifiée par le Super Admin restaurant'
+      );
+      setRestaurantCode(setupResult.restaurantCode || null);
       await updateSettings({
         certifiedReadyForHandover: true,
         configurationVerrouillee: true,
@@ -488,10 +582,13 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
       if (onCompleted) {
         onCompleted();
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const message = err instanceof Error
+        ? err.message
+        : 'Impossible de certifier le système.';
       showToast({
         title: 'Échec de Certification',
-        message: err?.message || 'Impossible de certifier le système.',
+        message,
         type: 'error',
       });
     } finally {
@@ -499,31 +596,46 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
     }
   };
 
-  if (!isOpen) return null;
+  if (!isOpen || currentUser.role !== 'superadmin') return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-md overflow-y-auto p-2 sm:p-4 md:p-6 select-none animate-in fade-in duration-200">
-      <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 w-full max-w-5xl overflow-hidden flex flex-col my-auto max-h-[92vh]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-slate-950/95 p-0 select-none backdrop-blur-md onboarding-overlay">
+      <div className="relative flex h-full w-full flex-col overflow-hidden border border-slate-200 bg-white shadow-2xl onboarding-shell onboarding-surface">
         {/* Header Bar */}
-        <div className="bg-gradient-to-r from-slate-950 via-slate-900 to-indigo-950 text-white px-6 py-5 flex items-center justify-between border-b border-slate-800 shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-amber-500 to-amber-300 text-slate-950 flex items-center justify-center shadow-lg shadow-amber-500/20 font-black">
-              <Rocket className="w-6 h-6" />
+        <div className="relative overflow-hidden bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 text-white px-6 py-5 flex items-center justify-between border-b border-slate-800 shrink-0 onboarding-topbar">
+          <div className="onboarding-light-beam" aria-hidden="true" />
+          <div className="onboarding-system-ring onboarding-system-ring-one" aria-hidden="true" />
+          <div className="onboarding-system-ring onboarding-system-ring-two" aria-hidden="true" />
+          <div key={currentSlide.id} className={`relative z-10 onboarding-brand-content flex items-center gap-3 onboarding-slide-copy onboarding-slide-${slideDirection}`}>
+            <div className="relative w-12 h-12 rounded-2xl bg-gradient-to-tr from-amber-500 to-amber-300 text-slate-950 flex items-center justify-center shadow-lg shadow-amber-500/20 font-black onboarding-logo-pulse">
+              <CurrentSlideIcon className="w-6 h-6" />
             </div>
-            <div>
+            <div className="onboarding-brand-copy">
               <div className="flex items-center gap-2">
                 <span className="text-xs uppercase font-black tracking-widest text-amber-400 bg-amber-400/10 px-2.5 py-0.5 rounded-full border border-amber-400/20">
-                  Assistant de Premier Lancement
+                  {isLaunchScreen ? 'Bienvenue' : `Page ${currentSlide.id} / 9`}
                 </span>
-                <span className="text-xs text-slate-400">Étape {currentStep} / 9</span>
+                <span className="text-xs text-slate-400">Super Admin</span>
               </div>
               <h2 className="text-lg sm:text-xl font-black text-white tracking-tight mt-0.5">
-                Mise en Service & Certification RestoMaster OS
+                {currentSlide.title}
               </h2>
+              <p className="onboarding-brand-description mt-4 max-w-xs text-sm leading-6 text-slate-300">
+                {currentSlide.description}
+              </p>
+              <div className="onboarding-brand-streaks mt-8" aria-hidden="true">
+                <span />
+                <span />
+                <span />
+              </div>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="relative z-10 flex items-center gap-3">
+            <div className="hidden sm:flex items-center gap-2 text-xs text-slate-400 onboarding-sync-status">
+              <span className="h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_12px_rgba(52,211,153,0.9)]" />
+              Système prêt
+            </div>
             <button
               type="button"
               onClick={onClose}
@@ -536,9 +648,9 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
         </div>
 
         {/* Step Indicator Pills */}
-        <div className="bg-slate-50 border-b border-slate-200 px-4 py-2.5 overflow-x-auto no-scrollbar shrink-0">
+        <div className="bg-slate-50 border-b border-slate-200 px-4 py-2.5 overflow-x-auto no-scrollbar shrink-0 onboarding-progress-track">
           <div className="flex items-center gap-1.5 min-w-max">
-            {[
+            {!isLaunchScreen && [
               { id: 1, label: '1. Identité' },
               { id: 2, label: '2. Fiscalité' },
               { id: 3, label: '3. Site' },
@@ -555,10 +667,10 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
                 <button
                   key={step.id}
                   type="button"
-                  onClick={() => setCurrentStep(step.id)}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                  onClick={() => goToStep(step.id)}
+                  className={`onboarding-step-pill px-3 py-1.5 rounded-xl text-xs font-bold transition-transform duration-200 flex items-center gap-1.5 cursor-pointer active:scale-95 ${
                     isActive
-                      ? 'bg-amber-500 text-slate-950 shadow-xs'
+                      ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/20'
                       : isPast
                       ? 'bg-slate-200 text-slate-800 hover:bg-slate-300'
                       : 'text-slate-400 hover:text-slate-700 hover:bg-slate-100'
@@ -570,15 +682,55 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
               );
             })}
           </div>
+          <div className="mt-2 h-1 overflow-hidden rounded-full bg-slate-200" aria-label={`Progression ${isLaunchScreen ? 0 : currentStep} sur 9`}>
+            <div
+              className="h-full origin-left rounded-full bg-gradient-to-r from-amber-400 via-orange-500 to-emerald-500 transition-transform duration-500 ease-out"
+              style={{ transform: `scaleX(${isLaunchScreen ? 0 : currentStep / 9})` }}
+            />
+          </div>
         </div>
 
         {/* Wizard Main Content Body */}
-        <div className="flex-1 overflow-y-auto p-5 sm:p-7 space-y-6">
+        {isLaunchScreen ? (
+          <div className="flex-1 overflow-y-auto p-6 sm:p-10 lg:p-16 onboarding-launch-panel onboarding-content">
+            <div className="mx-auto flex h-full max-w-2xl flex-col justify-center">
+              <div className="mb-8 inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-amber-100 text-amber-700 onboarding-launch-icon">
+                <Rocket className="h-8 w-8" />
+              </div>
+              <div className="max-w-xl">
+                <div className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-black uppercase tracking-[0.16em] text-emerald-700">
+                  <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                  Nouveau parcours de mise en service
+                </div>
+                <h1 className="mt-4 text-3xl font-black tracking-tight text-slate-950 sm:text-5xl">Mettons votre restaurant en service, étape par étape.</h1>
+                <p className="mt-5 max-w-2xl text-base leading-7 text-slate-500 sm:text-lg">Un parcours plus clair pour préparer l’identité, la fiscalité, la salle, la caisse, le matériel, la carte et les accès de votre équipe.</p>
+              </div>
+              <div className="mt-10 grid gap-3 sm:grid-cols-3">
+                {[
+                  ['01', '9 étapes guidées', 'Un fil conducteur sans détour'],
+                  ['02', 'Sauvegarde sécurisée', 'Vos données restent synchronisées'],
+                  ['03', 'Livraison contrôlée', 'Certification uniquement si tout est prêt'],
+                ].map(([number, label, description], index) => (
+                  <div key={label} className="rounded-2xl border border-slate-200 bg-white p-4 onboarding-launch-card" style={{ animationDelay: `${index * 80}ms` }}>
+                    <span className="mb-4 flex h-8 w-8 items-center justify-center rounded-lg bg-slate-950 text-xs font-black text-white">{number}</span>
+                    <div className="text-sm font-black text-slate-800">{label}</div>
+                    <div className="mt-1 text-sm leading-5 text-slate-500">{description}</div>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-8 flex items-center gap-3 text-sm text-slate-500">
+                <ShieldCheck className="h-5 w-5 text-emerald-600" />
+                <span>Vous pourrez revenir à chaque étape avant la certification finale.</span>
+              </div>
+            </div>
+          </div>
+        ) : (
+        <div key={currentStep} className={`flex-1 overflow-y-auto p-5 sm:p-7 space-y-6 onboarding-step-content onboarding-content onboarding-slide-${slideDirection}`}>
           {/* ========================================================= */}
           {/* STEP 1: IDENTITÉ LÉGALE & ENTREPRISE                      */}
           {/* ========================================================= */}
           {currentStep === 1 && (
-            <div className="space-y-5 animate-in fade-in duration-150">
+            <div className="space-y-5 animate-in fade-in duration-150 onboarding-step-panel">
               <div className="border-b border-slate-100 pb-3">
                 <h3 className="text-base font-black text-slate-900 flex items-center gap-2">
                   <Building2 className="w-5 h-5 text-amber-600" />
@@ -717,7 +869,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
           {/* STEP 2: FISCALITÉ & FINANCES (CGI 2026)                    */}
           {/* ========================================================= */}
           {currentStep === 2 && (
-            <div className="space-y-5 animate-in fade-in duration-150">
+            <div className="space-y-5 animate-in fade-in duration-150 onboarding-step-panel">
               <div className="border-b border-slate-100 pb-3">
                 <h3 className="text-base font-black text-slate-900 flex items-center gap-2">
                   <Receipt className="w-5 h-5 text-blue-600" />
@@ -801,20 +953,13 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
                   </select>
                 </div>
 
-                <div className="md:col-span-2 flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-200">
-                  <div>
-                    <div className="text-xs font-bold text-slate-900">
-                      Déduction Automatique des Ingrédients du Stock
-                    </div>
-                    <div className="text-[11px] text-slate-500">
-                      Déduit automatiquement les ingrédients selon les fiches techniques à chaque commande envoyée.
-                    </div>
-                  </div>
-                  <input
-                    type="checkbox"
+                <div className="md:col-span-2">
+                  <ConfigurationToggle
                     checked={enableStockAutoDeduction}
-                    onChange={(e) => setEnableStockAutoDeduction(e.target.checked)}
-                    className="w-5 h-5 text-amber-600 rounded cursor-pointer"
+                    onChange={setEnableStockAutoDeduction}
+                    label="Déduction automatique du stock"
+                    description="Déduit les ingrédients selon les fiches techniques à chaque commande envoyée."
+                    tone="emerald"
                   />
                 </div>
               </div>
@@ -851,19 +996,42 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Profil Opérationnel</label>
-                  <select
-                    value={outletProfile}
-                    onChange={(e) => setOutletProfile(e.target.value)}
-                    className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-300 bg-white font-semibold cursor-pointer"
-                  >
-                    <option value="restaurant_classique">Restaurant Classique & Service à Table</option>
-                    <option value="bar_lounge">Bar Lounge, Tapas & Boissons</option>
-                    <option value="fast_food">Fast-Food, Snacking & Comptoir</option>
-                    <option value="evenementiel_traiteur">Traiteur, Salons & Banquets</option>
-                    <option value="hotel_restaurant">Hôtel-Restaurant & Room Service</option>
-                    <option value="restaurant_livraison">Dark Kitchen & Livraison Urbaine</option>
-                  </select>
+                  <div className="mb-2 flex items-end justify-between gap-3">
+                    <div>
+                      <div className="text-sm font-extrabold text-slate-900">Profil opérationnel</div>
+                      <div className="mt-1 text-sm text-slate-500">Choisissez le modèle qui ressemble le plus à votre activité.</div>
+                    </div>
+                    <span className="hidden shrink-0 text-xs font-black uppercase tracking-wider text-amber-600 sm:block">1 choix</span>
+                  </div>
+                  <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+                    {[
+                      { id: 'restaurant_classique', title: 'Restaurant classique', text: 'Salle et service à table', icon: UtensilsCrossed },
+                      { id: 'bar_lounge', title: 'Bar & lounge', text: 'Boissons, tapas et ambiance', icon: Coins },
+                      { id: 'fast_food', title: 'Fast-food', text: 'Comptoir et vente rapide', icon: Store },
+                      { id: 'evenementiel_traiteur', title: 'Traiteur & banquets', text: 'Événements et grands services', icon: Users },
+                      { id: 'hotel_restaurant', title: 'Hôtel-restaurant', text: 'Room service et hébergement', icon: Building2 },
+                      { id: 'restaurant_livraison', title: 'Livraison', text: 'Dark kitchen et livraison', icon: Smartphone },
+                    ].map((profile) => {
+                      const ProfileIcon = profile.icon;
+                      const isSelected = outletProfile === profile.id;
+                      return (
+                        <button
+                          type="button"
+                          key={profile.id}
+                          aria-pressed={isSelected}
+                          onClick={() => setOutletProfile(profile.id)}
+                          className={`configuration-profile-card ${isSelected ? 'is-selected' : ''}`}
+                        >
+                          <span className="configuration-profile-icon"><ProfileIcon className="h-5 w-5" /></span>
+                          <span className="min-w-0 text-left">
+                            <span className="block text-sm font-extrabold text-slate-900">{profile.title}</span>
+                            <span className="mt-1 block text-sm text-slate-500">{profile.text}</span>
+                          </span>
+                          <span className="configuration-profile-check">{isSelected ? <Check className="h-4 w-4" /> : null}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
 
                 <div>
@@ -1050,47 +1218,29 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
 
                 {/* Espèces & Carte */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div className="flex items-center justify-between p-3.5 bg-slate-50 rounded-xl border border-slate-200">
-                    <div className="flex items-center gap-2.5">
-                      <Coins className="w-4 h-4 text-emerald-600" />
-                      <span className="text-xs font-bold text-slate-800">Espèces (FCFA)</span>
-                    </div>
-                    <input
-                      type="checkbox"
-                      checked={acceptCash}
-                      onChange={(e) => setAcceptCash(e.target.checked)}
-                      className="w-4 h-4 text-emerald-600 rounded cursor-pointer"
-                    />
-                  </div>
+                  <ConfigurationToggle
+                    checked={acceptCash}
+                    onChange={setAcceptCash}
+                    label="Espèces (FCFA)"
+                    tone="emerald"
+                  />
 
-                  <div className="flex items-center justify-between p-3.5 bg-slate-50 rounded-xl border border-slate-200">
-                    <div className="flex items-center gap-2.5">
-                      <CreditCard className="w-4 h-4 text-blue-600" />
-                      <span className="text-xs font-bold text-slate-800">Carte Bancaire / TPE</span>
-                    </div>
-                    <input
-                      type="checkbox"
-                      checked={acceptCard}
-                      onChange={(e) => setAcceptCard(e.target.checked)}
-                      className="w-4 h-4 text-blue-600 rounded cursor-pointer"
-                    />
-                  </div>
+                  <ConfigurationToggle
+                    checked={acceptCard}
+                    onChange={setAcceptCard}
+                    label="Carte bancaire / TPE"
+                    tone="blue"
+                  />
                 </div>
 
                 {/* Orange Money */}
                 <div className="p-4 bg-orange-50/60 rounded-2xl border border-orange-200 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Smartphone className="w-4 h-4 text-orange-600" />
-                      <span className="text-xs font-black text-orange-950">Orange Money Cameroun</span>
-                    </div>
-                    <input
-                      type="checkbox"
-                      checked={acceptOrangeMoney}
-                      onChange={(e) => setAcceptOrangeMoney(e.target.checked)}
-                      className="w-4 h-4 text-orange-600 rounded cursor-pointer"
-                    />
-                  </div>
+                  <ConfigurationToggle
+                    checked={acceptOrangeMoney}
+                    onChange={setAcceptOrangeMoney}
+                    label="Orange Money Cameroun"
+                    tone="orange"
+                  />
 
                   {acceptOrangeMoney && (
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
@@ -1124,18 +1274,12 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
 
                 {/* MTN MoMo */}
                 <div className="p-4 bg-yellow-50/60 rounded-2xl border border-yellow-200 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Smartphone className="w-4 h-4 text-amber-600" />
-                      <span className="text-xs font-black text-yellow-950">MTN Mobile Money Cameroun</span>
-                    </div>
-                    <input
-                      type="checkbox"
-                      checked={acceptMtnMoMo}
-                      onChange={(e) => setAcceptMtnMoMo(e.target.checked)}
-                      className="w-4 h-4 text-amber-600 rounded cursor-pointer"
-                    />
-                  </div>
+                  <ConfigurationToggle
+                    checked={acceptMtnMoMo}
+                    onChange={setAcceptMtnMoMo}
+                    label="MTN Mobile Money Cameroun"
+                    tone="emerald"
+                  />
 
                   {acceptMtnMoMo && (
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
@@ -1484,8 +1628,8 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
                   <button
                     key={item.id}
                     type="button"
-                    onClick={() => setCurrentStep(item.targetStep)}
-                    className={`p-3.5 rounded-2xl border text-left transition-all flex flex-col justify-between group cursor-pointer ${
+                    onClick={() => goToStep(item.targetStep)}
+                    className={`p-3.5 rounded-2xl border text-left transition-transform duration-180 flex flex-col justify-between group cursor-pointer ${
                       item.isValid
                         ? 'bg-emerald-50/40 border-emerald-200 hover:bg-emerald-50'
                         : 'bg-rose-50/40 border-rose-200 hover:bg-rose-50'
@@ -1540,7 +1684,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
                     type="button"
                     onClick={handleCertifyAndLock}
                     disabled={isSaving || !allChecksPassed}
-                    className={`flex items-center justify-center gap-2 px-5 py-3 rounded-2xl font-black text-xs shadow-lg transition-all ${
+                    className={`flex items-center justify-center gap-2 px-5 py-3 rounded-2xl font-black text-xs shadow-lg transition-transform duration-180 ${
                       allChecksPassed
                         ? 'bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 shadow-amber-500/20 active:scale-98 cursor-pointer ring-2 ring-amber-400/40'
                         : 'bg-slate-800 text-slate-500 cursor-not-allowed opacity-60'
@@ -1554,14 +1698,15 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
             </div>
           )}
         </div>
+        )}
 
         {/* Footer Navigation Bar */}
-        <div className="bg-white px-6 py-4 border-t border-slate-200 flex items-center justify-between shrink-0">
+        <div className="bg-white px-6 py-4 border-t border-slate-200 flex items-center justify-between shrink-0 onboarding-footer">
           <div>
-            {currentStep > 1 && (
+            {!isLaunchScreen && currentStep > 1 && (
               <button
                 type="button"
-                onClick={() => setCurrentStep((prev) => Math.max(1, prev - 1))}
+                onClick={() => goToStep(Math.max(1, currentStep - 1))}
                 className="flex items-center gap-2 px-4 py-2 rounded-xl text-slate-700 hover:bg-slate-100 font-bold text-xs transition cursor-pointer"
               >
                 <ArrowLeft className="w-4 h-4" />
@@ -1571,19 +1716,28 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
           </div>
 
           <div className="flex items-center gap-3">
-            <button
+            {!isLaunchScreen && <button
               type="button"
               onClick={handleApplyConfiguration}
               disabled={isSaving}
               className="px-4 py-2 rounded-xl border border-slate-300 hover:bg-slate-50 text-slate-700 font-semibold text-xs transition cursor-pointer"
             >
               {isSaving ? 'Sauvegarde...' : 'Sauvegarder l’étape'}
-            </button>
+            </button>}
 
-            {currentStep < 9 ? (
+            {isLaunchScreen ? (
               <button
                 type="button"
-                onClick={() => setCurrentStep((prev) => Math.min(9, prev + 1))}
+                onClick={() => setIsLaunchScreen(false)}
+                className="flex items-center gap-2 rounded-xl bg-slate-950 px-6 py-3 text-sm font-black text-white shadow-lg transition-transform duration-200 hover:-translate-y-0.5 hover:bg-slate-800 active:scale-95"
+              >
+                <span>Commencer la configuration</span>
+                <ArrowRight className="h-4 w-4 text-amber-400" />
+              </button>
+            ) : currentStep < 9 ? (
+              <button
+                type="button"
+                onClick={() => goToStep(Math.min(9, currentStep + 1))}
                 className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs transition shadow-xs cursor-pointer active:scale-98"
               >
                 <span>Étape Suivante</span>
@@ -1648,6 +1802,12 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
                   <div className="font-mono text-slate-600">RCCM : {rccm || 'N/A'}</div>
                   <div className="text-slate-500">Taux fiscal : 19,25% TTC (CGI 2026)</div>
                 </div>
+              </div>
+
+              <div className="rounded-2xl border border-amber-300 bg-amber-50 p-4 text-center">
+                <div className="text-[10px] uppercase font-black tracking-wider text-amber-700">Code restaurant de connexion</div>
+                <div className="mt-1 font-mono text-xl font-black tracking-widest text-slate-900">{restaurantCode || 'Code déjà remis'}</div>
+                <div className="mt-1 text-[11px] text-amber-800">À remettre au responsable avec son lien d’activation. Le code seul ne permet pas de se connecter.</div>
               </div>
 
               <div className="grid grid-cols-3 gap-3 py-2 border-b border-slate-200 text-center">
