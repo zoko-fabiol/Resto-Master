@@ -15,6 +15,7 @@ release/
 # Fonctions Firebase
 functions/lib/
 functions/node_modules/
+admin-panel/dist/
 
 # Identifiants et clés de service Firebase Admin (ne JAMAIS commiter)
 serviceAccountKey.json

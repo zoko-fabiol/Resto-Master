@@ -476,6 +476,8 @@ export interface Order {
   companyBillingNiu?: string;
   discountPercentRequested?: number;
   supervisorToken?: string;
+  /** Commande créée hors-ligne, non certifiée par le serveur (numéro PRV-…) */
+  provisional?: boolean;
 }
 
 export interface StockTransfer {

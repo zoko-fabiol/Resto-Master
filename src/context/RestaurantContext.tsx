@@ -1054,6 +1054,7 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       discount: orderData.discount || 0,
       total: orderData.total || 0,
       status: 'envoye',
+      provisional: true,
       paymentStatus: 'non_paye',
       paidAmount: 0,
       notes: orderData.notes,
@@ -1106,7 +1107,27 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       'kitchen_kds'
     );
 
-    await ordersFirestoreService.saveOrder(newOrder);
+    // Le serveur recalculera prix, taxes et numéro définitif à la reconnexion
+    offlineSyncService.enqueueCloudFunction(
+      'createOrder',
+      {
+        restaurantId: newOrder.restaurantId || selectedOutletId,
+        type: newOrder.type,
+        tableId: newOrder.tableId,
+        tableName: newOrder.tableName,
+        customerId: newOrder.customerId,
+        customerName: newOrder.customerName,
+        guestCount: newOrder.guestCount,
+        items: newOrder.items.map((i) => ({
+          productId: i.productId,
+          quantity: i.quantity,
+          notes: i.notes,
+          destination: i.destination,
+        })),
+        notes: newOrder.notes,
+      },
+      `order_create_${newOrder.id}`
+    );
 
     return newOrder;
   };

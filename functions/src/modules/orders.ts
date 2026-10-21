@@ -9,6 +9,8 @@ import {
   assertFeature,
 } from '../auth.js';
 import { CreateOrderRequest, AddItemsToOrderRequest, UserRole } from '../types.js';
+import { getDoualaDateKey } from '../utils/timezone.js';
+import { computeTax, DEFAULT_VAT_RATE, DEFAULT_CAC_PERCENT_OF_VAT } from '../utils/tax.js';
 
 const ROLE_MAX_DISCOUNT: Record<UserRole, number> = {
   superadmin: 100,
@@ -31,11 +33,7 @@ const ROLE_MAX_DISCOUNT: Record<UserRole, number> = {
  * Générateur atomique et séquentiel de numéro de commande : CMD-AAAAMMJJ-NNNN
  */
 async function generateOrderNumber(restaurantId: string): Promise<string> {
-  const now = new Date();
-  const yyyy = now.getFullYear();
-  const mm = String(now.getMonth() + 1).padStart(2, '0');
-  const dd = String(now.getDate()).padStart(2, '0');
-  const dateKey = `${yyyy}${mm}${dd}`;
+  const dateKey = getDoualaDateKey();
 
   const counterRef = db.collection('_counters').doc(`orders_${restaurantId}_${dateKey}`);
 
@@ -116,7 +114,13 @@ export async function handleCreateOrder(request: CallableRequest<CreateOrderRequ
   await assertFeature(caller.organizationId, 'pos_core');
 
   const data = request.data;
-  const restaurantId = data.restaurantId || caller.outlets[0] || 'default-restaurant';
+  const restaurantId = data.restaurantId || caller.outlets[0];
+  if (!restaurantId) {
+    throw new HttpsError('permission-denied', 'Aucun établissement associé à votre compte.');
+  }
+  if (!caller.outlets.includes('*') && !caller.outlets.includes(restaurantId)) {
+    throw new HttpsError('permission-denied', 'Accès refusé pour cet établissement.');
+  }
 
   // 1. Validation de la remise demandée selon role_limits dynamique
   const discountPercent = Math.min(100, Math.max(0, Number(data.discountPercentRequested) || 0));
@@ -169,9 +173,12 @@ export async function handleCreateOrder(request: CallableRequest<CreateOrderRequ
   const settingsSnap = await db.collection('settings').doc(restaurantId).get();
   const settings = settingsSnap.exists ? settingsSnap.data()! : {};
   const isTaxApplicable = settings.assujettiTVA !== false;
-  const vatRate = isTaxApplicable ? (Number(settings.taxRate) || 19.25) : 0; // Cameroun: 17.5% + CAC 10% = 19.25%
+  const vatRate = isTaxApplicable ? (Number(settings.baseVatRate) || DEFAULT_VAT_RATE) : 0;
 
-  const taxAmount = isTaxApplicable ? Math.round((subtotalAfterDiscount * vatRate) / 100) : 0;
+  // TVA 17,5 % puis CAC 10 % de la TVA (même règle d'arrondi que le client)
+  const taxAmount = isTaxApplicable
+    ? computeTax(subtotalAfterDiscount, vatRate, DEFAULT_CAC_PERCENT_OF_VAT).totalTax
+    : 0;
   const grandTotal = subtotalAfterDiscount + taxAmount;
 
   // 3. Attribution du numéro de commande serveur continu
@@ -322,7 +329,7 @@ export async function handleAddItemsToOrder(request: CallableRequest<AddItemsToO
     const newSubtotal = (Number(orderData.subtotal) || 0) + (additionalSubtotal - additionalDiscount);
 
     const vatRate = Number(orderData.taxRate) || 0;
-    const newTax = vatRate > 0 ? Math.round((newSubtotal * vatRate) / 100) : 0;
+    const newTax = vatRate > 0 ? computeTax(newSubtotal, vatRate, DEFAULT_CAC_PERCENT_OF_VAT).totalTax : 0;
     const newTotal = newSubtotal + newTax;
 
     const updates: Record<string, unknown> = {

@@ -3,6 +3,7 @@ import crypto from 'node:crypto';
 import { db, FieldValue } from '../firebase.js';
 import { getCallerContext, assertRoles } from '../auth.js';
 import { IssueInvoiceRequest } from '../types.js';
+import { getDoualaDateParts } from '../utils/timezone.js';
 
 /**
  * Calcul du hachage cryptographique SHA-256 chaîné
@@ -61,8 +62,11 @@ export async function handleIssueInvoice(request: CallableRequest<IssueInvoiceRe
     };
   }
 
-  const restaurantId = orderData.restaurantId || caller.outlets[0] || 'default-restaurant';
-  const fiscalYear = new Date().getFullYear(); // Dynamique depuis le serveur, non hardcodé
+  const restaurantId = orderData.restaurantId || caller.outlets[0];
+  if (!restaurantId || (!caller.outlets.includes('*') && !caller.outlets.includes(restaurantId))) {
+    throw new HttpsError('permission-denied', 'Accès refusé pour cet établissement.');
+  }
+  const fiscalYear = getDoualaDateParts().year; // Exercice selon Africa/Douala
 
   // Récupérer le hash de la dernière facture pour le chaînage fiscal DGI
   const lastInvoiceSnap = await db

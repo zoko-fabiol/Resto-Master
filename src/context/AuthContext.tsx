@@ -148,7 +148,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                   role: 'superadmin',
                   active: true,
                   accessibleRestaurantIds: ['*'],
-                  organizationId: data.organizationId || 'org-main',
+                  organizationId: data.organizationId || (claims.organizationId as string) || '',
                   updatedAt: new Date().toISOString(),
                 },
                 { merge: true }
@@ -188,7 +188,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               role: activeRole,
               avatar: data.avatar || fbUser.photoURL || undefined,
               phone: data.phone || fbUser.phoneNumber || undefined,
-              organizationId: data.organizationId || (claims.organizationId as string) || 'org-main',
+              organizationId: data.organizationId || (claims.organizationId as string) || '',
               accessibleRestaurantIds: accessibleOutlets,
               defaultRestaurantId: data.defaultRestaurantId,
               active: isActive,
@@ -212,7 +212,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               role: activeRole,
               avatar: fbUser.photoURL || undefined,
               phone: fbUser.phoneNumber || undefined,
-              organizationId: (claims.organizationId as string) || 'org-main',
+              organizationId: (claims.organizationId as string) || '',
               accessibleRestaurantIds: accessibleOutlets,
               active: isActive,
             };
@@ -389,8 +389,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 name: uData.name || 'Utilisateur',
                 role: (uData.role as UserRole) || 'serveur',
                 active: true,
-                accessibleRestaurantIds: uData.accessibleRestaurantIds || ['*'],
-                organizationId: uData.organizationId || 'org-main',
+                accessibleRestaurantIds: uData.accessibleRestaurantIds || [],
+                organizationId: uData.organizationId || '',
                 hasPin: true,
               };
               setCurrentUser(matchedUser);
@@ -422,8 +422,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             name: uData.name || 'Utilisateur',
             role: (uData.role as UserRole) || 'serveur',
             active: true,
-            accessibleRestaurantIds: uData.accessibleRestaurantIds || ['*'],
-            organizationId: uData.organizationId || 'org-main',
+            accessibleRestaurantIds: uData.accessibleRestaurantIds || [],
+            organizationId: uData.organizationId || '',
             hasPin: true,
           };
           setCurrentUser(matchedUser);

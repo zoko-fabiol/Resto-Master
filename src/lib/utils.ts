@@ -1,4 +1,5 @@
 import { OrderStatus, TableStatus, ReservationStatus, UserRole } from '../types/restaurant';
+import { getDoualaDateKey } from './timezone';
 
 export function formatCurrency(amount: number, currency: string = 'FCFA'): string {
   if (isNaN(amount) || amount === null || amount === undefined) return `0 ${currency}`;
@@ -82,24 +83,20 @@ export function generateSecureId(prefix?: string): string {
 }
 
 export function generateOrderNumber(sequenceNumber?: number, isProvisional: boolean = false): string {
-  const now = new Date();
-  const yyyy = now.getFullYear();
-  const mm = String(now.getMonth() + 1).padStart(2, '0');
-  const dd = String(now.getDate()).padStart(2, '0');
-  const dateStr = `${yyyy}${mm}${dd}`;
+  const dateStr = getDoualaDateKey();
 
   if (isProvisional) {
     const rand = Math.floor(1000 + Math.random() * 9000);
-    return `PROV-${dateStr}-${rand}`;
+    return `PRV-${dateStr}-${rand}`;
   }
 
   if (typeof sequenceNumber === 'number' && sequenceNumber > 0) {
     return `CMD-${dateStr}-${String(sequenceNumber).padStart(4, '0')}`;
   }
 
-  // Par défaut sans séquence serveur certifiée : marquer comme provisoire
+  // Par défaut sans séquence serveur certifiée : marquer comme provisoire PRV-
   const rand = Math.floor(1000 + Math.random() * 9000);
-  return `PROV-${dateStr}-${rand}`;
+  return `PRV-${dateStr}-${rand}`;
 }
 
 export function generatePurchaseOrderNumber(): string {

@@ -332,9 +332,13 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
       });
 
       // 2. Mise à jour de l'organisation
+      const orgId = organization?.id;
+      if (!orgId) {
+        throw new Error("Aucune organisation rattachée à votre compte. Contactez l'administrateur de la plateforme.");
+      }
       if (updateOrganization) {
         await updateOrganization({
-          id: organization?.id || 'org-main',
+          id: orgId,
           name: commercialName.trim() || legalName.trim(),
           legalName: legalName.trim(),
           niu: niu.trim(),
@@ -356,7 +360,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
         currentOutletId = `out-${Date.now()}`;
         const newOutlet: Outlet = {
           id: currentOutletId,
-          organizationId: organization?.id || 'org-main',
+          organizationId: orgId,
           name: outletName.trim(),
           commercialName: commercialName.trim() || outletName.trim(),
           city: outletCity.trim() || city.trim() || 'Douala',

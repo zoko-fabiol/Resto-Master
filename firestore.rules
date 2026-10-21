@@ -345,15 +345,18 @@ service cloud.firestore {
     // =========================================================================
     match /orders/{orderId} {
       allow read: if isAuthenticated() && hasDocRestaurantAccess();
-      allow create: if isAuthenticated() && hasIncomingRestaurantAccess();
-      // Interdiction formelle de modifier arbitrairement les montants financiers et numéros légaux
+      // Création exclusivement via Cloud Function createOrder (Admin SDK)
+      allow create: if false;
+      // Les non-managers ne peuvent modifier aucun champ financier ni de paiement
       allow update: if isAuthenticated() && hasIncomingRestaurantAccess() && (
         isDirection() || isManager() || (
-          (!('orderNumber' in request.resource.data) || request.resource.data.orderNumber == resource.data.orderNumber) &&
-          (!('total' in request.resource.data) || request.resource.data.total == resource.data.total) &&
-          (!('subtotal' in request.resource.data) || request.resource.data.subtotal == resource.data.subtotal) &&
-          (!('tax' in request.resource.data) || request.resource.data.tax == resource.data.tax) &&
-          (!('paidAmount' in request.resource.data) || request.resource.data.paidAmount >= resource.data.paidAmount)
+          !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+            'orderNumber', 'items', 'discount', 'discountPercent', 'payments',
+            'paymentStatus', 'paidAmount', 'totalPaid', 'tax', 'taxRate',
+            'subtotal', 'rawSubtotal', 'total', 'restaurantId', 'provisional'
+          ]) &&
+          (!('status' in request.resource.data) || request.resource.data.status == resource.data.status ||
+            !(request.resource.data.status in ['payee', 'annulee']))
         )
       );
       allow delete: if false; // Jamais de delete direct : annulation traçable avec avoir

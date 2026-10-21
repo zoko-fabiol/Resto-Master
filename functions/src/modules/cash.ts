@@ -3,6 +3,7 @@ import crypto from 'node:crypto';
 import { db, FieldValue } from '../firebase.js';
 import { getCallerContext, assertRoles } from '../auth.js';
 import { OpenCashSessionRequest, CloseCashSessionRequest } from '../types.js';
+import { getDoualaDateKey } from '../utils/timezone.js';
 
 const DEFAULT_VARIANCE_THRESHOLD = 500; // 500 FCFA seuil de justification obligatoire
 
@@ -10,11 +11,7 @@ const DEFAULT_VARIANCE_THRESHOLD = 500; // 500 FCFA seuil de justification oblig
  * Générateur séquentiel continu de numéros de rapport Z et X
  */
 async function generateZSequence(restaurantId: string): Promise<string> {
-  const now = new Date();
-  const yyyy = now.getFullYear();
-  const mm = String(now.getMonth() + 1).padStart(2, '0');
-  const dd = String(now.getDate()).padStart(2, '0');
-  const dateKey = `${yyyy}${mm}${dd}`;
+  const dateKey = getDoualaDateKey();
 
   const counterRef = db.collection('_counters').doc(`z_reports_${restaurantId}_${dateKey}`);
 
