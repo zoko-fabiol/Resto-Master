@@ -16,12 +16,103 @@ import {
   Link,
   ShieldCheck,
   ExternalLink,
+  Copy,
+  BookOpen,
+  Terminal,
+  Cloud,
+  Cpu,
+  HelpCircle,
+  Sparkles,
+  ChevronDown,
+  ChevronUp,
+  Code,
 } from 'lucide-react';
 import {
   restaurantWhatsAppService,
   RestaurantWhatsAppSettings,
   formatWhatsAppPhoneNumber,
 } from '../../../services/whatsapp/restaurantWhatsAppService';
+
+const WHATSAPP_NODE_GATEWAY_TEMPLATE = `/**
+ * RestoMaster OS — Passerelle Webhook WhatsApp Autohébergée
+ * Développée avec Node.js, Express & @whiskeysockets/baileys
+ * 
+ * 1. Initialiser le projet :
+ *    mkdir whatsapp-gateway && cd whatsapp-gateway
+ *    npm init -y
+ *    npm install express @whiskeysockets/baileys qrcode-terminal
+ * 
+ * 2. Démarrer :
+ *    node server.js
+ * 
+ * 3. Scannez le QR code affiché dans le terminal avec l'application WhatsApp du restaurant.
+ */
+
+const express = require('express');
+const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
+const qrcode = require('qrcode-terminal');
+
+const app = express();
+app.use(express.json());
+
+const PORT = process.env.PORT || 3001;
+const API_KEY = process.env.API_KEY || 'secret_resto_token_2026';
+
+let sock;
+
+async function startWhatsApp() {
+  const { state, saveCreds } = await useMultiFileAuthState('auth_session');
+  sock = makeWASocket({
+    auth: state,
+    printQRInTerminal: true,
+  });
+
+  sock.ev.on('creds.update', saveCreds);
+  sock.ev.on('connection.update', (update) => {
+    const { connection, lastDisconnect, qr } = update;
+    if (qr) {
+      console.log('\\n[RestoMaster] SCANNEZ CE QR CODE DANS WHATSAPP -> APPAREILS CONNECTES :\\n');
+      qrcode.generate(qr, { small: true });
+    }
+    if (connection === 'close') {
+      const shouldReconnect = lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
+      console.log('Connexion interrompue, tentative de reconnexion...', shouldReconnect);
+      if (shouldReconnect) startWhatsApp();
+    } else if (connection === 'open') {
+      console.log('\\n[✓] Passerelle WhatsApp RestoMaster connectée avec succès !\\n');
+    }
+  });
+}
+
+// Endpoint webhook appelé automatiquement par RestoMaster OS
+app.post('/send-message', async (req, res) => {
+  const authHeader = req.headers['authorization'];
+  if (API_KEY && (!authHeader || !authHeader.includes(API_KEY))) {
+    return res.status(401).json({ error: 'Token API non valide' });
+  }
+
+  const { phone, message } = req.body;
+  if (!phone || !message) {
+    return res.status(400).json({ error: 'Champs phone et message obligatoires' });
+  }
+
+  try {
+    const cleanPhone = phone.replace(/[^0-9]/g, '');
+    const jid = \`\${cleanPhone}@s.whatsapp.net\`;
+    await sock.sendMessage(jid, { text: message });
+    console.log(\`[✓] Message WhatsApp expédié avec succès à \${cleanPhone}\`);
+    return res.json({ success: true, to: cleanPhone });
+  } catch (error) {
+    console.error('[✗] Erreur lors de l envoi WhatsApp:', error);
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+app.listen(PORT, () => {
+  console.log(\`Serveur WhatsApp RestoMaster démarré sur http://localhost:\${PORT}\`);
+  startWhatsApp();
+});
+`;
 
 export const RestaurantWhatsAppConfigSection: React.FC = () => {
   const { activeRestaurant, updateSettings, settings, isModuleEntitled } = useRestaurant();
@@ -43,11 +134,47 @@ export const RestaurantWhatsAppConfigSection: React.FC = () => {
   const [orderReadyAlertEnabled, setOrderReadyAlertEnabled] = useState(true);
   const [digitalReceiptAlertEnabled, setDigitalReceiptAlertEnabled] = useState(true);
 
-  // Banc de Test
+  // Banc de Test & Tutoriel
   const [testRecipient, setTestRecipient] = useState('');
   const [testTemplate, setTestTemplate] = useState<'reservation' | 'order_ready' | 'receipt'>('reservation');
   const [isSendingTest, setIsSendingTest] = useState(false);
   const [testStatus, setTestStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  // États du Tutoriel Pédagogique
+  const [showTutorial, setShowTutorial] = useState(true);
+  const [tutorialTab, setTutorialTab] = useState<'cloud' | 'nocode' | 'selfhosted'>('cloud');
+  const [copiedScript, setCopiedScript] = useState(false);
+  const [copiedSchema, setCopiedSchema] = useState(false);
+
+  const handleCopyScript = () => {
+    navigator.clipboard.writeText(WHATSAPP_NODE_GATEWAY_TEMPLATE);
+    setCopiedScript(true);
+    showToast({
+      type: 'success',
+      title: 'Script Node.js Copié',
+      message: 'Le code de la passerelle WhatsApp a été copié dans le presse-papier.',
+    });
+    setTimeout(() => setCopiedScript(false), 2500);
+  };
+
+  const handleCopySchema = () => {
+    const jsonSchema = JSON.stringify({
+      phone: "2376XXXXXXXX",
+      message: "Texte du message avec emojis...",
+      trigger: "reservation_confirmed",
+      restaurantName: restaurantName,
+      senderPhone: restaurantPhoneNumber || "2376XXXXXXXX",
+      timestamp: new Date().toISOString()
+    }, null, 2);
+    navigator.clipboard.writeText(jsonSchema);
+    setCopiedSchema(true);
+    showToast({
+      type: 'success',
+      title: 'Schéma JSON Copié',
+      message: 'Le payload JSON standardisé a été copié.',
+    });
+    setTimeout(() => setCopiedSchema(false), 2500);
+  };
 
   const restaurantId = activeRestaurant?.id || settings.restaurantId || '';
   const restaurantName = activeRestaurant?.name || settings.name || 'Notre Restaurant';
@@ -376,42 +503,339 @@ export const RestaurantWhatsAppConfigSection: React.FC = () => {
 
         {/* Détails si Mode Automatique Webhook est sélectionné */}
         {gatewayMode === 'automatic_webhook' && (
-          <div className="p-5 rounded-2xl border-2 border-emerald-300 bg-gradient-to-br from-emerald-50/60 via-white to-emerald-50/30 space-y-4">
-            <h3 className="font-black text-xs text-slate-900 flex items-center gap-2">
-              <Link className="w-4 h-4 text-emerald-600" />
-              Paramètres de votre Passerelle Webhook WhatsApp
-            </h3>
+          <div className="space-y-4">
+            {/* Formulaire de Connexion Webhook */}
+            <div className="p-5 rounded-2xl border-2 border-emerald-300 bg-gradient-to-br from-emerald-50/60 via-white to-emerald-50/30 space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-emerald-200/60 pb-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-xl bg-emerald-600 text-white flex items-center justify-center shadow-xs">
+                    <Link className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="font-black text-xs text-slate-900">Paramètres de votre Passerelle Webhook WhatsApp</h3>
+                    <p className="text-[11px] text-slate-600">
+                      Raccordez votre instance WhatsApp (UltraMsg, Wasapi, Make, Baileys ou Evolution API)
+                    </p>
+                  </div>
+                </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              <div className="md:col-span-2 space-y-1">
-                <label className="text-xs font-bold text-slate-800 block">
-                  URL du Webhook de la Passerelle WhatsApp :
-                </label>
-                <input
-                  type="url"
-                  value={webhookUrl}
-                  onChange={(e) => setWebhookUrl(e.target.value)}
-                  placeholder="https://api.votre-passerelle.com/send-message"
-                  className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs bg-white text-slate-900 font-mono focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
-                />
-                <p className="text-[10px] text-slate-500">
-                  Compatible avec Evolution API, Baileys, WPPConnect ou webhook standard JSON.
-                </p>
+                <button
+                  type="button"
+                  onClick={() => setShowTutorial(!showTutorial)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-100 hover:bg-emerald-200 text-emerald-900 font-bold text-xs transition border border-emerald-300 cursor-pointer"
+                >
+                  <BookOpen className="w-3.5 h-3.5 text-emerald-700" />
+                  <span>{showTutorial ? 'Masquer le Tutoriel' : 'Comment avoir ces informations ? (Tutoriel)'}</span>
+                  {showTutorial ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                </button>
               </div>
 
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-800 block">
-                  Clé API / Token de Sécurité (Optionnel) :
-                </label>
-                <input
-                  type="password"
-                  value={apiKey}
-                  onChange={(e) => setApiKey(e.target.value)}
-                  placeholder="Bearer token..."
-                  className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs bg-white text-slate-900 font-mono focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
-                />
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div className="md:col-span-2 space-y-1">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-slate-800 block">
+                      URL du Webhook de la Passerelle WhatsApp :
+                    </label>
+                    {webhookUrl.trim().startsWith('http') && (
+                      <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-600">
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        URL Définie
+                      </span>
+                    )}
+                  </div>
+                  <input
+                    type="url"
+                    value={webhookUrl}
+                    onChange={(e) => setWebhookUrl(e.target.value)}
+                    placeholder="https://api.votre-passerelle.com/send-message"
+                    className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs bg-white text-slate-900 font-mono focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
+                  />
+                  <p className="text-[10px] text-slate-500">
+                    Endpoint HTTP POST appelé automatiquement par RestoMaster OS avec le payload JSON.
+                  </p>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-800 block">
+                    Clé API / Token de Sécurité (Optionnel) :
+                  </label>
+                  <input
+                    type="password"
+                    value={apiKey}
+                    onChange={(e) => setApiKey(e.target.value)}
+                    placeholder="Bearer token ou token instance..."
+                    className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs bg-white text-slate-900 font-mono focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
+                  />
+                  <p className="text-[10px] text-slate-500">
+                    Transmis dans l'en-tête HTTP <code className="text-slate-700">Authorization: Bearer ...</code>
+                  </p>
+                </div>
               </div>
             </div>
+
+            {/* Guide & Tutoriel Pédagogique Intégré */}
+            {showTutorial && (
+              <div className="p-5 rounded-2xl border-2 border-emerald-200 bg-white space-y-4 shadow-sm animate-in fade-in duration-200">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 font-black text-[10px] uppercase">
+                        Guide RestoMaster OS
+                      </span>
+                      <h4 className="font-black text-sm text-slate-900">
+                        Comment obtenir votre URL et Token en 3 minutes ?
+                      </h4>
+                    </div>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      Trois méthodes éprouvées pour connecter le numéro WhatsApp officiel de votre restaurant :
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={handleCopySchema}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition border border-slate-200 cursor-pointer"
+                      title="Copier le format JSON envoyé par RestoMaster OS"
+                    >
+                      {copiedSchema ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Code className="w-3.5 h-3.5 text-slate-500" />}
+                      <span>{copiedSchema ? 'Format JSON Copié !' : 'Format JSON Payload'}</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Sélecteur d'Onglets de Solution */}
+                <div className="flex items-center gap-1.5 p-1 bg-slate-100 rounded-xl overflow-x-auto text-xs font-bold">
+                  <button
+                    type="button"
+                    onClick={() => setTutorialTab('cloud')}
+                    className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-all cursor-pointer whitespace-nowrap ${
+                      tutorialTab === 'cloud'
+                        ? 'bg-white text-emerald-900 shadow-2xs'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    <Cloud className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>Option 1 : Passerelle Cloud en 60s (UltraMsg / Wasapi)</span>
+                    <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-emerald-100 text-emerald-800 uppercase font-black">
+                      Recommandé
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setTutorialTab('nocode')}
+                    className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-all cursor-pointer whitespace-nowrap ${
+                      tutorialTab === 'nocode'
+                        ? 'bg-white text-emerald-900 shadow-2xs'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                    <span>Option 2 : No-Code Gratuit (Make.com / n8n)</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setTutorialTab('selfhosted')}
+                    className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-all cursor-pointer whitespace-nowrap ${
+                      tutorialTab === 'selfhosted'
+                        ? 'bg-white text-emerald-900 shadow-2xs'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    <Terminal className="w-3.5 h-3.5 text-slate-700" />
+                    <span>Option 3 : Mini-Serveur Node.js (100% Gratuit)</span>
+                  </button>
+                </div>
+
+                {/* Contenu de l'Option 1 : Passerelle Cloud (UltraMsg / Wasapi) */}
+                {tutorialTab === 'cloud' && (
+                  <div className="space-y-4 pt-1">
+                    <div className="p-3 bg-emerald-50/60 rounded-xl border border-emerald-100 text-xs text-emerald-950 flex items-start gap-2.5">
+                      <Zap className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                      <div>
+                        <strong>La méthode la plus rapide au monde :</strong> Vous n'avez rien à installer sur un ordinateur. Vous créez un compte sur une passerelle WhatsApp cloud, scannez un QR Code avec le téléphone du restaurant, et copiez l'URL fournie.
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                      <div className="p-3 rounded-xl bg-slate-50 border border-slate-200/80 space-y-1.5">
+                        <div className="flex items-center gap-2">
+                          <span className="w-5 h-5 rounded-full bg-emerald-600 text-white font-black text-[11px] flex items-center justify-center">1</span>
+                          <span className="font-bold text-xs text-slate-900">Créer une instance</span>
+                        </div>
+                        <p className="text-[11px] text-slate-600 leading-snug">
+                          Inscrivez-vous sur une plateforme comme <a href="https://ultramsg.com/" target="_blank" rel="noopener noreferrer" className="text-emerald-700 underline font-bold inline-flex items-center gap-0.5">UltraMsg <ExternalLink className="w-2.5 h-2.5" /></a> ou <a href="https://wasapi.io/" target="_blank" rel="noopener noreferrer" className="text-emerald-700 underline font-bold inline-flex items-center gap-0.5">Wasapi <ExternalLink className="w-2.5 h-2.5" /></a>.
+                        </p>
+                      </div>
+
+                      <div className="p-3 rounded-xl bg-slate-50 border border-slate-200/80 space-y-1.5">
+                        <div className="flex items-center gap-2">
+                          <span className="w-5 h-5 rounded-full bg-emerald-600 text-white font-black text-[11px] flex items-center justify-center">2</span>
+                          <span className="font-bold text-xs text-slate-900">Scanner le QR Code</span>
+                        </div>
+                        <p className="text-[11px] text-slate-600 leading-snug">
+                          Dans l'application WhatsApp du restaurant, ouvrez <strong>Appareils connectés</strong> et scannez le QR code affiché à l'écran.
+                        </p>
+                      </div>
+
+                      <div className="p-3 rounded-xl bg-slate-50 border border-slate-200/80 space-y-1.5">
+                        <div className="flex items-center gap-2">
+                          <span className="w-5 h-5 rounded-full bg-emerald-600 text-white font-black text-[11px] flex items-center justify-center">3</span>
+                          <span className="font-bold text-xs text-slate-900">Copier l'URL & Token</span>
+                        </div>
+                        <p className="text-[11px] text-slate-600 leading-snug">
+                          Récupérez l'URL du webhook fournie (ex: <code className="bg-slate-200 px-1 py-0.5 rounded text-[10px]">https://api.ultramsg.com/...</code>) et le Token d'instance.
+                        </p>
+                      </div>
+
+                      <div className="p-3 rounded-xl bg-slate-50 border border-slate-200/80 space-y-1.5">
+                        <div className="flex items-center gap-2">
+                          <span className="w-5 h-5 rounded-full bg-emerald-600 text-white font-black text-[11px] flex items-center justify-center">4</span>
+                          <span className="font-bold text-xs text-slate-900">Coller & Tester</span>
+                        </div>
+                        <p className="text-[11px] text-slate-600 leading-snug">
+                          Collez les deux valeurs dans les champs ci-dessus, enregistrez, et faites un essai avec le <strong>Banc de Test</strong> en bas de page !
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Contenu de l'Option 2 : No-Code (Make / n8n) */}
+                {tutorialTab === 'nocode' && (
+                  <div className="space-y-4 pt-1">
+                    <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-xs text-amber-950 flex items-start gap-2.5">
+                      <Sparkles className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                      <div>
+                        <strong>Automatisation No-Code 100% flexible :</strong> Utilisez Make.com ou n8n pour recevoir le webhook de RestoMaster OS et router le message vers WhatsApp Business, Twilio, MessageBird ou votre propre bot.
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                      <div className="p-3 rounded-xl bg-slate-50 border border-slate-200/80 space-y-1.5">
+                        <div className="flex items-center gap-2">
+                          <span className="w-5 h-5 rounded-full bg-amber-500 text-slate-950 font-black text-[11px] flex items-center justify-center">1</span>
+                          <span className="font-bold text-xs text-slate-900">Ouvrir Make / n8n</span>
+                        </div>
+                        <p className="text-[11px] text-slate-600 leading-snug">
+                          Créez un compte gratuit sur <a href="https://www.make.com/" target="_blank" rel="noopener noreferrer" className="text-amber-800 underline font-bold inline-flex items-center gap-0.5">Make.com <ExternalLink className="w-2.5 h-2.5" /></a> et cliquez sur <strong>Create a new scenario</strong>.
+                        </p>
+                      </div>
+
+                      <div className="p-3 rounded-xl bg-slate-50 border border-slate-200/80 space-y-1.5">
+                        <div className="flex items-center gap-2">
+                          <span className="w-5 h-5 rounded-full bg-amber-500 text-slate-950 font-black text-[11px] flex items-center justify-center">2</span>
+                          <span className="font-bold text-xs text-slate-900">Trigger Custom Webhook</span>
+                        </div>
+                        <p className="text-[11px] text-slate-600 leading-snug">
+                          Ajoutez le module <strong>Webhooks &gt; Custom webhook</strong>. Make vous donne immédiatement une URL webhook unique.
+                        </p>
+                      </div>
+
+                      <div className="p-3 rounded-xl bg-slate-50 border border-slate-200/80 space-y-1.5">
+                        <div className="flex items-center gap-2">
+                          <span className="w-5 h-5 rounded-full bg-amber-500 text-slate-950 font-black text-[11px] flex items-center justify-center">3</span>
+                          <span className="font-bold text-xs text-slate-900">Module WhatsApp</span>
+                        </div>
+                        <p className="text-[11px] text-slate-600 leading-snug">
+                          Ajoutez ensuite le module WhatsApp (ou Twilio) configuré avec le numéro de destination <code className="bg-slate-200 px-1 py-0.5 rounded text-[10px]">phone</code> et le texte <code className="bg-slate-200 px-1 py-0.5 rounded text-[10px]">message</code>.
+                        </p>
+                      </div>
+
+                      <div className="p-3 rounded-xl bg-slate-50 border border-slate-200/80 space-y-1.5">
+                        <div className="flex items-center gap-2">
+                          <span className="w-5 h-5 rounded-full bg-amber-500 text-slate-950 font-black text-[11px] flex items-center justify-center">4</span>
+                          <span className="font-bold text-xs text-slate-900">Coller l'URL Make</span>
+                        </div>
+                        <p className="text-[11px] text-slate-600 leading-snug">
+                          Collez l'URL de votre Webhook Make ci-dessus dans le champ <strong>URL du Webhook</strong> de RestoMaster OS.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Contenu de l'Option 3 : Mini-Serveur Node.js Baileys Autohébergé */}
+                {tutorialTab === 'selfhosted' && (
+                  <div className="space-y-4 pt-1">
+                    <div className="p-3 bg-slate-900 text-white rounded-xl text-xs flex items-start justify-between gap-3 shadow-xs">
+                      <div className="flex items-start gap-2.5">
+                        <Terminal className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                        <div>
+                          <strong>Micro-Serveur Node.js 100% Souverain & Gratuit :</strong> Hébergez votre propre passerelle sur votre ordinateur de caisse, un serveur local ou un VPS (Render, Railway). Aucune dépendance tierce payante.
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={handleCopyScript}
+                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-bold text-xs shadow-xs transition cursor-pointer shrink-0 ${
+                          copiedScript
+                            ? 'bg-emerald-600 text-white'
+                            : 'bg-emerald-500 hover:bg-emerald-400 text-slate-950'
+                        }`}
+                      >
+                        {copiedScript ? (
+                          <>
+                            <Check className="w-3.5 h-3.5" />
+                            <span>Code Copié !</span>
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="w-3.5 h-3.5" />
+                            <span>Copier le Code du Serveur</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                      <div className="p-3 rounded-xl bg-slate-50 border border-slate-200/80 space-y-1.5">
+                        <div className="flex items-center gap-2">
+                          <span className="w-5 h-5 rounded-full bg-slate-900 text-white font-black text-[11px] flex items-center justify-center">1</span>
+                          <span className="font-bold text-xs text-slate-900">Créer le dossier</span>
+                        </div>
+                        <p className="text-[11px] text-slate-600 leading-snug">
+                          Créez un dossier <code className="bg-slate-200 px-1 py-0.5 rounded text-[10px]">whatsapp-gateway</code> et initialisez-le avec <code className="bg-slate-200 px-1 py-0.5 rounded text-[10px]">npm init -y</code>.
+                        </p>
+                      </div>
+
+                      <div className="p-3 rounded-xl bg-slate-50 border border-slate-200/80 space-y-1.5">
+                        <div className="flex items-center gap-2">
+                          <span className="w-5 h-5 rounded-full bg-slate-900 text-white font-black text-[11px] flex items-center justify-center">2</span>
+                          <span className="font-bold text-xs text-slate-900">Installer les dépendances</span>
+                        </div>
+                        <p className="text-[11px] text-slate-600 leading-snug">
+                          Exécutez <code className="bg-slate-200 px-1 py-0.5 rounded text-[10px]">npm i express @whiskeysockets/baileys qrcode-terminal</code>.
+                        </p>
+                      </div>
+
+                      <div className="p-3 rounded-xl bg-slate-50 border border-slate-200/80 space-y-1.5">
+                        <div className="flex items-center gap-2">
+                          <span className="w-5 h-5 rounded-full bg-slate-900 text-white font-black text-[11px] flex items-center justify-center">3</span>
+                          <span className="font-bold text-xs text-slate-900">Coller le script</span>
+                        </div>
+                        <p className="text-[11px] text-slate-600 leading-snug">
+                          Cliquez sur <strong>« Copier le Code »</strong>, créez un fichier <code className="bg-slate-200 px-1 py-0.5 rounded text-[10px]">server.js</code>, collez et lancez avec <code className="bg-slate-200 px-1 py-0.5 rounded text-[10px]">node server.js</code>.
+                        </p>
+                      </div>
+
+                      <div className="p-3 rounded-xl bg-slate-50 border border-slate-200/80 space-y-1.5">
+                        <div className="flex items-center gap-2">
+                          <span className="w-5 h-5 rounded-full bg-slate-900 text-white font-black text-[11px] flex items-center justify-center">4</span>
+                          <span className="font-bold text-xs text-slate-900">Renseigner l'URL</span>
+                        </div>
+                        <p className="text-[11px] text-slate-600 leading-snug">
+                          Indiquez l'URL locale ou publique (ex: <code className="bg-slate-200 px-1 py-0.5 rounded text-[10px]">http://localhost:3001/send-message</code>) ci-dessus.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
       </div>
