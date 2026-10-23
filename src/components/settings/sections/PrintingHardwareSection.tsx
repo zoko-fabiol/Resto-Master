@@ -40,23 +40,11 @@ export const PrintingHardwareSection: React.FC = () => {
     settings,
     selectedOutletId,
     isFeatureEnabled,
-    updateFeatureStatus,
   } = useRestaurant();
   const { showToast, playAudioChime } = useToast();
   const confirm = useConfirm();
 
   const isPrintersModuleActive = isFeatureEnabled('printers_hardware');
-
-  const handleToggleModuleStatus = () => {
-    const nextStatus = isPrintersModuleActive ? 'SUSPENDU' : 'ACTIVÉ';
-    updateFeatureStatus('printers_hardware', nextStatus);
-    playAudioChime();
-    showToast({
-      type: nextStatus === 'ACTIVÉ' ? 'success' : 'warning',
-      title: nextStatus === 'ACTIVÉ' ? 'Module Impression Activé' : 'Module Impression Suspendu',
-      message: `Le module d'impression matérielle est désormais ${nextStatus.toLowerCase()} dans la configuration.`,
-    });
-  };
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editingPeripheral, setEditingPeripheral] = useState<Peripheral | null>(null);
@@ -346,24 +334,22 @@ export const PrintingHardwareSection: React.FC = () => {
 
         {/* Browser Capabilities Badges & Master Module Switch */}
         <div className="flex items-center gap-2 flex-wrap">
-          {/* Master activation toggle */}
-          <button
-            type="button"
-            onClick={handleToggleModuleStatus}
-            className={`px-3 py-1.5 rounded-xl text-xs font-black flex items-center gap-2 border transition-all cursor-pointer ${
+          {/* État du module impression */}
+          <div
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-2 border ${
               isPrintersModuleActive
-                ? 'bg-emerald-500 text-slate-950 border-emerald-400 shadow-xs'
-                : 'bg-slate-200 text-slate-700 border-slate-300'
+                ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
+                : 'bg-slate-100 text-slate-700 border-slate-300'
             }`}
-            title="Activer ou suspendre le module d'impression dans la configuration globale"
+            title="Statut d'activation de la gestion d'impression"
           >
             <span
               className={`w-2 h-2 rounded-full ${
-                isPrintersModuleActive ? 'bg-slate-950 animate-pulse' : 'bg-slate-500'
+                isPrintersModuleActive ? 'bg-emerald-500' : 'bg-slate-400'
               }`}
             ></span>
-            <span>{isPrintersModuleActive ? 'Module Activé' : 'Module Suspendu'}</span>
-          </button>
+            <span>{isPrintersModuleActive ? 'Service d\'impression actif' : 'Impression désactivée'}</span>
+          </div>
 
           <div
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold ${
@@ -402,13 +388,9 @@ export const PrintingHardwareSection: React.FC = () => {
               </div>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={handleToggleModuleStatus}
-            className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-bold transition-colors shadow-2xs cursor-pointer shrink-0"
-          >
-            Activer dans Configuration
-          </button>
+          <span className="px-3 py-1.5 bg-amber-100 text-amber-900 border border-amber-300 rounded-xl font-bold text-xs shrink-0">
+            Géré par RestoMaster
+          </span>
         </div>
       )}
 

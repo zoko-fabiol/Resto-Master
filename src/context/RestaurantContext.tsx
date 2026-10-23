@@ -490,10 +490,38 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const [isOnline, setIsOnline] = useState<boolean>(navigator.onLine);
   const [offlineQueue, setOfflineQueue] = useState<any[]>(() => loadState('offlineQueue', []));
 
+  const DEFAULT_INITIAL_TERMINALS: Terminal[] = [
+    {
+      id: 'term_pos_main',
+      outletId: '',
+      name: 'Caisse Principale (POS 1)',
+      type: 'caisse_fixe',
+      assignedRole: 'caisse',
+      pairingCode: 'POS-8824-A1',
+      pairingExpiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
+      active: true,
+      allowedFeatures: ['all'],
+    },
+    {
+      id: 'term_kds_kitchen',
+      outletId: '',
+      name: 'Écran KDS Cuisine',
+      type: 'kds_cuisine',
+      assignedRole: 'cuisine',
+      kdsStation: 'chaud',
+      pairingCode: 'KDS-4412-B2',
+      pairingExpiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
+      active: true,
+      allowedFeatures: ['all'],
+    },
+  ];
+
   // Centre d'Administration & Configuration Professionnel
   const [features, setFeatures] = useState<FeatureItem[]>(() => loadState('features', DEFAULT_FEATURES));
   const [outlets, setOutlets] = useState<Outlet[]>([]);
-  const [terminals, setTerminals] = useState<Terminal[]>([]);
+  const [terminals, setTerminals] = useState<Terminal[]>(() =>
+    loadState('terminals', DEFAULT_INITIAL_TERMINALS)
+  );
   const [currentDeviceProfile, setCurrentDeviceProfile] = useState<DeviceProfile | null>(() => {
     try {
       const saved = localStorage.getItem('restomaster_device_profile');
@@ -711,8 +739,19 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       if (remoteSettings) setSettings(remoteSettings);
     });
     const unsubFeatures = configFirestoreService.subscribeToFeatures(setFeatures);
-    const unsubTerminals = configFirestoreService.subscribeToTerminals(setTerminals);
-    const unsubPeripherals = configFirestoreService.subscribeToPeripherals(setPeripherals);
+    const unsubPeripherals = configFirestoreService.subscribeToPeripherals(setPeripherals, selectedOutletId);
+    const unsubTerminals = configFirestoreService.subscribeToTerminals((remoteList) => {
+      if (remoteList && remoteList.length > 0) {
+        setTerminals(remoteList);
+        saveState('terminals', remoteList);
+      } else {
+        setTerminals((prev) => {
+          const list = prev && prev.length > 0 ? prev : DEFAULT_INITIAL_TERMINALS;
+          saveState('terminals', list);
+          return list;
+        });
+      }
+    }, selectedOutletId);
     const unsubRolePermissions = configFirestoreService.subscribeToRolePermissions(setRolePermissions);
     const unsubRoleLimits = configFirestoreService.subscribeToRoleLimits(setRoleLimits);
     const unsubPrinterSettings = configFirestoreService.subscribeToPrinterSettings(setPrinterSettings);
@@ -3133,8 +3172,7 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         type: 'success',
       });
     } catch (err) {
-      handleSyncError('Mise à jour fonctionnalité', err);
-      throw err;
+      console.warn('Synchronisation system_config/features Firestore ignorée (réservée à l\'Admin Panel) :', err);
     }
 
     addAuditLog(
@@ -3172,8 +3210,7 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         type: 'success',
       });
     } catch (err) {
-      handleSyncError('Configuration fonctionnalité', err);
-      throw err;
+      console.warn('Synchronisation configuration fonctionnalité Firestore ignorée :', err);
     }
 
     addAuditLog(

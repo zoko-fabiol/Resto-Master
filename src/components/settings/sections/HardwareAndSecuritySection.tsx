@@ -42,6 +42,8 @@ import {
   Star,
   Mail,
   Zap,
+  Trash2,
+  X,
 } from 'lucide-react';
 import { ModernRuleToggle } from './ModernRuleToggle';
 import { RestaurantEmailConfigSection } from './RestaurantEmailConfigSection';
@@ -62,6 +64,9 @@ export const HardwareAndSecuritySection: React.FC<Props> = ({ subTab }) => {
     updateRoleLimits,
     peripherals,
     terminals,
+    addTerminal,
+    deleteTerminal,
+    selectedOutletId,
     outlets,
     configHistory,
     applyConfigProfile,
@@ -85,6 +90,13 @@ export const HardwareAndSecuritySection: React.FC<Props> = ({ subTab }) => {
   const [copiedTerminalId, setCopiedTerminalId] = useState<string | null>(null);
   const [showRolesGuide, setShowRolesGuide] = useState(false);
   const [notifTab, setNotifTab] = useState<'emails_gas' | 'local_alerts'>('emails_gas');
+
+  // Modal d'ajout de nouveau terminal
+  const [addTerminalModalOpen, setAddTerminalModalOpen] = useState(false);
+  const [newTermName, setNewTermName] = useState('Poste Caisse POS');
+  const [newTermType, setNewTermType] = useState<string>('caisse_fixe');
+  const [newTermRole, setNewTermRole] = useState<UserRole>('caisse');
+  const [newTermStation, setNewTermStation] = useState<'chaud' | 'froid' | 'bar' | 'expo'>('chaud');
 
   const rolesList: { role: UserRole; label: string; desc: string }[] = [
     { role: 'direction', label: 'Direction Générale / Propriétaire', desc: 'Accès sans restriction à tous les modules, configurations et clôtures.' },
@@ -143,9 +155,25 @@ export const HardwareAndSecuritySection: React.FC<Props> = ({ subTab }) => {
                 </span>
               </div>
               <p className="text-xs text-slate-500 mt-0.5">
-                Déploiement universel par jeton d'activation à 6 caractères, liaison aux rôles et verrouillage d'écran
+                Déploiement universel par jeton d'activation à 6-8 caractères, liaison aux rôles et verrouillage d'écran
               </p>
             </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setNewTermName('Caisse 2 POS');
+                setNewTermType('caisse_fixe');
+                setNewTermRole('caisse');
+                setAddTerminalModalOpen(true);
+              }}
+              className="px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-xs transition-colors cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Nouveau Terminal</span>
+            </button>
           </div>
         </div>
 
@@ -164,151 +192,339 @@ export const HardwareAndSecuritySection: React.FC<Props> = ({ subTab }) => {
           </div>
         </div>
 
-        {/* Terminals Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {terminals.map((t) => {
-            const Icon = getTerminalIcon(t.type);
-            const isCopied = copiedTerminalId === t.id;
+        {/* Terminals Grid or Empty State */}
+        {terminals.length === 0 ? (
+          <div className="p-8 text-center bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200 space-y-4">
+            <div className="w-14 h-14 rounded-2xl bg-amber-100 text-amber-800 flex items-center justify-center mx-auto shadow-xs">
+              <Monitor className="w-7 h-7" />
+            </div>
+            <div>
+              <h4 className="font-bold text-sm text-slate-900">Aucun poste ou terminal configuré</h4>
+              <p className="text-xs text-slate-500 max-w-md mx-auto mt-1 leading-relaxed">
+                Déployez votre première caisse tactile pour obtenir immédiatement un code d'activation opérationnel.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={async () => {
+                await addTerminal({
+                  name: 'Caisse Principale (POS 1)',
+                  type: 'caisse_fixe',
+                  outletId: selectedOutletId || '',
+                  assignedRole: 'caisse',
+                  active: true,
+                  allowedFeatures: ['all'],
+                });
+              }}
+              className="px-5 py-2.5 bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs rounded-xl shadow-xs transition-colors cursor-pointer inline-flex items-center gap-2"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Déployer la Caisse POS Principale</span>
+            </button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {terminals.map((t) => {
+              const Icon = getTerminalIcon(t.type);
+              const isCopied = copiedTerminalId === t.id;
 
-            return (
-              <div
-                key={t.id}
-                className="p-5 rounded-2xl border border-slate-200 hover:border-amber-400 bg-slate-50/70 hover:bg-white transition-all flex flex-col justify-between space-y-4 shadow-2xs group"
+              return (
+                <div
+                  key={t.id}
+                  className="p-5 rounded-2xl border border-slate-200 hover:border-amber-400 bg-slate-50/70 hover:bg-white transition-all flex flex-col justify-between space-y-4 shadow-2xs group"
+                >
+                  <div>
+                    {/* Top line with Icon and Status */}
+                    <div className="flex items-start justify-between gap-2 mb-3">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-9 h-9 rounded-xl bg-white border border-slate-200 shadow-2xs flex items-center justify-center text-slate-700 group-hover:text-amber-600 group-hover:border-amber-300 transition-colors">
+                          <Icon className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <h4 className="font-black text-xs text-slate-900 leading-tight">
+                            {t.name}
+                          </h4>
+                          <span className="text-[10px] text-slate-400 uppercase font-semibold">
+                            {t.type.replace('_', ' ')}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200 flex items-center gap-1 shrink-0">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                          En ligne
+                        </span>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            const ok = await confirm({
+                              title: 'Supprimer ce terminal',
+                              message: `Voulez-vous retirer le poste "${t.name}" ? Il ne pourra plus se connecter avec ce code.`,
+                              confirmText: 'Supprimer',
+                              variant: 'danger',
+                            });
+                            if (ok) {
+                              await deleteTerminal(t.id);
+                            }
+                          }}
+                          className="p-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+                          title="Supprimer ce terminal"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Metadata Specs */}
+                    <div className="space-y-1.5 text-[11px] bg-white p-3 rounded-xl border border-slate-200/80">
+                      <div className="flex items-center justify-between text-slate-600">
+                        <span className="text-slate-400">Rôle assigné :</span>
+                        <strong className="text-slate-800 uppercase font-bold">{t.assignedRole}</strong>
+                      </div>
+                      <div className="flex items-center justify-between text-slate-600">
+                        <span className="text-slate-400">Zone restaurant :</span>
+                        <span className="font-semibold text-slate-700">{t.assignedZone || 'Générale'}</span>
+                      </div>
+                      {t.assignedTableId && (
+                        <div className="flex items-center justify-between text-slate-600">
+                          <span className="text-slate-400">Table assignée :</span>
+                          <strong className="text-amber-700 font-bold">Table {t.assignedTableId}</strong>
+                        </div>
+                      )}
+                      {t.kdsStation && (
+                        <div className="flex items-center justify-between text-slate-600">
+                          <span className="text-slate-400">Poste KDS :</span>
+                          <strong className="text-indigo-700 font-bold uppercase">{t.kdsStation}</strong>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Pairing Code & Controls */}
+                  <div className="pt-2 border-t border-slate-200 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                        Code d'Activation :
+                      </span>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          const newCode = await generateTerminalPairingCode(t.id);
+                          showToast({
+                            type: 'info',
+                            title: 'Nouveau Code Généré',
+                            message: `Code d'activation ${newCode} prêt pour ${t.name}.`,
+                          });
+                        }}
+                        className="text-[10px] font-bold text-amber-700 hover:text-amber-800 hover:underline flex items-center gap-1 cursor-pointer"
+                      >
+                        <RefreshCw className="w-2.5 h-2.5" /> Régénérer
+                      </button>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <div className="flex-1 bg-slate-900 text-amber-400 font-mono font-black text-sm text-center py-2 px-3 rounded-xl border border-slate-800 tracking-wider select-all shadow-inner">
+                        {t.pairingCode || 'NON DÉFINI'}
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (t.pairingCode) {
+                            navigator.clipboard.writeText(t.pairingCode);
+                            setCopiedTerminalId(t.id);
+                            setTimeout(() => setCopiedTerminalId(null), 2000);
+                            showToast({
+                              type: 'success',
+                              title: 'Code copié',
+                              message: `Code ${t.pairingCode} copié dans le presse-papiers.`,
+                            });
+                          }
+                        }}
+                        className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 transition-colors shadow-2xs cursor-pointer"
+                        title="Copier le code d'activation"
+                      >
+                        {isCopied ? (
+                          <Check className="w-4 h-4 text-emerald-600" />
+                        ) : (
+                          <Copy className="w-4 h-4" />
+                        )}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          if (t.pairingCode) {
+                            await pairDeviceWithCode(t.pairingCode);
+                            showToast({
+                              type: 'success',
+                              title: 'Poste Activé Immédiatement',
+                              message: `Ce navigateur est désormais appairé sous le profil "${t.name}".`,
+                            });
+                          }
+                        }}
+                        className="px-2.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-[11px] transition-colors shadow-2xs active:scale-95 whitespace-nowrap cursor-pointer"
+                        title="Tester et verrouiller cet écran immédiatement sur ce terminal"
+                      >
+                        Activer Ici
+                      </button>
+                    </div>
+
+                    {t.pairingExpiresAt && (
+                      <div className="text-[10px] flex items-center justify-between px-1">
+                        {new Date(t.pairingExpiresAt).getTime() < Date.now() ? (
+                          <span className="text-rose-600 font-bold">Code expiré (cliquez sur Régénérer)</span>
+                        ) : (
+                          <span className="text-slate-500">
+                            Valide jusqu'à {new Date(t.pairingExpiresAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })} (durée 15 min)
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Modale d'ajout d'un nouveau terminal */}
+        {addTerminalModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150">
+            <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl border border-slate-200 overflow-hidden">
+              <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-amber-600 text-white flex items-center justify-center shadow-xs">
+                    <Monitor className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-bold text-slate-900">Nouveau Terminal / Poste</h3>
+                    <p className="text-xs text-slate-500">Génération d'un code d'activation universel</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setAddTerminalModalOpen(false)}
+                  className="text-slate-400 hover:text-slate-700 p-2 rounded-xl hover:bg-slate-100 transition-colors cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <form
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  if (!newTermName.trim()) return;
+                  await addTerminal({
+                    name: newTermName.trim(),
+                    type: newTermType as any,
+                    assignedRole: newTermRole,
+                    kdsStation: newTermType === 'kds_cuisine' ? newTermStation : undefined,
+                    outletId: selectedOutletId || '',
+                    active: true,
+                    allowedFeatures: ['all'],
+                  });
+                  setAddTerminalModalOpen(false);
+                }}
+                className="p-6 space-y-4"
               >
                 <div>
-                  {/* Top line with Icon and Status */}
-                  <div className="flex items-start justify-between gap-2 mb-3">
-                    <div className="flex items-center gap-2.5">
-                      <div className="w-9 h-9 rounded-xl bg-white border border-slate-200 shadow-2xs flex items-center justify-center text-slate-700 group-hover:text-amber-600 group-hover:border-amber-300 transition-colors">
-                        <Icon className="w-4 h-4" />
-                      </div>
-                      <div>
-                        <h4 className="font-black text-xs text-slate-900 leading-tight">
-                          {t.name}
-                        </h4>
-                        <span className="text-[10px] text-slate-400 uppercase font-semibold">
-                          {t.type.replace('_', ' ')}
-                        </span>
-                      </div>
-                    </div>
+                  <label className="text-xs font-semibold text-slate-700 block mb-1">
+                    Nom du poste
+                  </label>
+                  <input
+                    type="text"
+                    value={newTermName}
+                    onChange={(e) => setNewTermName(e.target.value)}
+                    placeholder="Ex: Caisse 2 Terrasse, Tablette Serveur, KDS Chaud"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs sm:text-sm font-medium focus:outline-hidden focus:ring-2 focus:ring-amber-500"
+                    required
+                  />
+                </div>
 
-                    <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200 flex items-center gap-1 shrink-0">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                      En ligne
-                    </span>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs font-semibold text-slate-700 block mb-1">
+                      Type d'appareil
+                    </label>
+                    <select
+                      value={newTermType}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setNewTermType(val);
+                        if (val === 'caisse_fixe') setNewTermRole('caisse');
+                        else if (val.includes('tablette')) setNewTermRole('serveur');
+                        else if (val === 'kds_cuisine') setNewTermRole('cuisine');
+                        else if (val === 'kds_bar') setNewTermRole('bar');
+                      }}
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs sm:text-sm font-medium focus:outline-hidden focus:ring-2 focus:ring-amber-500 bg-white"
+                    >
+                      <option value="caisse_fixe">Ordinateur / Caisse Fixe</option>
+                      <option value="tablette_serveur">Tablette Serveur</option>
+                      <option value="tablette_table">Tablette Client à Table</option>
+                      <option value="kds_cuisine">Écran KDS Cuisine</option>
+                      <option value="kds_bar">Écran KDS Bar</option>
+                      <option value="ecran_retrait">TV / Écran de Retrait</option>
+                      <option value="borne_client">Borne Tactile Client</option>
+                    </select>
                   </div>
 
-                  {/* Metadata Specs */}
-                  <div className="space-y-1.5 text-[11px] bg-white p-3 rounded-xl border border-slate-200/80">
-                    <div className="flex items-center justify-between text-slate-600">
-                      <span className="text-slate-400">Rôle assigné :</span>
-                      <strong className="text-slate-800 uppercase font-bold">{t.assignedRole}</strong>
-                    </div>
-                    <div className="flex items-center justify-between text-slate-600">
-                      <span className="text-slate-400">Zone restaurant :</span>
-                      <span className="font-semibold text-slate-700">{t.assignedZone || 'Générale'}</span>
-                    </div>
-                    {t.assignedTableId && (
-                      <div className="flex items-center justify-between text-slate-600">
-                        <span className="text-slate-400">Table assignée :</span>
-                        <strong className="text-amber-700 font-bold">Table {t.assignedTableId}</strong>
-                      </div>
-                    )}
-                    {t.kdsStation && (
-                      <div className="flex items-center justify-between text-slate-600">
-                        <span className="text-slate-400">Poste KDS :</span>
-                        <strong className="text-indigo-700 font-bold uppercase">{t.kdsStation}</strong>
-                      </div>
-                    )}
+                  <div>
+                    <label className="text-xs font-semibold text-slate-700 block mb-1">
+                      Rôle assigné
+                    </label>
+                    <select
+                      value={newTermRole}
+                      onChange={(e) => setNewTermRole(e.target.value as UserRole)}
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs sm:text-sm font-medium focus:outline-hidden focus:ring-2 focus:ring-amber-500 bg-white"
+                    >
+                      <option value="caisse">Caissier / Caisse</option>
+                      <option value="serveur">Serveur</option>
+                      <option value="cuisine">Cuisine</option>
+                      <option value="bar">Barman</option>
+                      <option value="manager">Manager</option>
+                      <option value="direction">Direction</option>
+                    </select>
                   </div>
                 </div>
 
-                {/* Pairing Code & Controls */}
-                <div className="pt-2 border-t border-slate-200 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                      Code d'Activation :
-                    </span>
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        const newCode = await generateTerminalPairingCode(t.id);
-                        showToast({
-                          type: 'info',
-                          title: 'Nouveau Code Généré',
-                          message: `Code d'activation ${newCode} prêt pour ${t.name}.`,
-                        });
-                      }}
-                      className="text-[10px] font-bold text-amber-700 hover:text-amber-800 hover:underline flex items-center gap-1"
+                {newTermType === 'kds_cuisine' && (
+                  <div>
+                    <label className="text-xs font-semibold text-slate-700 block mb-1">
+                      Poste de préparation KDS
+                    </label>
+                    <select
+                      value={newTermStation}
+                      onChange={(e) => setNewTermStation(e.target.value as any)}
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs sm:text-sm font-medium focus:outline-hidden focus:ring-2 focus:ring-amber-500 bg-white"
                     >
-                      <RefreshCw className="w-2.5 h-2.5" /> Régénérer
-                    </button>
+                      <option value="chaud">Poste Chaud (Cuissons, Frites, Four)</option>
+                      <option value="froid">Poste Froid (Salades, Entrées, Desserts)</option>
+                      <option value="expo">Poste Passe / Envoi (Coordination)</option>
+                    </select>
                   </div>
+                )}
 
-                  <div className="flex items-center gap-2">
-                    <div className="flex-1 bg-slate-900 text-amber-400 font-mono font-black text-sm text-center py-2 px-3 rounded-xl border border-slate-800 tracking-wider select-all shadow-inner">
-                      {t.pairingCode || 'NON DÉFINI'}
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (t.pairingCode) {
-                          navigator.clipboard.writeText(t.pairingCode);
-                          setCopiedTerminalId(t.id);
-                          setTimeout(() => setCopiedTerminalId(null), 2000);
-                          showToast({
-                            type: 'success',
-                            title: 'Code copié',
-                            message: `Code ${t.pairingCode} copié dans le presse-papiers.`,
-                          });
-                        }
-                      }}
-                      className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 transition-colors shadow-2xs"
-                      title="Copier le code d'activation"
-                    >
-                      {isCopied ? (
-                        <Check className="w-4 h-4 text-emerald-600" />
-                      ) : (
-                        <Copy className="w-4 h-4" />
-                      )}
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        if (t.pairingCode) {
-                          await pairDeviceWithCode(t.pairingCode);
-                          showToast({
-                            type: 'success',
-                            title: 'Poste Activé Immédiatement',
-                            message: `Ce navigateur est désormais appairé sous le profil "${t.name}".`,
-                          });
-                        }
-                      }}
-                      className="px-2.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-[11px] transition-colors shadow-2xs active:scale-95 whitespace-nowrap"
-                      title="Tester et verrouiller cet écran immédiatement sur ce terminal"
-                    >
-                      Activer Ici
-                    </button>
-                  </div>
-
-                  {t.pairingExpiresAt && (
-                    <div className="text-[10px] flex items-center justify-between px-1">
-                      {new Date(t.pairingExpiresAt).getTime() < Date.now() ? (
-                        <span className="text-rose-600 font-bold">Code expiré (cliquez sur Régénérer)</span>
-                      ) : (
-                        <span className="text-slate-500">
-                          Valide jusqu'à {new Date(t.pairingExpiresAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })} (durée 15 min)
-                        </span>
-                      )}
-                    </div>
-                  )}
+                <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setAddTerminalModalOpen(false)}
+                    className="px-4 py-2.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-50 transition-colors cursor-pointer"
+                  >
+                    Annuler
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-5 py-2.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-xl shadow-xs transition-colors cursor-pointer"
+                  >
+                    Générer et Enregistrer
+                  </button>
                 </div>
-              </div>
-            );
-          })}
-        </div>
+              </form>
+            </div>
+          </div>
+        )}
       </div>
     );
   }

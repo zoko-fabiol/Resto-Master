@@ -6,6 +6,7 @@ import {
   deleteDoc,
   onSnapshot,
   query,
+  where,
   orderBy,
   limit,
 } from 'firebase/firestore';
@@ -72,11 +73,12 @@ export const configFirestoreService = {
     }
   },
 
-  subscribeToTerminals(callback: (terminals: Terminal[]) => void): () => void {
+  subscribeToTerminals(callback: (terminals: Terminal[]) => void, outletId?: string): () => void {
     try {
       const colRef = collection(db, 'terminals');
+      const q = outletId ? query(colRef, where('outletId', '==', outletId)) : colRef;
       return onSnapshot(
-        colRef,
+        q,
         (snapshot) => {
           callback(snapshot.docs.map((d) => d.data() as Terminal));
         },
@@ -109,11 +111,12 @@ export const configFirestoreService = {
     }
   },
 
-  subscribeToPeripherals(callback: (peripherals: Peripheral[]) => void): () => void {
+  subscribeToPeripherals(callback: (peripherals: Peripheral[]) => void, outletId?: string): () => void {
     try {
       const colRef = collection(db, 'peripherals');
+      const q = outletId ? query(colRef, where('outletId', '==', outletId)) : colRef;
       return onSnapshot(
-        colRef,
+        q,
         (snapshot) => {
           callback(snapshot.docs.map((d) => d.data() as Peripheral));
         },
