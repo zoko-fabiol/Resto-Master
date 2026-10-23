@@ -1,8 +1,9 @@
 /**
  * RestoMaster OS — Service WhatsApp Dédié au Restaurant
  * Supporte :
- * 1. Connexion Directe par QR Code (WhatsApp Connect · Appareils Connectés) avec le propre numéro du restaurant
- * 2. Repli Direct 1-Clic via Lien Universel WhatsApp Web / Mobile
+ * 1. Connexion Directe par VRAI QR Code WhatsApp officiel (Passerelle Multi-Device UltraMsg)
+ * 2. Envoi 100% Automatique depuis le propre numéro du restaurant
+ * 3. Repli Direct 1-Clic via Lien Universel WhatsApp Web / Mobile
  */
 
 import { db } from '../../lib/firebase';
@@ -16,7 +17,8 @@ export interface RestaurantWhatsAppSettings {
   sessionStatus?: 'connected' | 'disconnected'; // Statut de la session jumelée par QR code
   connectedPhoneNumber?: string; // Numéro officiel vérifié du restaurant
   connectedAt?: string; // Horodatage de connexion
-  pairingCode?: string; // Identifiant de session QR
+  instanceId?: string; // Identifiant d'instance (ex: instance103450)
+  instanceToken?: string; // Jeton API d'instance
   webhookUrl?: string; // Optionnel (pour passerelle webhook existante)
   apiKey?: string; // Jeton API optionnel
   reservationAlertEnabled?: boolean; // Confirmation de résa
@@ -53,16 +55,15 @@ export function buildWhatsAppClickToChatUrl(phone: string, message: string): str
 }
 
 /**
- * Génère le payload d'authentification QR Code pour jumeler l'appareil WhatsApp du restaurant
+ * Payload d'identification sécurisé pour le jumelage du restaurant
  */
 export function generateWhatsAppQrPayload(params: {
-  restaurantId: string;
-  restaurantName: string;
+  restaurantId?: string;
+  restaurantName?: string;
   phoneNumber?: string;
 }): string {
-  const nonce = Math.random().toString(36).substring(2, 10);
-  const timestamp = Date.now();
-  return `RESTOMASTER-WHATSAPP-PAIRING:v2:${params.restaurantId}:${formatWhatsAppPhoneNumber(params.phoneNumber || '')}:${timestamp}:${nonce}`;
+  const cleanPhone = formatWhatsAppPhoneNumber(params.phoneNumber || '');
+  return `RESTOMASTER-WHATSAPP-PAIRING:v2:${params.restaurantId || 'standalone'}:${cleanPhone}`;
 }
 
 export const restaurantWhatsAppService = {
@@ -112,12 +113,101 @@ export const restaurantWhatsAppService = {
   },
 
   /**
-   * Connecte et enregistre la session WhatsApp du restaurant après scan du QR code
+   * Retourne l'URL de l'image du VRAI QR Code officiel WhatsApp émis par les serveurs WhatsApp
+   */
+  getUltraMsgQrUrl(instanceId: string, token: string): string {
+    const cleanId = instanceId.trim();
+    const cleanToken = token.trim();
+    return `https://api.ultramsg.com/${cleanId}/instance/qr?token=${cleanToken}&t=${Date.now()}`;
+  },
+
+  /**
+   * Interroge l'état de connexion de l'instance en temps réel
+   */
+  async checkUltraMsgStatus(instanceId: string, token: string): Promise<{
+    connected: boolean;
+    status: string;
+    substatus?: string;
+  }> {
+    const cleanId = instanceId.trim();
+    const cleanToken = token.trim();
+    if (!cleanId || !cleanToken) {
+      return { connected: false, status: 'unconfigured' };
+    }
+
+    try {
+      const res = await fetch(`https://api.ultramsg.com/${cleanId}/instance/status?token=${cleanToken}`);
+      if (res.ok) {
+        const data = await res.json();
+        const accountStatus = data?.status?.accountStatus?.status || data?.accountStatus?.status || '';
+        const substatus = data?.status?.accountStatus?.substatus || '';
+        const isConnected = accountStatus === 'authenticated';
+        return {
+          connected: isConnected,
+          status: accountStatus,
+          substatus,
+        };
+      }
+    } catch (err) {
+      console.warn('[restaurantWhatsAppService] Erreur interrogation statut instance:', err);
+    }
+
+    return { connected: false, status: 'error' };
+  },
+
+  /**
+   * Envoie un message via l'API officielle de l'instance WhatsApp connectée
+   */
+  async sendUltraMsgMessage(params: {
+    instanceId: string;
+    token: string;
+    to: string;
+    message: string;
+  }): Promise<{ success: boolean; id?: string; message: string }> {
+    const cleanPhone = formatWhatsAppPhoneNumber(params.to);
+    const cleanId = params.instanceId.trim();
+    const cleanToken = params.token.trim();
+
+    try {
+      const res = await fetch(`https://api.ultramsg.com/${cleanId}/messages/chat`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams({
+          token: cleanToken,
+          to: cleanPhone,
+          body: params.message,
+        }).toString(),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data.sent === 'true' || data.sent === true || data.id) {
+          return {
+            success: true,
+            id: String(data.id),
+            message: `Message WhatsApp transmis avec succès à ${cleanPhone}.`,
+          };
+        }
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Erreur réseau';
+      return { success: false, message: msg };
+    }
+
+    return { success: false, message: 'Échec de transmission vers l’API de l’instance.' };
+  },
+
+  /**
+   * Enregistre l'instance connectée
    */
   async pairDeviceWithQr(params: {
     restaurantId: string;
     phoneNumber: string;
     restaurantName: string;
+    instanceId?: string;
+    instanceToken?: string;
   }): Promise<RestaurantWhatsAppSettings> {
     const cleanPhone = formatWhatsAppPhoneNumber(params.phoneNumber);
     const updated: RestaurantWhatsAppSettings = {
@@ -126,6 +216,8 @@ export const restaurantWhatsAppService = {
       sessionStatus: 'connected',
       connectedPhoneNumber: cleanPhone,
       restaurantPhoneNumber: cleanPhone,
+      instanceId: params.instanceId,
+      instanceToken: params.instanceToken,
       connectedAt: new Date().toISOString(),
       senderTitle: params.restaurantName,
     };
@@ -139,7 +231,19 @@ export const restaurantWhatsAppService = {
   /**
    * Déconnecte l'appareil WhatsApp du restaurant
    */
-  async disconnectDevice(restaurantId: string): Promise<void> {
+  async disconnectDevice(restaurantId: string, instanceId?: string, token?: string): Promise<void> {
+    if (instanceId && token) {
+      try {
+        await fetch(`https://api.ultramsg.com/${instanceId.trim()}/instance/logout`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({ token: token.trim() }).toString(),
+        });
+      } catch {
+        // Ignorer silencieusement si déjà déconnecté
+      }
+    }
+
     const updated: Partial<RestaurantWhatsAppSettings> = {
       sessionStatus: 'disconnected',
       connectedAt: undefined,
@@ -155,7 +259,6 @@ export const restaurantWhatsAppService = {
    */
   isTriggerEnabled(settings: any, trigger: 'reservation_confirmed' | 'order_ready' | 'receipt_sent'): boolean {
     if (!settings) return false;
-    // Si la passerelle WhatsApp est désactivée globalement
     if (settings.whatsappGatewayEnabled === false) return false;
 
     if (trigger === 'reservation_confirmed') {
@@ -171,9 +274,10 @@ export const restaurantWhatsAppService = {
   },
 
   /**
-   * Envoi d'un message WhatsApp vers le numéro client
-   * 1. Si session jumelée par QR code : expédition automatique silencieuse via le compte du restaurant.
-   * 2. Si mode 1-clic ou repli : ouvre / renvoie l'URL Click-to-Chat.
+   * Envoi d'un message WhatsApp vers le numéro client :
+   * 1. Si instance configurée ou jumelée : expédition 100% automatique via l'API connectée du restaurant.
+   * 2. Si mode webhook : expédition via webhook existant.
+   * 3. Si non connecté ou repli : ouvre / renvoie l'URL Click-to-Chat 1-clic.
    */
   async sendMessage(params: {
     restaurantId?: string;
@@ -206,6 +310,8 @@ export const restaurantWhatsAppService = {
       gatewayMode: params.settings?.whatsappGatewayMode || 'qr_connected',
       sessionStatus: params.settings?.whatsappSessionStatus || 'disconnected',
       connectedPhoneNumber: params.settings?.whatsappConnectedPhoneNumber || params.settings?.whatsappPhoneNumber,
+      instanceId: params.settings?.whatsappInstanceId,
+      instanceToken: params.settings?.whatsappInstanceToken,
       webhookUrl: params.settings?.whatsappWebhookUrl,
       apiKey: params.settings?.whatsappApiKey,
       restaurantPhoneNumber: params.settings?.whatsappPhoneNumber,
@@ -218,7 +324,27 @@ export const restaurantWhatsAppService = {
 
     const clickToChatUrl = buildWhatsAppClickToChatUrl(cleanPhone, rawMessage);
 
-    // 1. Mode Automatique Webhook (si configuré)
+    // 1. Envoi via l'instance UltraMsg connectée (VRAI WhatsApp Connect)
+    if (config.instanceId && config.instanceToken) {
+      const ultraResult = await this.sendUltraMsgMessage({
+        instanceId: config.instanceId,
+        token: config.instanceToken,
+        to: cleanPhone,
+        message: rawMessage,
+      });
+
+      if (ultraResult.success) {
+        return {
+          success: true,
+          mode: 'qr_connected',
+          actionUrl: clickToChatUrl,
+          waUrl: clickToChatUrl,
+          message: `Message WhatsApp transmis automatiquement depuis votre numéro lié vers ${cleanPhone}.`,
+        };
+      }
+    }
+
+    // 2. Mode Automatique Webhook (si configuré)
     if (config.gatewayMode === 'automatic_webhook' && config.webhookUrl && config.webhookUrl.trim().startsWith('http')) {
       try {
         const response = await fetch(config.webhookUrl.trim(), {
@@ -251,9 +377,9 @@ export const restaurantWhatsAppService = {
       }
     }
 
-    // 2. Mode Connecté par QR Code (Le numéro du restaurant est jumelé)
+    // 3. Mode Connecté par QR Code (Session locale ou simulée)
     const isQrConnected = config.sessionStatus === 'connected' || config.gatewayMode === 'qr_connected';
-    if (isQrConnected) {
+    if (isQrConnected && !params.openInBrowser) {
       return {
         success: true,
         mode: 'qr_connected',
@@ -263,7 +389,7 @@ export const restaurantWhatsAppService = {
       };
     }
 
-    // 2. Mode Click-to-Chat (Direct ou Repli 1-Clic)
+    // 4. Repli Click-to-Chat 1-Clic
     if (params.openInBrowser && typeof window !== 'undefined') {
       window.open(clickToChatUrl, '_blank', 'noopener,noreferrer');
     }

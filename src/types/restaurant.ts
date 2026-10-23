@@ -198,6 +198,8 @@ export interface RestaurantSettings {
     sessionStatus?: 'connected' | 'disconnected';
     connectedPhoneNumber?: string;
     connectedAt?: string;
+    instanceId?: string;
+    instanceToken?: string;
     webhookUrl?: string;
     apiKey?: string;
     reservationAlertEnabled?: boolean;
@@ -210,6 +212,8 @@ export interface RestaurantSettings {
   whatsappConnectedPhoneNumber?: string;
   whatsappPhoneNumber?: string;
   whatsappSenderTitle?: string;
+  whatsappInstanceId?: string;
+  whatsappInstanceToken?: string;
   whatsappWebhookUrl?: string;
   whatsappApiKey?: string;
   whatsappReservationAlertEnabled?: boolean;

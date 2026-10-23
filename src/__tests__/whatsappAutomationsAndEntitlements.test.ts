@@ -201,5 +201,55 @@ describe('Service WhatsApp & Conditionnement des Alertes par Abonnement', () => 
       expect(result.mode).toBe('qr_connected');
       expect(result.message).toContain('237655889900');
     });
+
+    it('génère l’URL du Vrai QR Code officiel UltraMsg avec l’identifiant et le token', () => {
+      const qrUrl = restaurantWhatsAppService.getUltraMsgQrUrl('instance103450', 'token_secret_123');
+      expect(qrUrl).toContain('https://api.ultramsg.com/instance103450/instance/qr?token=token_secret_123');
+    });
+
+    it('vérifie le statut de connexion de l’instance UltraMsg via checkUltraMsgStatus', async () => {
+      const fetchMock = vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          status: {
+            accountStatus: {
+              status: 'authenticated',
+              substatus: 'normal',
+            },
+          },
+        }),
+      });
+      global.fetch = fetchMock;
+
+      const statusResult = await restaurantWhatsAppService.checkUltraMsgStatus('instance103450', 'token_secret_123');
+      expect(statusResult.connected).toBe(true);
+      expect(statusResult.status).toBe('authenticated');
+    });
+
+    it('envoie un message direct via l’instance UltraMsg connectée', async () => {
+      const fetchMock = vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          sent: 'true',
+          id: 'msg_ultra_99214',
+          message: 'ok',
+        }),
+      });
+      global.fetch = fetchMock;
+
+      const res = await restaurantWhatsAppService.sendUltraMsgMessage({
+        instanceId: 'instance103450',
+        token: 'token_secret_123',
+        to: '655889900',
+        message: 'Message de test automatique',
+      });
+
+      expect(res.success).toBe(true);
+      expect(res.id).toBe('msg_ultra_99214');
+      expect(fetchMock).toHaveBeenCalledWith('https://api.ultramsg.com/instance103450/messages/chat', expect.objectContaining({
+        method: 'POST',
+      }));
+    });
   });
 });
+
