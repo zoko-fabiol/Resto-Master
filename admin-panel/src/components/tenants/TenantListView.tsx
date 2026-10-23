@@ -15,10 +15,12 @@ import {
   CreditCard,
   Building2,
   ExternalLink,
+  Mail,
 } from 'lucide-react';
 import { Tenant, TenantStatus, DEFAULT_PLANS, Plan } from '@shared';
 import { adminPlatformService } from '../../services/adminPlatformService';
 import { PendingDeletionsBanner } from './PendingDeletionsBanner';
+import { SendTenantCredentialsModal } from './SendTenantCredentialsModal';
 
 interface TenantListViewProps {
   tenants: Tenant[];
@@ -35,6 +37,7 @@ export const TenantListView: React.FC<TenantListViewProps> = ({
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [planFilter, setPlanFilter] = useState<string>('all');
   const [suspendingTenant, setSuspendingTenant] = useState<Tenant | null>(null);
+  const [sendingCredentialsTenant, setSendingCredentialsTenant] = useState<Tenant | null>(null);
   const [suspensionMode, setSuspensionMode] = useState<'read_only' | 'full_block'>('read_only');
   const [suspensionReason, setSuspensionReason] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -232,6 +235,15 @@ export const TenantListView: React.FC<TenantListViewProps> = ({
                   <ArrowUpRight className="w-3.5 h-3.5" />
                 </button>
 
+                <button
+                  onClick={() => setSendingCredentialsTenant(tenant)}
+                  title="Envoyer les identifiants de connexion par e-mail"
+                  className="px-3 py-2 rounded-xl bg-amber-500/15 hover:bg-amber-500 hover:text-slate-950 text-amber-300 text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer border border-amber-500/30 shadow-xs"
+                >
+                  <Mail className="w-3.5 h-3.5" />
+                  <span>Identifiants</span>
+                </button>
+
                 {tenant.status === 'suspendu' ? (
                   <button
                     onClick={() => handleReactivate(tenant)}
@@ -331,6 +343,15 @@ export const TenantListView: React.FC<TenantListViewProps> = ({
                     </td>
                     <td className="py-3.5 px-4 text-right">
                       <div className="flex items-center justify-end gap-1.5">
+                        <button
+                          onClick={() => setSendingCredentialsTenant(tenant)}
+                          title="Envoyer les identifiants officiels par e-mail au gestionnaire"
+                          className="px-2.5 py-1.5 rounded-lg bg-amber-500/15 hover:bg-amber-500 hover:text-slate-950 text-amber-300 border border-amber-500/30 text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shadow-xs"
+                        >
+                          <Mail className="w-3.5 h-3.5" />
+                          <span className="hidden xl:inline text-[11px]">Envoyer Identifiants</span>
+                        </button>
+
                         <button
                           onClick={() => onSelectTenant(tenant.id)}
                           className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-amber-500 hover:text-slate-950 text-slate-300 text-xs font-bold transition-all cursor-pointer flex items-center gap-1"
@@ -453,6 +474,12 @@ export const TenantListView: React.FC<TenantListViewProps> = ({
           </div>
         </div>
       )}
+      {/* Modal d'Envoi des Identifiants Restaurant */}
+      <SendTenantCredentialsModal
+        isOpen={Boolean(sendingCredentialsTenant)}
+        onClose={() => setSendingCredentialsTenant(null)}
+        tenant={sendingCredentialsTenant}
+      />
     </div>
   );
 };

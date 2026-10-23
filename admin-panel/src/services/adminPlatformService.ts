@@ -539,6 +539,101 @@ export const adminPlatformService = {
     }
   },
 
+  /**
+   * Envoi manuel des identifiants (Code Boutique / Restaurant + Mot de passe temporaire)
+   * par e-mail designé au gestionnaire / adhérent de l'établissement
+   */
+  async sendTenantCredentials(params: {
+    orgId: string;
+    recipientEmail: string;
+    recipientName: string;
+    restaurantName: string;
+    restaurantCode?: string;
+    temporaryPassword?: string;
+    planName?: string;
+    city?: string;
+    updateUserPassword?: boolean;
+  }): Promise<{
+    success: boolean;
+    message: string;
+    restaurantCode: string;
+    emailSent: boolean;
+  }> {
+    const orgId = params.orgId;
+    const now = new Date().toISOString();
+
+    // 1. Détermination ou génération du Code Restaurant / Numéro de Boutique
+    let restaurantCode = params.restaurantCode?.trim();
+    if (!restaurantCode) {
+      const cityLetters = (params.city || 'RMS').replace(/[^a-zA-Z]/g, '').slice(0, 3).toUpperCase() || 'RMS';
+      const randomSuffix = Math.floor(1000 + Math.random() * 9000);
+      restaurantCode = `RMS-${cityLetters}-${randomSuffix}`;
+    }
+
+    // 2. Mise à jour du tenant et des restaurants associés avec le restaurantCode
+    try {
+      const tenantRef = doc(db, 'tenants', orgId);
+      await updateDoc(tenantRef, {
+        restaurantCode,
+        updatedAt: now,
+      });
+
+      // Mettre à jour également les outlets associés si existants
+      const restoId = `resto_${orgId.replace('org_', '')}`;
+      const restoSnap = await getDoc(doc(db, 'restaurants', restoId));
+      if (restoSnap.exists()) {
+        await updateDoc(restoSnap.ref, { restaurantCode, updatedAt: now });
+      }
+    } catch (e) {
+      console.warn('[adminPlatformService] Erreur mise à jour restaurantCode dans Firestore:', e);
+    }
+
+    // 3. Gestion du compte utilisateur et mot de passe temporaire
+    const ownerPassword = params.temporaryPassword?.trim();
+    if (ownerPassword && params.updateUserPassword) {
+      try {
+        const tempApp = initializeApp(firebaseConfig, `temp-${Date.now()}`);
+        const tempAuth = getAuth(tempApp);
+        try {
+          await createUserWithEmailAndPassword(tempAuth, params.recipientEmail, ownerPassword);
+        } catch (authErr: any) {
+          console.info('[adminPlatformService] Compte Auth existant ou géré:', authErr?.code);
+        } finally {
+          await authSignOut(tempAuth);
+          await deleteApp(tempApp);
+        }
+      } catch (err) {
+        console.warn('[adminPlatformService] Notification Auth:', err);
+      }
+    }
+
+    // 4. Calcul de l'URL de connexion directe avec paramètres pré-remplis
+    const clientBaseUrl =
+      (import.meta as any).env?.VITE_APP_CLIENT_URL ||
+      (window.location.port === '3001' ? `${window.location.protocol}//${window.location.hostname}:3000` : window.location.origin);
+    const directLoginUrl = `${clientBaseUrl}/?restaurantCode=${encodeURIComponent(restaurantCode)}&email=${encodeURIComponent(params.recipientEmail)}`;
+
+    // 5. Expédition de l'e-mail officiel designé via Google Apps Script
+    const emailRes = await gasEmailService.sendWelcomeEmail({
+      to: params.recipientEmail,
+      recipientName: params.recipientName,
+      restaurantName: params.restaurantName,
+      restaurantCode,
+      email: params.recipientEmail,
+      password: ownerPassword,
+      planName: params.planName || 'Formule Professionnelle (Pro)',
+      city: params.city || 'Douala',
+      loginUrl: directLoginUrl,
+    });
+
+    return {
+      success: emailRes.success,
+      message: emailRes.message,
+      restaurantCode,
+      emailSent: emailRes.success,
+    };
+  },
+
   async rejectSignup(params: { signupId: string; reason: string }): Promise<any> {
     try {
       const fn = httpsCallable(functions, 'rejectSignup');

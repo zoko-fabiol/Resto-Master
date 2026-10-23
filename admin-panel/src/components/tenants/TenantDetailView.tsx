@@ -18,6 +18,7 @@ import {
   Users,
   Store,
   Wand2,
+  Mail,
 } from 'lucide-react';
 import { Tenant, TenantEntitlements, DEFAULT_PLANS, Plan } from '@shared';
 import { adminPlatformService } from '../../services/adminPlatformService';
@@ -34,6 +35,7 @@ import { DangerZoneTab } from './tabs/DangerZoneTab';
 import { ConfigurationTab } from './tabs/ConfigurationTab';
 import { ProfileApplicatorModal } from '../config/ProfileApplicatorModal';
 import { SetupWizardModal } from '../config/SetupWizardModal';
+import { SendTenantCredentialsModal } from './SendTenantCredentialsModal';
 
 interface TenantDetailViewProps {
   orgId: string;
@@ -46,6 +48,7 @@ export const TenantDetailView: React.FC<TenantDetailViewProps> = ({ orgId, onBac
   const [activeTab, setActiveTab] = useState<string>('features');
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [showWizardModal, setShowWizardModal] = useState(false);
+  const [showCredentialsModal, setShowCredentialsModal] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
   // Écoute en temps réel du tenant et de ses droits
@@ -170,6 +173,14 @@ export const TenantDetailView: React.FC<TenantDetailViewProps> = ({ orgId, onBac
         {/* Quick actions buttons in header */}
         <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
           <button
+            onClick={() => setShowCredentialsModal(true)}
+            className="flex-1 sm:flex-none px-3.5 py-2.5 rounded-xl bg-amber-500/15 hover:bg-amber-500 hover:text-slate-950 text-amber-300 text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer border border-amber-500/30 shadow-xs"
+          >
+            <Mail className="w-4 h-4" />
+            <span>Envoyer les Identifiants</span>
+          </button>
+
+          <button
             onClick={() => setShowWizardModal(true)}
             className="flex-1 sm:flex-none px-3.5 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md shadow-amber-500/20"
           >
@@ -223,7 +234,12 @@ export const TenantDetailView: React.FC<TenantDetailViewProps> = ({ orgId, onBac
         {activeTab === 'configuration' && (
           <ConfigurationTab tenant={tenant} entitlements={entitlements} />
         )}
-        {activeTab === 'overview' && <OverviewTab tenant={tenant} />}
+        {activeTab === 'overview' && (
+          <OverviewTab
+            tenant={tenant}
+            onSendCredentials={() => setShowCredentialsModal(true)}
+          />
+        )}
         {activeTab === 'users' && <UsersTab tenant={tenant} entitlements={entitlements} />}
         {activeTab === 'outlets' && <OutletsTab tenant={tenant} />}
         {activeTab === 'limits' && <LimitsTab tenant={tenant} />}
@@ -249,6 +265,13 @@ export const TenantDetailView: React.FC<TenantDetailViewProps> = ({ orgId, onBac
         orgId={tenant.id}
         restaurantName={tenant.company?.name || tenant.id}
         currentEntitlements={entitlements}
+      />
+
+      {/* Send Tenant Credentials Modal */}
+      <SendTenantCredentialsModal
+        isOpen={showCredentialsModal}
+        onClose={() => setShowCredentialsModal(false)}
+        tenant={tenant}
       />
     </div>
   );

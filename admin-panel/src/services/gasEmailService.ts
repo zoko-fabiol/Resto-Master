@@ -202,7 +202,7 @@ export const gasEmailService = {
                   <td style="padding:20px;">
                     <table role="presentation" width="100%" cellspacing="0" cellpadding="8">
                       <tr>
-                        <td width="38%" style="font-size:12px;color:#94a3b8;font-weight:600;">Code Restaurant :</td>
+                        <td width="44%" style="font-size:12px;color:#94a3b8;font-weight:600;">Code Boutique / Restaurant :</td>
                         <td style="font-size:14px;color:#f59e0b;font-weight:800;font-family:monospace;letter-spacing:1px;">
                           ${data.restaurantCode}
                         </td>

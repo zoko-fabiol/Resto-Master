@@ -4,9 +4,10 @@ import { Tenant, DEFAULT_PLANS, Plan } from '@shared';
 
 interface OverviewTabProps {
   tenant: Tenant;
+  onSendCredentials?: () => void;
 }
 
-export const OverviewTab: React.FC<OverviewTabProps> = ({ tenant }) => {
+export const OverviewTab: React.FC<OverviewTabProps> = ({ tenant, onSendCredentials }) => {
   const plan = DEFAULT_PLANS.find((p: Plan) => p.id === tenant.planId);
 
   return (
@@ -107,6 +108,19 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({ tenant }) => {
                   {tenant.owner?.uid || 'En attente de rattachement'}
                 </div>
               </div>
+
+              {onSendCredentials && (
+                <div className="pt-2">
+                  <button
+                    type="button"
+                    onClick={onSendCredentials}
+                    className="w-full py-2.5 px-3 rounded-xl bg-amber-500/15 hover:bg-amber-500 hover:text-slate-950 text-amber-300 font-bold text-xs border border-amber-500/30 transition-all flex items-center justify-center gap-2 cursor-pointer shadow-xs"
+                  >
+                    <Mail className="w-4 h-4" />
+                    <span>Envoyer les Identifiants par E-mail</span>
+                  </button>
+                </div>
+              )}
             </div>
           </div>
 
