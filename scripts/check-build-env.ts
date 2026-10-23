@@ -64,6 +64,13 @@ if (demoVars.length > 0) {
   hasErrors = true;
 }
 
+// 1.bis Interdiction formelle de VITE_USE_EMULATORS en build de production
+if (allEnv.VITE_USE_EMULATORS === 'true') {
+  console.error('[ERREUR CRITIQUE] VITE_USE_EMULATORS=true détecté dans l’environnement !');
+  console.error('Les émulateurs locaux ne doivent JAMAIS être activés pour un build de production.');
+  hasErrors = true;
+}
+
 // 2. Vérification des variables Firebase obligatoires
 const requiredFirebaseVars = [
   'VITE_FIREBASE_API_KEY',

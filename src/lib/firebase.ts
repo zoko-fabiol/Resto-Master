@@ -3,12 +3,15 @@ import {
   initializeFirestore,
   persistentLocalCache,
   persistentMultipleTabManager,
+  persistentSingleTabManager,
+  memoryLocalCache,
   getFirestore,
   Firestore,
+  connectFirestoreEmulator,
 } from 'firebase/firestore';
-import { getAuth, Auth } from 'firebase/auth';
+import { getAuth, Auth, connectAuthEmulator } from 'firebase/auth';
 import { getStorage, FirebaseStorage } from 'firebase/storage';
-import { getFunctions, Functions } from 'firebase/functions';
+import { getFunctions, Functions, connectFunctionsEmulator } from 'firebase/functions';
 import { initializeAppCheck, ReCaptchaEnterpriseProvider } from 'firebase/app-check';
 
 // -----------------------------------------------------------------------------
@@ -44,12 +47,18 @@ export const firebaseConfig = {
   appId: (import.meta.env.VITE_FIREBASE_APP_ID as string) || '',
 };
 
+// Détection de l'environnement desktop (Electron ou Tauri)
+const isDesktopRuntime =
+  typeof window !== 'undefined' &&
+  ('electronAPI' in (window as object) || '__TAURI_INTERNALS__' in (window as object));
+
 // Initialisation de l'instance d'application Firebase (Singleton)
 const app: FirebaseApp = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 
 // Initialisation conditionnelle d'App Check (reCAPTCHA Enterprise / Debug en Dev)
+// reCAPTCHA n'est pas utilisable depuis un runtime desktop local (file:// ou electron/tauri) : App Check y est ignoré.
 const appCheckSiteKey = import.meta.env.VITE_FIREBASE_APPCHECK_KEY as string | undefined;
-if (appCheckSiteKey && typeof window !== 'undefined') {
+if (appCheckSiteKey && typeof window !== 'undefined' && !isDesktopRuntime) {
   try {
     if (import.meta.env.DEV || import.meta.env.VITE_FIREBASE_APPCHECK_DEBUG === 'true') {
       // @ts-expect-error Firebase App Check Debug token window flag
@@ -77,18 +86,45 @@ try {
     app,
     {
       localCache: persistentLocalCache({
-        tabManager: persistentMultipleTabManager(),
+        tabManager: isDesktopRuntime
+          ? persistentSingleTabManager(undefined)
+          : persistentMultipleTabManager(),
       }),
+      // Robustesse derrière proxy / pare-feu de restaurant et dans WebView/Electron
+      experimentalAutoDetectLongPolling: true,
     },
     customDbId
   );
-} catch {
-  firestoreInstance = customDbId ? getFirestore(app, customDbId) : getFirestore(app);
+} catch (err) {
+  console.warn('[RestoMaster OS] Cache Firestore persistant indisponible :', err);
+  try {
+    firestoreInstance = initializeFirestore(
+      app,
+      { localCache: memoryLocalCache(), experimentalAutoDetectLongPolling: true },
+      customDbId
+    );
+  } catch {
+    // Déjà initialisé (HMR) : récupérer l'instance existante
+    firestoreInstance = customDbId ? getFirestore(app, customDbId) : getFirestore(app);
+  }
 }
 
 export const db: Firestore = firestoreInstance;
 export const auth: Auth = getAuth(app);
 export const storage: FirebaseStorage = getStorage(app);
 export const functions: Functions = getFunctions(app, 'europe-west1');
+
+// Connexion sécurisée aux émulateurs locaux UNIQUEMENT si explicitement activée et hors production
+const useEmulators = import.meta.env.VITE_USE_EMULATORS === 'true' && !import.meta.env.PROD;
+if (useEmulators) {
+  try {
+    connectAuthEmulator(auth, 'http://127.0.0.1:9099', { disableWarnings: true });
+    connectFirestoreEmulator(db, '127.0.0.1', 8080);
+    connectFunctionsEmulator(functions, '127.0.0.1', 5001);
+    console.info('[RestoMaster OS] Connecté aux émulateurs Firebase locaux (Auth: 9099, Firestore: 8080, Functions: 5001).');
+  } catch (err) {
+    console.warn('[RestoMaster OS] Connexion aux émulateurs déjà effectuée ou avertissement :', err);
+  }
+}
 
 export default app;
