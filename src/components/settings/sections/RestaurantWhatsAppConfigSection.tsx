@@ -53,6 +53,8 @@ export const RestaurantWhatsAppConfigSection: React.FC = () => {
   const [qrCountdown, setQrCountdown] = useState<number>(60);
   const [isCheckingStatus, setIsCheckingStatus] = useState<boolean>(false);
   const [instanceStatusText, setInstanceStatusText] = useState<string>('En attente de scan');
+  const [instanceErrorDetails, setInstanceErrorDetails] = useState<string>('');
+  const [qrImageError, setQrImageError] = useState<boolean>(false);
   const [showHelpGuide, setShowHelpGuide] = useState<boolean>(false);
 
   // Déclencheurs (Alertes Métier)
@@ -144,6 +146,8 @@ export const RestaurantWhatsAppConfigSection: React.FC = () => {
         setConnectedPhoneNumber(cleanPhone);
         setConnectedAt(now);
         setInstanceStatusText('Appareil authentifié et connecté');
+        setInstanceErrorDetails('');
+        setQrImageError(false);
 
         await restaurantWhatsAppService.saveWhatsAppSettings(restaurantId, {
           enabled: true,
@@ -177,8 +181,19 @@ export const RestaurantWhatsAppConfigSection: React.FC = () => {
           message: 'Votre smartphone est jumelé. Les messages partiront désormais automatiquement depuis votre numéro.',
         });
         return true;
+      } else if (result.status === 'error') {
+        setInstanceStatusText(result.errorDetails || 'Erreur instance');
+        setInstanceErrorDetails(result.errorDetails || 'Instance introuvable ou inactive sur UltraMsg');
+        if (!silent) {
+          showToast({
+            type: 'error',
+            title: 'Erreur d’accès à l’instance',
+            message: result.errorDetails || 'Impossible de joindre cette instance UltraMsg. Vérifiez votre ID et votre Token.',
+          });
+        }
       } else {
-        setInstanceStatusText(result.status ? `Statut : ${result.status}` : 'Non connecté');
+        setInstanceStatusText(result.status ? `Statut : ${result.status}` : 'En attente de scan');
+        setInstanceErrorDetails('');
         if (!silent) {
           showToast({
             type: 'info',
@@ -189,6 +204,7 @@ export const RestaurantWhatsAppConfigSection: React.FC = () => {
       }
     } catch {
       setInstanceStatusText('Erreur de vérification');
+      setInstanceErrorDetails('Impossible de contacter le service WhatsApp');
     } finally {
       if (!silent) setIsCheckingStatus(false);
     }
@@ -595,7 +611,10 @@ export const RestaurantWhatsAppConfigSection: React.FC = () => {
                   <input
                     type="text"
                     value={instanceId}
-                    onChange={(e) => setInstanceId(e.target.value)}
+                    onChange={(e) => {
+                      setInstanceId(e.target.value);
+                      setQrImageError(false);
+                    }}
                     placeholder="ex: instance103450"
                     className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs bg-white text-slate-900 font-mono font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
                   />
@@ -606,7 +625,10 @@ export const RestaurantWhatsAppConfigSection: React.FC = () => {
                   <input
                     type="password"
                     value={instanceToken}
-                    onChange={(e) => setInstanceToken(e.target.value)}
+                    onChange={(e) => {
+                      setInstanceToken(e.target.value);
+                      setQrImageError(false);
+                    }}
                     placeholder="ex: m4k5d9f0s..."
                     className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs bg-white text-slate-900 font-mono font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
                   />
@@ -693,38 +715,91 @@ export const RestaurantWhatsAppConfigSection: React.FC = () => {
                 {/* Colonne QR Code */}
                 <div className="md:col-span-5 flex flex-col items-center justify-center p-4 bg-white rounded-2xl border border-slate-200 shadow-xs relative">
                   {hasCredentials ? (
-                    <div className="flex flex-col items-center space-y-3">
-                      <div className="relative p-2 bg-white rounded-xl border border-slate-200 shadow-inner">
-                        <img
-                          src={ultraQrUrl}
-                          alt="Vrai QR Code Officiel WhatsApp"
-                          className="w-[240px] h-[240px] object-contain rounded-lg"
-                          onError={(e) => {
-                            // En cas d'erreur de chargement de l'instance
-                            (e.target as HTMLElement).style.display = 'none';
-                          }}
-                        />
-                      </div>
+                    <div className="flex flex-col items-center space-y-3 w-full">
+                      {qrImageError ? (
+                        <div className="w-[240px] h-[240px] p-4 rounded-2xl border-2 border-dashed border-rose-300 bg-rose-50/70 flex flex-col items-center justify-center text-center space-y-2">
+                          <div className="w-10 h-10 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center">
+                            <AlertCircle className="w-5 h-5" />
+                          </div>
+                          <h4 className="text-xs font-black text-rose-900">QR Code Non Disponible</h4>
+                          <p className="text-[11px] text-rose-700 leading-snug">
+                            {instanceErrorDetails || 'Impossible de joindre cette instance UltraMsg. Vérifiez l’ID et le Token.'}
+                          </p>
+                          <div className="pt-1 flex flex-col gap-1.5 w-full">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setQrImageError(false);
+                                refreshQrCode();
+                                verifyInstanceStatus(instanceId, instanceToken, false);
+                              }}
+                              className="w-full py-1.5 px-2 bg-white hover:bg-rose-100 text-rose-800 font-bold text-[10px] rounded-lg border border-rose-300 shadow-2xs cursor-pointer"
+                            >
+                              Réessayer
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setGatewayMode('click_to_chat')}
+                              className="w-full py-1.5 px-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-[10px] rounded-lg shadow-2xs cursor-pointer"
+                            >
+                              Passer en Mode 1-Clic Gratuit
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="relative p-2 bg-white rounded-xl border border-slate-200 shadow-inner">
+                          <img
+                            src={ultraQrUrl}
+                            alt="Vrai QR Code Officiel WhatsApp"
+                            className="w-[240px] h-[240px] object-contain rounded-lg"
+                            onError={() => {
+                              setQrImageError(true);
+                            }}
+                            onLoad={() => {
+                              setQrImageError(false);
+                            }}
+                          />
+                        </div>
+                      )}
 
-                      <div className="flex items-center justify-between w-full px-2 text-[11px] text-slate-500 font-medium">
-                        <span className="flex items-center gap-1">
-                          <RefreshCw className="w-3 h-3 text-slate-400 animate-spin" />
-                          <span>Expire dans {qrCountdown}s</span>
-                        </span>
-                        <button
-                          type="button"
-                          onClick={refreshQrCode}
-                          className="text-emerald-700 font-bold hover:underline cursor-pointer"
-                        >
-                          Rafraîchir le code
-                        </button>
-                      </div>
+                      {!qrImageError && (
+                        <div className="flex items-center justify-between w-full px-2 text-[11px] text-slate-500 font-medium">
+                          <span className="flex items-center gap-1">
+                            <RefreshCw className="w-3 h-3 text-slate-400 animate-spin" />
+                            <span>Expire dans {qrCountdown}s</span>
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setQrImageError(false);
+                              refreshQrCode();
+                            }}
+                            className="text-emerald-700 font-bold hover:underline cursor-pointer"
+                          >
+                            Rafraîchir le code
+                          </button>
+                        </div>
+                      )}
 
-                      {/* Indicateur de détection automatique */}
-                      <div className="w-full p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-center">
-                        <span className="text-[11px] font-bold text-emerald-800 flex items-center justify-center gap-1.5">
-                          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
-                          <span>Détection automatique active : {instanceStatusText}</span>
+                      {/* Indicateur d'état dynamique (Couleur adaptée selon l'erreur ou le succès) */}
+                      <div className={`w-full p-2.5 rounded-xl border text-center transition-colors ${
+                        instanceStatusText.toLowerCase().includes('error') || qrImageError
+                          ? 'bg-rose-50 border-rose-200 text-rose-800'
+                          : instanceStatusText.toLowerCase().includes('auth')
+                          ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                          : 'bg-amber-50 border-amber-200 text-amber-800'
+                      }`}>
+                        <span className="text-[11px] font-bold flex items-center justify-center gap-1.5">
+                          {instanceStatusText.toLowerCase().includes('error') || qrImageError ? (
+                            <AlertCircle className="w-3.5 h-3.5 text-rose-600 shrink-0" />
+                          ) : (
+                            <span className="w-2 h-2 rounded-full bg-current animate-ping" />
+                          )}
+                          <span>
+                            {instanceStatusText.toLowerCase().includes('error') || qrImageError
+                              ? `Problème : ${instanceErrorDetails || instanceStatusText}`
+                              : `Détection active : ${instanceStatusText}`}
+                          </span>
                         </span>
                       </div>
                     </div>

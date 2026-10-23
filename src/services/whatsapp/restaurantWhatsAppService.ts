@@ -118,7 +118,10 @@ export const restaurantWhatsAppService = {
   getUltraMsgQrUrl(instanceId: string, token: string): string {
     const cleanId = instanceId.trim();
     const cleanToken = token.trim();
-    return `https://api.ultramsg.com/${cleanId}/instance/qr?token=${cleanToken}&t=${Date.now()}`;
+    const baseUrl = (typeof window !== 'undefined' && window.location?.hostname === 'localhost')
+      ? '/api-ultramsg'
+      : 'https://api.ultramsg.com';
+    return `${baseUrl}/${cleanId}/instance/qr?token=${cleanToken}&t=${Date.now()}`;
   },
 
   /**
@@ -128,6 +131,7 @@ export const restaurantWhatsAppService = {
     connected: boolean;
     status: string;
     substatus?: string;
+    errorDetails?: string;
   }> {
     const cleanId = instanceId.trim();
     const cleanToken = token.trim();
@@ -136,23 +140,42 @@ export const restaurantWhatsAppService = {
     }
 
     try {
-      const res = await fetch(`https://api.ultramsg.com/${cleanId}/instance/status?token=${cleanToken}`);
-      if (res.ok) {
-        const data = await res.json();
+      const baseUrl = (typeof window !== 'undefined' && window.location?.hostname === 'localhost')
+        ? '/api-ultramsg'
+        : 'https://api.ultramsg.com';
+      const res = await fetch(`${baseUrl}/${cleanId}/instance/status?token=${cleanToken}`);
+      const data = await res.json().catch(() => null);
+
+      if (res.ok && data) {
         const accountStatus = data?.status?.accountStatus?.status || data?.accountStatus?.status || '';
         const substatus = data?.status?.accountStatus?.substatus || '';
         const isConnected = accountStatus === 'authenticated';
         return {
           connected: isConnected,
-          status: accountStatus,
+          status: accountStatus || 'ready',
           substatus,
         };
+      } else {
+        const rawError = data?.error;
+        let errorDetails = 'Instance introuvable ou inactive sur UltraMsg';
+        if (typeof rawError === 'string') {
+          errorDetails = rawError;
+        } else if (res.status === 404) {
+          errorDetails = 'Instance inexistante ou arrêtée (Erreur 404). Vérifiez l’ID et le Token.';
+        } else if (res.status === 401 || res.status === 403) {
+          errorDetails = 'Token d’instance non autorisé ou expiré.';
+        }
+        return {
+          connected: false,
+          status: 'error',
+          errorDetails,
+        };
       }
-    } catch (err) {
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Erreur réseau';
       console.warn('[restaurantWhatsAppService] Erreur interrogation statut instance:', err);
+      return { connected: false, status: 'error', errorDetails: msg };
     }
-
-    return { connected: false, status: 'error' };
   },
 
   /**
@@ -167,9 +190,12 @@ export const restaurantWhatsAppService = {
     const cleanPhone = formatWhatsAppPhoneNumber(params.to);
     const cleanId = params.instanceId.trim();
     const cleanToken = params.token.trim();
+    const baseUrl = (typeof window !== 'undefined' && window.location?.hostname === 'localhost')
+      ? '/api-ultramsg'
+      : 'https://api.ultramsg.com';
 
     try {
-      const res = await fetch(`https://api.ultramsg.com/${cleanId}/messages/chat`, {
+      const res = await fetch(`${baseUrl}/${cleanId}/messages/chat`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',
@@ -182,14 +208,21 @@ export const restaurantWhatsAppService = {
       });
 
       if (res.ok) {
-        const data = await res.json();
-        if (data.sent === 'true' || data.sent === true || data.id) {
+        const data = await res.json().catch(() => null);
+        if (data && (data.sent === 'true' || data.sent === true || data.id)) {
           return {
             success: true,
             id: String(data.id),
             message: `Message WhatsApp transmis avec succès à ${cleanPhone}.`,
           };
         }
+        if (data?.error) {
+          return { success: false, message: String(data.error) };
+        }
+      } else {
+        const data = await res.json().catch(() => null);
+        const errMsg = data?.error || `Erreur passerelle (HTTP ${res.status})`;
+        return { success: false, message: String(errMsg) };
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Erreur réseau';

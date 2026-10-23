@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { buildExecutiveReportEmail, ExecutiveReportData } from '../services/email/emailTemplates';
 import { restaurantEmailService } from '../services/email/restaurantEmailService';
 
@@ -157,8 +157,14 @@ describe('Passerelle Google Apps Script & Tolérance Réseau', () => {
   });
 
   it('gère le mode passerelle RestoMaster par défaut et le mode dédié restaurant', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      text: async () => 'OK',
+    });
+    global.fetch = fetchMock;
+
     // Mode RestoMaster par défaut
-    const settings = await restaurantEmailService.getEmailSettings('test-resto-unexisting');
+    const settings = await restaurantEmailService.getEmailSettings('');
     expect(settings.providerMode).toBe('restomaster');
     expect(settings.gasWebhookUrl).toBeDefined();
 
@@ -169,7 +175,6 @@ describe('Passerelle Google Apps Script & Tolérance Réseau', () => {
       htmlBody: '<b>Test</b>',
       providerMode: 'restomaster',
     });
-    // fetch étant mocké ou intercepté / no-cors
     expect(sendResult).toHaveProperty('success');
   });
 });

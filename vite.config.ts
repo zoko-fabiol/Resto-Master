@@ -119,6 +119,14 @@ export default defineConfig(({ mode }) => {
       hmr: process.env.DISABLE_HMR !== 'true',
       // Disable file watching when DISABLE_HMR is true to save CPU during agent edits.
       watch: process.env.DISABLE_HMR === 'true' ? null : {},
+      proxy: {
+        '/api-ultramsg': {
+          target: 'https://api.ultramsg.com',
+          changeOrigin: true,
+          secure: true,
+          rewrite: (pathStr: string) => pathStr.replace(/^\/api-ultramsg/, ''),
+        },
+      },
     },
   };
 });
