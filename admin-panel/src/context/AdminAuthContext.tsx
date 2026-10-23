@@ -36,16 +36,16 @@ export const AdminAuthProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const resolveAdminProfile = useCallback(async (user: FirebaseUser): Promise<PlatformAdmin | null> => {
     try {
       const tokenResult = await user.getIdTokenResult(true);
-      const platformRole = tokenResult.claims.platformRole as PlatformRole | undefined;
+      let platformRole = tokenResult.claims.platformRole as PlatformRole | undefined;
 
-      // 1. Accès conditionné STRICTEMENT par le custom claim platformRole
       const validPlatformRoles: PlatformRole[] = ['platform_owner', 'platform_admin', 'support', 'billing'];
-      if (!platformRole || !validPlatformRoles.includes(platformRole)) {
-        console.warn(`[AdminAuthContext] Accès refusé pour ${user.email}: aucun platformRole valide.`);
-        return null;
+
+      // 1. Accès prioritaire par Custom Claim platformRole ou role === 'superadmin'
+      if (!platformRole && tokenResult.claims.role === 'superadmin') {
+        platformRole = 'platform_owner';
       }
 
-      // 2. Détermination réelle de l'état MFA (multi-facteurs enrolés ou claim explicite)
+      // 2. Détermination de l'état MFA (multi-facteurs enrolés ou claim explicite)
       let hasEnrolledMfa = false;
       try {
         hasEnrolledMfa = multiFactor(user).enrolledFactors.length > 0;
@@ -56,7 +56,7 @@ export const AdminAuthProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         hasEnrolledMfa = true;
       }
 
-      // 3. Lecture facultative des métadonnées du document platform_admins
+      // 3. Lecture des métadonnées du document platform_admins (avec fallback rôle si claim absent)
       let adminName = (tokenResult.claims.name as string) || user.displayName || user.email?.split('@')[0] || 'Admin';
       let isActive = tokenResult.claims.active !== false;
       let effectiveMfa = hasEnrolledMfa;
@@ -65,6 +65,9 @@ export const AdminAuthProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         const adminDoc = await getDoc(doc(db, 'platform_admins', user.uid));
         if (adminDoc.exists()) {
           const data = adminDoc.data();
+          if (!platformRole && data.role && validPlatformRoles.includes(data.role as PlatformRole)) {
+            platformRole = data.role as PlatformRole;
+          }
           if (data.active === false) {
             isActive = false;
           }
@@ -76,8 +79,12 @@ export const AdminAuthProvider: React.FC<{ children: React.ReactNode }> = ({ chi
           }
         }
       } catch (err) {
-        // En cas d'erreur de lecture Firestore, les claims de sécurité Auth font foi
         console.warn('[AdminAuthContext] Lecture doc platform_admins ignorée:', err);
+      }
+
+      if (!platformRole || !validPlatformRoles.includes(platformRole)) {
+        console.warn(`[AdminAuthContext] Accès refusé pour ${user.email}: aucun platformRole valide.`);
+        return null;
       }
 
       if (!isActive) {
