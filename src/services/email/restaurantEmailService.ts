@@ -91,6 +91,7 @@ export const restaurantEmailService = {
   async sendEmail(params: {
     restaurantId?: string;
     restaurantName?: string;
+    senderName?: string;
     webhookUrl?: string;
     providerMode?: 'restomaster' | 'custom';
     to: string;
@@ -100,10 +101,12 @@ export const restaurantEmailService = {
   }): Promise<{ success: boolean; message: string }> {
     let targetWebhook = params.webhookUrl;
     let effectiveMode = params.providerMode;
+    let effectiveSender = params.senderName || params.restaurantName;
 
-    if (params.restaurantId && (!targetWebhook || !effectiveMode)) {
+    if (params.restaurantId && (!targetWebhook || !effectiveMode || !effectiveSender)) {
       const config = await this.getEmailSettings(params.restaurantId);
       if (!effectiveMode) effectiveMode = config.providerMode;
+      if (!effectiveSender) effectiveSender = config.senderName;
       if (!targetWebhook && effectiveMode === 'custom') {
         targetWebhook = config.gasWebhookUrl;
       }
@@ -125,6 +128,8 @@ export const restaurantEmailService = {
       };
     }
 
+    const cleanSenderName = (effectiveSender || params.restaurantName || 'Restaurant').trim();
+
     try {
       const response = await fetch(targetWebhook, {
         method: 'POST',
@@ -137,7 +142,8 @@ export const restaurantEmailService = {
           subject: params.subject,
           htmlBody: params.htmlBody,
           textBody: params.textBody || params.subject,
-          restaurantName: params.restaurantName || 'RestoMaster OS',
+          senderName: cleanSenderName,
+          restaurantName: cleanSenderName,
         }),
       });
 
@@ -171,25 +177,26 @@ export const restaurantEmailService = {
   },
 
   /**
-   * Génère le code Google Apps Script personnalisé au restaurant
+   * Génère le code Google Apps Script personnalisé au restaurant.
+   * Le nom de l'expéditeur de tous les e-mails est STRICTEMENT le nom du restaurant.
    */
   generateGoogleAppsScriptCode(restaurantName: string = 'Votre Restaurant'): string {
-    const cleanName = restaurantName.replace(/["\\]/g, '');
+    const cleanName = restaurantName.replace(/["\\]/g, '').trim() || 'Votre Restaurant';
     return `/**
- * RestoMaster OS — Service d'Expédition d'E-mails Restaurant
- * Établissement : ${cleanName}
+ * Service d'Expédition d'E-mails
+ * Restaurant : ${cleanName}
  *
  * Quota 100% GRATUIT : 100 e-mails / jour via votre boîte Gmail personnelle ou Google Workspace.
  *
- * GUIDE D'ACTIVATION EN 4 ÉTAPES CHRONO (2 minutes) :
+ * GUIDE D'ACTIVATION EN 4 ÉTAPES (2 minutes) :
  * 1. Ouvrez dans votre navigateur : https://script.google.com
  * 2. Créez un "Nouveau projet", effacez le contenu du fichier Code.gs et collez l'intégralité de ce script.
  * 3. Enregistrez (Ctrl+S), puis cliquez sur le bouton bleu "Déployer" > "Nouveau déploiement".
  * 4. Cliquez sur l'engrenage "Sélectionner le type" > "Application Web" :
- *    - Description : "RestoMaster Mailer - ${cleanName}"
+ *    - Description : "${cleanName}"
  *    - Exécuter en tant que : "Moi (votre adresse Gmail)"
- *    - Qui a accès : "Tout le monde" (Anyone)  <--- TRÈS IMPORTANT pour autoriser les envois
- * 5. Cliquez sur "Déployer", validez les autorisations Google, copiez l'URL se terminant par /exec et collez-la dans RestoMaster OS !
+ *    - Qui a accès : "Tout le monde" (Anyone)  <--- OBLIGATOIRE pour autoriser les envois
+ * 5. Cliquez sur "Déployer", validez les autorisations Google, copiez l'URL se terminant par /exec et collez-la dans votre interface !
  */
 
 function doPost(e) {
@@ -205,8 +212,15 @@ function doPost(e) {
     var to = payload.to;
     var subject = payload.subject || "Notification — ${cleanName}";
     var htmlBody = payload.htmlBody;
-    var textBody = payload.textBody || "Message envoyé depuis le système de gestion de ${cleanName}.";
-    var senderTitle = payload.restaurantName || "${cleanName} · RestoMaster OS";
+    var textBody = payload.textBody || "Message envoyé depuis le restaurant ${cleanName}.";
+
+    // Le nom de l'expéditeur est STRICTEMENT le nom du restaurant
+    var senderName = "${cleanName}";
+    if (payload.senderName && payload.senderName.toString().trim() !== "") {
+      senderName = payload.senderName.toString().trim();
+    } else if (payload.restaurantName && payload.restaurantName.toString().trim() !== "") {
+      senderName = payload.restaurantName.toString().trim();
+    }
 
     if (!to) {
       return ContentService.createTextOutput(JSON.stringify({
@@ -220,7 +234,7 @@ function doPost(e) {
       subject: subject,
       htmlBody: htmlBody,
       body: textBody,
-      name: senderTitle
+      name: senderName
     });
 
     return ContentService.createTextOutput(JSON.stringify({
@@ -240,7 +254,7 @@ function doPost(e) {
 function doGet(e) {
   return ContentService.createTextOutput(JSON.stringify({
     status: "ok",
-    service: "RestoMaster OS Mailer",
+    service: "Passerelle E-mail Restaurant",
     restaurant: "${cleanName}",
     quotaRemaining: MailApp.getRemainingDailyQuota(),
     timestamp: new Date().toISOString()
@@ -249,3 +263,4 @@ function doGet(e) {
 `;
   },
 };
+

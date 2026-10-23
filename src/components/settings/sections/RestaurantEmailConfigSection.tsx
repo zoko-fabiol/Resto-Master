@@ -197,14 +197,15 @@ export const RestaurantEmailConfigSection: React.FC = () => {
 
   const handleCopyScript = async () => {
     try {
-      const script = restaurantEmailService.generateGoogleAppsScriptCode(restaurantName);
+      const activeName = senderName.trim() || restaurantName;
+      const script = restaurantEmailService.generateGoogleAppsScriptCode(activeName);
       await navigator.clipboard.writeText(script);
       setCopiedScript(true);
       setTimeout(() => setCopiedScript(false), 2500);
       showToast({
         type: 'success',
         title: 'Script Copié dans le Presse-Papier',
-        message: 'Collez ce code dans script.google.com et déployez en Application Web.',
+        message: `Code prêt avec l'expéditeur "${activeName}". Collez-le dans Google Apps Script et déployez en Application Web.`,
       });
     } catch {
       setCopiedScript(false);
@@ -427,6 +428,7 @@ export const RestaurantEmailConfigSection: React.FC = () => {
       const res = await restaurantEmailService.sendEmail({
         restaurantId,
         restaurantName,
+        senderName: senderName.trim() || restaurantName,
         providerMode,
         webhookUrl: webhookUrl.trim(),
         to: testRecipient.trim(),

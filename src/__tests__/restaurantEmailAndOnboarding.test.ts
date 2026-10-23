@@ -147,10 +147,11 @@ describe('Génération des Rapports Directeur & Clôture Z', () => {
 });
 
 describe('Passerelle Google Apps Script & Tolérance Réseau', () => {
-  it('fournit le script personnalisé prêt pour le restaurant', () => {
+  it('fournit le script personnalisé prêt pour le restaurant avec nom d\'expéditeur exclusif', () => {
     const code = restaurantEmailService.generateGoogleAppsScriptCode('Le Grand Gourmet');
     expect(code).toContain('function doPost(e)');
-    expect(code).toContain('Le Grand Gourmet');
+    expect(code).toContain('var senderName = "Le Grand Gourmet";');
+    expect(code).toContain('name: senderName');
     expect(code).toContain('MailApp.sendEmail');
     expect(code).toContain('https://script.google.com');
   });
