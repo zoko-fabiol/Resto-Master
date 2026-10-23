@@ -3423,7 +3423,7 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
   const addTerminal = async (terminalData: Omit<Terminal, 'id'>) => {
     const code = `TRM-${generateCsprngPairingToken()}`;
-    const newTerm: Terminal = {
+    const rawTerm: Terminal = {
       ...terminalData,
       id: generateSecureId('term'),
       pairingCode: terminalData.pairingCode || code,
@@ -3431,6 +3431,7 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       active: terminalData.active ?? true,
       allowedFeatures: terminalData.allowedFeatures || ['all'],
     };
+    const newTerm: Terminal = JSON.parse(JSON.stringify(rawTerm));
     setTerminals((prev) => [...prev, newTerm]);
     try {
       await configFirestoreService.saveTerminal(newTerm);
@@ -3454,7 +3455,7 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const updateTerminal = async (id: string, updates: Partial<Terminal>) => {
     const existing = terminals.find((t) => t.id === id);
     if (!existing) return;
-    const updated: Terminal = { ...existing, ...updates };
+    const updated: Terminal = JSON.parse(JSON.stringify({ ...existing, ...updates }));
     setTerminals((prev) => prev.map((t) => (t.id === id ? updated : t)));
     try {
       await configFirestoreService.saveTerminal(updated);

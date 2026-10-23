@@ -416,15 +416,18 @@ export const HardwareAndSecuritySection: React.FC<Props> = ({ subTab }) => {
                 onSubmit={async (e) => {
                   e.preventDefault();
                   if (!newTermName.trim()) return;
-                  await addTerminal({
+                  const payload: Parameters<typeof addTerminal>[0] = {
                     name: newTermName.trim(),
                     type: newTermType as any,
                     assignedRole: newTermRole,
-                    kdsStation: newTermType === 'kds_cuisine' ? newTermStation : undefined,
                     outletId: selectedOutletId || '',
                     active: true,
                     allowedFeatures: ['all'],
-                  });
+                  };
+                  if (newTermType === 'kds_cuisine' && newTermStation) {
+                    payload.kdsStation = newTermStation;
+                  }
+                  await addTerminal(payload);
                   setAddTerminalModalOpen(false);
                 }}
                 className="p-6 space-y-4"

@@ -57,7 +57,8 @@ export const configFirestoreService = {
   async saveTerminal(terminal: Terminal): Promise<void> {
     try {
       const docRef = doc(db, 'terminals', terminal.id);
-      await setDoc(docRef, terminal, { merge: true });
+      const clean = JSON.parse(JSON.stringify(terminal));
+      await setDoc(docRef, clean, { merge: true });
     } catch (err) {
       console.error('Erreur saveTerminal Firestore:', err);
       throw err;
@@ -95,7 +96,8 @@ export const configFirestoreService = {
   async savePeripheral(peripheral: Peripheral): Promise<void> {
     try {
       const docRef = doc(db, 'peripherals', peripheral.id);
-      await setDoc(docRef, peripheral, { merge: true });
+      const clean = JSON.parse(JSON.stringify(peripheral));
+      await setDoc(docRef, clean, { merge: true });
     } catch (err) {
       console.error('Erreur savePeripheral Firestore:', err);
       throw err;
