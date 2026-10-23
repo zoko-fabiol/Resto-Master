@@ -175,6 +175,7 @@ export interface Peripheral {
   port?: number;
   terminalId?: string;
   outletId: string;
+  restaurantId?: string;
   active: boolean;
   paperWidth?: '58mm' | '80mm';
   charactersPerLine?: 32 | 42 | 48;

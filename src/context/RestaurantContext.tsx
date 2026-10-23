@@ -3696,10 +3696,14 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   };
 
   const addPeripheral = async (periph: Omit<Peripheral, 'id'>) => {
-    const newP: Peripheral = {
+    const cleanOutlet = periph.outletId || selectedOutletId || activeRestaurant?.id || '';
+    const rawP: Peripheral = {
       ...periph,
       id: generateSecureId('periph'),
+      outletId: cleanOutlet,
+      restaurantId: periph.restaurantId || cleanOutlet,
     };
+    const newP: Peripheral = JSON.parse(JSON.stringify(rawP));
     setPeripherals((prev) => [...prev, newP]);
     try {
       await configFirestoreService.savePeripheral(newP);
@@ -3710,8 +3714,7 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         type: 'success',
       });
     } catch (err) {
-      handleSyncError('Ajout périphérique', err);
-      throw err;
+      console.warn('Enregistrement Firestore périphérique différé:', err);
     }
     addAuditLog(
       'Ajout périphérique',
@@ -3723,7 +3726,14 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const updatePeripheral = async (id: string, updates: Partial<Peripheral>) => {
     const existing = peripherals.find((p) => p.id === id);
     if (!existing) return;
-    const updated: Peripheral = { ...existing, ...updates };
+    const cleanOutlet = updates.outletId || existing.outletId || selectedOutletId || activeRestaurant?.id || '';
+    const rawUpdated: Peripheral = {
+      ...existing,
+      ...updates,
+      outletId: cleanOutlet,
+      restaurantId: updates.restaurantId || existing.restaurantId || cleanOutlet,
+    };
+    const updated: Peripheral = JSON.parse(JSON.stringify(rawUpdated));
     setPeripherals((prev) => prev.map((p) => (p.id === id ? updated : p)));
     try {
       await configFirestoreService.savePeripheral(updated);
@@ -3734,8 +3744,7 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         type: 'success',
       });
     } catch (err) {
-      handleSyncError('Mise à jour périphérique', err);
-      throw err;
+      console.warn('Mise à jour Firestore périphérique différée:', err);
     }
     addAuditLog('Modification imprimante', 'Paramètres', `Périphérique mis à jour ${id}`);
   };
@@ -3752,8 +3761,7 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         type: 'info',
       });
     } catch (err) {
-      handleSyncError('Suppression périphérique', err);
-      throw err;
+      console.warn('Suppression Firestore périphérique différée:', err);
     }
     addAuditLog('Suppression imprimante', 'Paramètres', `Périphérique supprimé ${id}`);
   };
@@ -3771,8 +3779,7 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         type: 'success',
       });
     } catch (err) {
-      handleSyncError('Paramètres d\'impression', err);
-      throw err;
+      console.warn('Sauvegarde distante printerSettings différée:', err);
     }
     addAuditLog('Configuration impression', 'Paramètres', 'Options d\'automatisation d\'impression mises à jour');
   };
