@@ -136,8 +136,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (fbUser && fbUser.email) {
         try {
-          // Lecture des Custom Claims du jeton d'authentification
-          const tokenResult = await fbUser.getIdTokenResult();
+          // Lecture des Custom Claims du jeton d'authentification (avec rafraîchissement forcé)
+          const tokenResult = await fbUser.getIdTokenResult(true);
           const claims = tokenResult.claims || {};
           const claimRole = claims.role as UserRole | undefined;
           const platformRole = claims.platformRole as string | undefined;
@@ -627,13 +627,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           { merge: true }
         );
 
-        await updateDoc(
+        await setDoc(
           doc(db, 'users', currentUser.id),
           {
             hasPin: true,
             pinCode: deleteField(),
             updatedAt: new Date().toISOString(),
-          }
+          },
+          { merge: true }
         );
 
         setCurrentUser((prev) => ({

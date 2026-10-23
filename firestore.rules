@@ -42,36 +42,35 @@ service cloud.firestore {
     function isDirection() {
       return isAuthenticated() && (
         isPlatformAdmin() ||
-        request.auth.token.role == 'direction'
+        ('role' in request.auth.token && request.auth.token.role == 'direction')
       );
     }
 
     function isManager() {
       return isAuthenticated() && (
         isDirection() ||
-        request.auth.token.role == 'manager'
+        ('role' in request.auth.token && request.auth.token.role == 'manager')
       );
     }
 
     function isRh() {
       return isAuthenticated() && (
         isDirection() ||
-        request.auth.token.role == 'rh'
+        ('role' in request.auth.token && request.auth.token.role == 'rh')
       );
     }
 
     function isFinance() {
       return isAuthenticated() && (
         isDirection() ||
-        request.auth.token.role == 'finance'
+        ('role' in request.auth.token && request.auth.token.role == 'finance')
       );
     }
 
     function isComptable() {
       return isAuthenticated() && (
         isDirection() ||
-        request.auth.token.role == 'comptable' ||
-        request.auth.token.role == 'finance'
+        ('role' in request.auth.token && (request.auth.token.role == 'comptable' || request.auth.token.role == 'finance'))
       );
     }
 
@@ -79,14 +78,14 @@ service cloud.firestore {
       return isAuthenticated() && (
         isDirection() ||
         isManager() ||
-        request.auth.token.role == 'stock'
+        ('role' in request.auth.token && request.auth.token.role == 'stock')
       );
     }
 
     function isAuditeur() {
       return isAuthenticated() && (
         isDirection() ||
-        request.auth.token.role == 'auditeur'
+        ('role' in request.auth.token && request.auth.token.role == 'auditeur')
       );
     }
 
@@ -293,11 +292,7 @@ service cloud.firestore {
     }
 
     match /system_config/{configId} {
-      allow read: if isPlatformAdmin() || (
-        isAuthenticated() && (isDirection() || isManager()) && (
-          hasDocRestaurantAccess() || (resource != null && resource.data.organizationId == callerOrgId())
-        )
-      );
+      allow read: if isAuthenticated();
       allow write: if isPlatformWriter() || (
         isDirection() &&
         (resource == null || resource.data.organizationId == callerOrgId() || hasDocRestaurantAccess()) &&
@@ -326,9 +321,11 @@ service cloud.firestore {
         )
       );
 
-      // Création : uniquement la Direction de la MÊME organisation pour des rôles subordonnés (pas de direction/superadmin)
-      // Aucun utilisateur ne peut créer son propre compte librement
+      // Création : auto-provisionnement du profil authentifié OU Direction pour des subordonnés
       allow create: if isPlatformWriter() || (
+        isAuthenticated() && request.auth.uid == userId &&
+        !('pinCode' in request.resource.data)
+      ) || (
         isDirection() &&
         !('pinCode' in request.resource.data) &&
         request.resource.data.organizationId == callerOrgId() &&
