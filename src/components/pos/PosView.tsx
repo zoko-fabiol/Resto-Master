@@ -4,6 +4,7 @@ import { useToast } from '../../context/ToastContext';
 import { useAuth } from '../../context/AuthContext';
 import { Product, OrderItem, Order } from '../../types/restaurant';
 import { formatCurrency } from '../../lib/utils';
+import { calculateCameroonVatFromHt } from '../../../shared/fiscal/cameroonFiscal';
 import { printerService } from '../../services/printing/printerService';
 import {
   Search,
@@ -462,11 +463,17 @@ export const PosView: React.FC<PosViewProps> = ({ initialTableId, onOpenPayment,
   };
 
   // Calculations
-  const rawSubtotal = cart.reduce((sum, i) => sum + i.unitPrice * i.quantity, 0);
+  const rawSubtotal = Math.round(cart.reduce((sum, i) => sum + i.unitPrice * i.quantity, 0));
   const discountAmount = Math.round((rawSubtotal * discountPercent) / 100);
-  const subtotalAfterDiscount = rawSubtotal - discountAmount;
-  const taxAmount = Math.round((subtotalAfterDiscount * settings.taxRate) / 100);
-  const grandTotal = subtotalAfterDiscount + taxAmount;
+  const subtotalAfterDiscount = Math.max(0, rawSubtotal - discountAmount);
+  const vatResult = calculateCameroonVatFromHt(
+    subtotalAfterDiscount,
+    settings.baseVatRate || 17.5,
+    10,
+    !settings.assujettiTVA
+  );
+  const taxAmount = vatResult.totalTax;
+  const grandTotal = vatResult.totalTTC;
 
   // Selected table object
   const currentTable = tables.find((t) => t.id === selectedTableId);

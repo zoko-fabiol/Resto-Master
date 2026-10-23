@@ -1,5 +1,6 @@
 import { OrderStatus, TableStatus, ReservationStatus, UserRole } from '../types/restaurant';
 import { getDoualaDateKey } from './timezone';
+import { calculateCameroonVatFromHt } from '../../shared/fiscal/cameroonFiscal';
 
 export function formatCurrency(amount: number, currency: string = 'FCFA'): string {
   if (isNaN(amount) || amount === null || amount === undefined) return `0 ${currency}`;
@@ -196,19 +197,14 @@ export function formatLegalInvoiceNotice(amount: number, currency = 'FRANCS CFA'
 
 // Calcul fiscal Cameroun (TVA 17.5% + 10% CAC = 19.25%)
 export function calculateCameroonTaxes(subtotalHt: number, totalRate: number = 19.25) {
-  const baseHt = Math.max(0, Math.round(subtotalHt));
   const vatRate = totalRate > 0 ? totalRate / 1.1 : 17.5;
-  const tvaBase = Math.round((baseHt * vatRate) / 100);
-  const cacBase = Math.round((tvaBase * 10) / 100);
-  const combinedTax = tvaBase + cacBase;
-  const totalTtc = baseHt + combinedTax;
-
+  const res = calculateCameroonVatFromHt(subtotalHt, vatRate, 10);
   return {
-    subtotalHt: baseHt,
-    tvaBase,
-    cacBase,
-    combinedTax,
-    totalTtc,
+    subtotalHt: res.baseHT,
+    tvaBase: res.vatAmount,
+    cacBase: res.cacAmount,
+    combinedTax: res.totalTax,
+    totalTtc: res.totalTTC,
   };
 }
 
