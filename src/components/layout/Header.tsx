@@ -86,7 +86,7 @@ export const Header: React.FC<HeaderProps> = ({
   openUserGuide,
   openOnboarding,
 }) => {
-  const { currentUser, lockSession, logout } = useAuth();
+  const { currentUser, isSuperadmin, lockSession, logout } = useAuth();
   const confirm = useConfirm();
   const {
     notifications,
@@ -591,7 +591,7 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
 
           {/* Assistant de Mise en Service / Prêt à Livrer Indicator */}
-          {openOnboarding && currentUser.role === 'superadmin' && (
+          {openOnboarding && (isSuperadmin || currentUser.role === 'superadmin' || currentUser.role === 'direction') && (
             <button
               type="button"
               onClick={openOnboarding}

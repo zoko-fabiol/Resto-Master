@@ -127,10 +127,10 @@ export const AdminCenterView: React.FC = () => {
   const [isOnboardingOpen, setIsOnboardingOpen] = useState(false);
 
   const handleToggleConfigLock = async () => {
-    if (!isTrueSuperAdmin) {
+    if (!isSuperAdmin) {
       showToast({
         title: 'Action Réservée',
-        message: 'Seul le Super-Administrateur peut modifier le verrouillage de la plateforme.',
+        message: 'Seul le Super-Administrateur ou la Direction peut modifier le verrouillage de la plateforme.',
         type: 'warning',
       });
       return;
@@ -876,14 +876,14 @@ export const AdminCenterView: React.FC = () => {
           <div className="flex items-center gap-2 shrink-0">
             <button
               type="button"
-              disabled={!isTrueSuperAdmin}
-              onClick={() => isTrueSuperAdmin && setIsOnboardingOpen(true)}
+              disabled={!isSuperAdmin}
+              onClick={() => isSuperAdmin && setIsOnboardingOpen(true)}
               className="px-3.5 py-2 rounded-xl bg-white border border-emerald-300 text-emerald-900 hover:bg-emerald-100 font-bold text-xs transition cursor-pointer shadow-2xs"
             >
               Revoir l'Audit & Fiche de Mise en Service
             </button>
 
-            {isTrueSuperAdmin && (
+            {isSuperAdmin && (
               <button
                 type="button"
                 onClick={handleToggleConfigLock}
@@ -918,9 +918,9 @@ export const AdminCenterView: React.FC = () => {
 
           <button
             type="button"
-            disabled={!isTrueSuperAdmin}
-            onClick={() => isTrueSuperAdmin && setIsOnboardingOpen(true)}
-            className={`px-4 py-2.5 rounded-xl text-white font-black text-xs transition flex items-center gap-2 shrink-0 shadow-md active:scale-98 ${isTrueSuperAdmin ? 'bg-slate-900 hover:bg-slate-800 cursor-pointer' : 'bg-slate-400 cursor-not-allowed'}`}
+            disabled={!isSuperAdmin}
+            onClick={() => isSuperAdmin && setIsOnboardingOpen(true)}
+            className={`px-4 py-2.5 rounded-xl text-white font-black text-xs transition flex items-center gap-2 shrink-0 shadow-md active:scale-98 ${isSuperAdmin ? 'bg-slate-900 hover:bg-slate-800 cursor-pointer' : 'bg-slate-400 cursor-not-allowed'}`}
           >
             <Rocket className="w-4 h-4 text-amber-400" />
             <span>Lancer l'Assistant (9 étapes)</span>
