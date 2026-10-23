@@ -936,4 +936,66 @@ export const adminPlatformService = {
   async exportTenantData(params: { orgId: string; reason: string }): Promise<any> {
     return { success: true, message: 'Export généré.' };
   },
+
+  async setUserAccess(params: {
+    orgId: string;
+    targetUserId: string;
+    tabs: string[];
+    permissions?: Record<
+      string,
+      {
+        view?: boolean;
+        create?: boolean;
+        edit?: boolean;
+        delete?: boolean;
+        validate?: boolean;
+        export?: boolean;
+      }
+    >;
+    assignedTableId?: string;
+    reason: string;
+    ticketNumber?: string;
+  }): Promise<any> {
+    const fn = httpsCallable(functions, 'setUserAccess');
+    const res = await fn(params);
+    return res.data;
+  },
+
+  async setTenantRule(params: {
+    orgId: string;
+    ruleKey: string;
+    value: boolean | string | number;
+    delegable?: boolean;
+    reason: string;
+    ticketNumber?: string;
+  }): Promise<any> {
+    const fn = httpsCallable(functions, 'setTenantRule');
+    const res = await fn(params);
+    return res.data;
+  },
+
+  subscribeToTenantUserAccessList(
+    orgId: string,
+    callback: (accessList: any[]) => void
+  ): Unsubscribe {
+    if (!orgId) {
+      callback([]);
+      return () => {};
+    }
+    const collRef = collection(db, 'tenants', orgId, 'userAccess');
+    return onSnapshot(
+      collRef,
+      (snapshot) => {
+        const list = snapshot.docs.map((docSnap) => ({
+          uid: docSnap.id,
+          ...docSnap.data(),
+        }));
+        callback(list);
+      },
+      (err) => {
+        console.warn(`[adminPlatformService] Erreur écoute userAccess pour ${orgId}:`, err);
+        callback([]);
+      }
+    );
+  },
 };

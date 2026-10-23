@@ -31,6 +31,7 @@ import { DiagnosticsTab } from './tabs/DiagnosticsTab';
 import { AuditTab } from './tabs/AuditTab';
 import { SupportTab } from './tabs/SupportTab';
 import { DangerZoneTab } from './tabs/DangerZoneTab';
+import { ConfigurationTab } from './tabs/ConfigurationTab';
 import { ProfileApplicatorModal } from '../config/ProfileApplicatorModal';
 import { SetupWizardModal } from '../config/SetupWizardModal';
 
@@ -101,6 +102,7 @@ export const TenantDetailView: React.FC<TenantDetailViewProps> = ({ orgId, onBac
 
   const tabs = [
     { id: 'features', label: 'Matrice des Droits & Modules', icon: Sliders },
+    { id: 'configuration', label: 'Configuration & Délégation', icon: Sliders },
     { id: 'overview', label: 'Fiche Société & Contacts', icon: Building2 },
     { id: 'users', label: 'Comptes Collaborateurs', icon: Users },
     { id: 'outlets', label: 'Succursales & Points de Vente', icon: Store },
@@ -218,8 +220,11 @@ export const TenantDetailView: React.FC<TenantDetailViewProps> = ({ orgId, onBac
             onOpenSetupWizard={() => setShowWizardModal(true)}
           />
         )}
+        {activeTab === 'configuration' && (
+          <ConfigurationTab tenant={tenant} entitlements={entitlements} />
+        )}
         {activeTab === 'overview' && <OverviewTab tenant={tenant} />}
-        {activeTab === 'users' && <UsersTab tenant={tenant} />}
+        {activeTab === 'users' && <UsersTab tenant={tenant} entitlements={entitlements} />}
         {activeTab === 'outlets' && <OutletsTab tenant={tenant} />}
         {activeTab === 'limits' && <LimitsTab tenant={tenant} />}
         {activeTab === 'billing' && <BillingTab tenant={tenant} />}

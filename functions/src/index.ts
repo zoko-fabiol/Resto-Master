@@ -34,6 +34,8 @@ import {
   handleResetOwnerPassword,
   handleChangeTenantPlan,
   handleExportTenantData,
+  handleSetUserAccess,
+  handleSetTenantRule,
 } from './modules/platformAdmin.js';
 
 const FUNCTION_OPTIONS = {
@@ -108,6 +110,8 @@ export const forceSignOut = onCall(FUNCTION_OPTIONS, handleForceSignOut);
 export const resetOwnerPassword = onCall(FUNCTION_OPTIONS, handleResetOwnerPassword);
 export const changeTenantPlan = onCall(FUNCTION_OPTIONS, handleChangeTenantPlan);
 export const exportTenantData = onCall(FUNCTION_OPTIONS, handleExportTenantData);
+export const setUserAccess = onCall(FUNCTION_OPTIONS, handleSetUserAccess);
+export const setTenantRule = onCall(FUNCTION_OPTIONS, handleSetTenantRule);
 
 // 14. Catalogue & Tarifs Officiels RestoMaster OS (Phase 2)
 import { handleComputeQuote, handleUpdateCatalog } from './modules/catalog.js';

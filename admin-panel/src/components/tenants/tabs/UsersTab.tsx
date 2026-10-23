@@ -11,20 +11,24 @@ import {
   RefreshCw,
   Send,
   Lock,
+  Sliders,
 } from 'lucide-react';
-import { Tenant } from '@shared';
+import { Tenant, TenantEntitlements } from '@shared';
 import { adminPlatformService } from '../../../services/adminPlatformService';
+import { UserAccessEditorModal } from './UserAccessEditorModal';
 
 interface UsersTabProps {
   tenant: Tenant;
+  entitlements?: TenantEntitlements | null;
 }
 
-export const UsersTab: React.FC<UsersTabProps> = ({ tenant }) => {
+export const UsersTab: React.FC<UsersTabProps> = ({ tenant, entitlements = null }) => {
   const [users, setUsers] = useState<any[]>([]);
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState('all');
   const [isLoading, setIsLoading] = useState(true);
   const [resettingUid, setResettingUid] = useState<string | null>(null);
+  const [editingUser, setEditingUser] = useState<any | null>(null);
 
   useEffect(() => {
     setIsLoading(true);
@@ -189,15 +193,26 @@ export const UsersTab: React.FC<UsersTabProps> = ({ tenant }) => {
                     </td>
 
                     <td className="py-3 px-4 text-right">
-                      <button
-                        onClick={() => handleTriggerPasswordReset(u.email)}
-                        disabled={resettingUid === u.email}
-                        title="Déclencher un lien de réinitialisation"
-                        className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-all inline-flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-                      >
-                        <Send className="w-3 h-3 text-amber-400" />
-                        <span>Réinitialiser MDP</span>
-                      </button>
+                      <div className="flex items-center justify-end gap-1.5">
+                        <button
+                          onClick={() => setEditingUser(u)}
+                          title="Gérer les onglets et permissions de cet utilisateur"
+                          className="px-2.5 py-1.5 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 text-amber-400 border border-amber-500/30 transition-all inline-flex items-center gap-1.5 cursor-pointer font-bold"
+                        >
+                          <Sliders className="w-3 h-3" />
+                          <span>Droits & Accès</span>
+                        </button>
+
+                        <button
+                          onClick={() => handleTriggerPasswordReset(u.email)}
+                          disabled={resettingUid === u.email}
+                          title="Déclencher un lien de réinitialisation"
+                          className="px-2 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-all inline-flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                        >
+                          <Send className="w-3 h-3 text-slate-400" />
+                          <span className="hidden sm:inline">MDP</span>
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 );
@@ -223,6 +238,20 @@ export const UsersTab: React.FC<UsersTabProps> = ({ tenant }) => {
           </table>
         </div>
       </div>
+
+      {/* Modale d'édition chirurgicale des droits */}
+      {editingUser && (
+        <UserAccessEditorModal
+          isOpen={Boolean(editingUser)}
+          onClose={() => setEditingUser(null)}
+          tenant={tenant}
+          user={editingUser}
+          entitlements={entitlements}
+          onSaved={() => {
+            setEditingUser(null);
+          }}
+        />
+      )}
     </div>
   );
 };

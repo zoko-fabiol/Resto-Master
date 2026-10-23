@@ -447,161 +447,34 @@ export const RestaurantEmailConfigSection: React.FC = () => {
   return (
     <div className="space-y-6">
       
-      {/* 1. En-tête Principal & État de la Passerelle */}
-      <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-indigo-950 text-white p-6 rounded-3xl shadow-xl border border-slate-800 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+      {/* 1. État de la Passerelle Gérée par RestoMaster */}
+      <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-indigo-950 text-white p-5 rounded-2xl border border-slate-800 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-md">
         <div className="flex items-center gap-3.5">
-          <div className="w-12 h-12 rounded-2xl bg-amber-500/20 border border-amber-500/40 text-amber-400 flex items-center justify-center font-black shadow-inner shrink-0">
-            <Mail className="w-6 h-6" />
+          <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center font-black shrink-0">
+            <Mail className="w-5 h-5" />
           </div>
           <div>
             <div className="flex items-center gap-2 flex-wrap">
-              <h2 className="text-base sm:text-lg font-black tracking-tight">
-                Passerelle E-mails Google Apps Script (Restaurant)
+              <h2 className="text-sm font-black text-white">
+                Passerelle E-mails & Notifications Restaurant
               </h2>
-              <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-amber-400/20 text-amber-300 border border-amber-400/30">
-                100 E-mails/Jour Gratuits
+              <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                Gérée par RestoMaster
               </span>
             </div>
-            <p className="text-xs text-slate-300 mt-1 max-w-2xl leading-relaxed">
-              Expédiez automatiquement les alertes de seuil de stock, les confirmations de table, les reçus numériques de caisse et les rapports Z avec votre propre boîte Gmail ou Google Workspace, sans abonnement payant ni carte bancaire.
+            <p className="text-xs text-slate-300 mt-0.5 max-w-2xl">
+              L'infrastructure d'envoi est automatiquement supervisée par la plateforme. Renseignez ci-dessous les adresses de destination des collaborateurs pour les alertes de stock, les rapports Z et les bilans de direction.
             </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-2 self-end md:self-auto shrink-0">
-          {webhookUrl ? (
-            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-xs font-bold">
-              <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-              <span>Passerelle Active</span>
-            </div>
-          ) : (
-            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500/20 border border-amber-500/40 text-amber-300 text-xs font-bold">
-              <AlertCircle className="w-4 h-4 text-amber-400" />
-              <span>Passerelle Plateforme par Défaut</span>
-            </div>
-          )}
+        <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 text-xs font-bold shrink-0">
+          <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+          <span>Passerelle Active</span>
         </div>
       </div>
 
-      {/* 2. Bloc de Configuration Webhook & Copie du Script */}
-      <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-xs space-y-6">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
-          <div>
-            <h3 className="text-sm font-black text-slate-900 flex items-center gap-2">
-              <Zap className="w-4 h-4 text-amber-500" />
-              1. Déploiement du Script Google Apps Script
-            </h3>
-            <p className="text-xs text-slate-500 mt-0.5">
-              Copiez ce script personnalisé avec l'identité de <strong>{restaurantName}</strong> et publiez-le sur votre compte Google.
-            </p>
-          </div>
-
-          <button
-            type="button"
-            onClick={handleCopyScript}
-            className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition shadow-xs cursor-pointer shrink-0"
-          >
-            {copiedScript ? (
-              <>
-                <Check className="w-4 h-4 text-emerald-400" />
-                <span>Script Copié !</span>
-              </>
-            ) : (
-              <>
-                <Copy className="w-4 h-4 text-amber-400" />
-                <span>Copier le Code Google Apps Script</span>
-              </>
-            )}
-          </button>
-        </div>
-
-        {/* 4 Étapes Visuelles de Mise en Service */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
-          <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 space-y-1">
-            <span className="text-[10px] font-black uppercase text-amber-600 tracking-wider">Étape 1</span>
-            <div className="font-bold text-slate-900">Ouvrez Google Script</div>
-            <p className="text-[11px] text-slate-500">
-              Allez sur <a href="https://script.google.com" target="_blank" rel="noreferrer" className="text-blue-600 underline font-bold">script.google.com</a> et créez un « Nouveau projet ».
-            </p>
-          </div>
-
-          <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 space-y-1">
-            <span className="text-[10px] font-black uppercase text-amber-600 tracking-wider">Étape 2</span>
-            <div className="font-bold text-slate-900">Collez le Code</div>
-            <p className="text-[11px] text-slate-500">
-              Effacez le contenu de <code>Code.gs</code>, collez le script copié et enregistrez (<kbd>Ctrl+S</kbd>).
-            </p>
-          </div>
-
-          <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 space-y-1">
-            <span className="text-[10px] font-black uppercase text-amber-600 tracking-wider">Étape 3</span>
-            <div className="font-bold text-slate-900">Déployez en Web App</div>
-            <p className="text-[11px] text-slate-500">
-              Cliquez sur <strong>Déployer &gt; Nouveau déploiement</strong>, type <strong>Application Web</strong>.
-            </p>
-          </div>
-
-          <div className="p-3.5 rounded-2xl bg-amber-50/80 border border-amber-200 space-y-1">
-            <span className="text-[10px] font-black uppercase text-amber-700 tracking-wider">Étape 4 (Cruciale)</span>
-            <div className="font-bold text-amber-950">Accès : Tout le monde</div>
-            <p className="text-[11px] text-amber-800">
-              Réglez <em>"Qui a accès"</em> sur <strong>"Tout le monde" (Anyone)</strong>, puis collez l'URL ci-dessous.
-            </p>
-          </div>
-        </div>
-
-        {/* Champ Saisie Webhook & Nom Expéditeur */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
-          <div className="md:col-span-2 space-y-1.5">
-            <label className="text-xs font-bold text-slate-700 block">
-              URL du Webhook Google Apps Script du Restaurant :
-            </label>
-            <input
-              type="text"
-              value={webhookUrl}
-              onChange={(e) => setWebhookUrl(e.target.value)}
-              placeholder="https://script.google.com/macros/s/AKfycb.../exec"
-              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-mono text-slate-900 bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-amber-500/20"
-            />
-          </div>
-
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold text-slate-700 block">
-              Nom d'Expéditeur Affiché :
-            </label>
-            <input
-              type="text"
-              value={senderName}
-              onChange={(e) => setSenderName(e.target.value)}
-              placeholder={restaurantName}
-              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-medium text-slate-900 bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-amber-500/20"
-            />
-          </div>
-        </div>
-
-        <div className="flex justify-end pt-2">
-          <button
-            type="button"
-            disabled={saving}
-            onClick={handleSaveSettings}
-            className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 disabled:bg-slate-400 text-slate-950 font-black text-xs shadow-md shadow-amber-500/20 transition cursor-pointer"
-          >
-            {saving ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin" />
-                <span>Enregistrement en cours...</span>
-              </>
-            ) : (
-              <>
-                <Check className="w-4 h-4" />
-                <span>Enregistrer la Passerelle E-mail</span>
-              </>
-            )}
-          </button>
-        </div>
-      </div>
-
-      {/* 3. Déclencheurs Automatiques Métier */}
+      {/* 2. Déclencheurs Automatiques Métier */}
       <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-xs space-y-5">
         <div className="border-b border-slate-100 pb-3">
           <h3 className="text-sm font-black text-slate-900 flex items-center gap-2">
@@ -797,6 +670,27 @@ export const RestaurantEmailConfigSection: React.FC = () => {
             </div>
           </div>
 
+        </div>
+
+        <div className="flex justify-end pt-3 border-t border-slate-100">
+          <button
+            type="button"
+            disabled={saving}
+            onClick={handleSaveSettings}
+            className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 disabled:bg-slate-400 text-slate-950 font-black text-xs shadow-md shadow-amber-500/20 transition cursor-pointer"
+          >
+            {saving ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <span>Enregistrement en cours...</span>
+              </>
+            ) : (
+              <>
+                <Check className="w-4 h-4" />
+                <span>Enregistrer les Préférences E-mail</span>
+              </>
+            )}
+          </button>
         </div>
       </div>
 

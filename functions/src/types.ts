@@ -342,3 +342,32 @@ export interface ExportTenantDataRequest {
   orgId: string;
   reason: string;
 }
+
+export interface SetUserAccessRequest {
+  orgId: string;
+  targetUserId: string;
+  tabs: string[];
+  permissions?: Record<
+    string,
+    {
+      view?: boolean;
+      create?: boolean;
+      edit?: boolean;
+      delete?: boolean;
+      validate?: boolean;
+      export?: boolean;
+    }
+  >;
+  assignedTableId?: string;
+  reason: string;
+  ticketNumber?: string;
+}
+
+export interface SetTenantRuleRequest {
+  orgId: string;
+  ruleKey: string;
+  value: boolean | string | number;
+  delegable?: boolean;
+  reason: string;
+  ticketNumber?: string;
+}

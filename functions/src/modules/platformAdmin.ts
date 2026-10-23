@@ -19,9 +19,12 @@ import {
   ResetOwnerPasswordRequest,
   ChangeTenantPlanRequest,
   ExportTenantDataRequest,
+  SetUserAccessRequest,
+  SetTenantRuleRequest,
 } from '../types.js';
 import { resolveEntitlements } from '../shared/catalog/resolver.js';
 import { PackId, RestaurantTypeId } from '../shared/catalog/packs.js';
+import { TAB_CATALOG, OPERATION_RULES } from '../shared/types/accessCatalog.js';
 
 // Matrice des profils de configuration intégrée pour exécution serveur sécurisée
 const SERVER_PROFILES: Record<
@@ -1142,4 +1145,143 @@ export async function handleExportTenantData(
   });
 
   return { success: true, exportId, exportRecord };
+}
+
+// ---------------------------------------------------------------------------
+// 15. Définition chirurgicale des accès d'un utilisateur (setUserAccess)
+// ---------------------------------------------------------------------------
+export async function handleSetUserAccess(
+  request: CallableRequest<SetUserAccessRequest>
+) {
+  const caller = getCallerPlatformContext(request);
+  assertPlatformRole(caller, ['platform_owner', 'platform_admin']);
+
+  const { orgId, targetUserId, tabs, permissions, assignedTableId, reason, ticketNumber } =
+    request.data || {};
+
+  if (!orgId || !targetUserId || !reason || reason.trim().length < 5) {
+    throw new HttpsError(
+      'invalid-argument',
+      'orgId, targetUserId et motif explicite (min. 5 caractères) requis.'
+    );
+  }
+
+  // Validation d'entrée contre le catalogue des onglets
+  const validTabIds = new Set(TAB_CATALOG.map((t) => t.id as string));
+  for (const t of tabs || []) {
+    if (!validTabIds.has(t)) {
+      throw new HttpsError(
+        'invalid-argument',
+        `L'onglet "${t}" n'existe pas dans le catalogue officiel.`
+      );
+    }
+  }
+
+  const userAccessRef = db
+    .collection('tenants')
+    .doc(orgId)
+    .collection('userAccess')
+    .doc(targetUserId);
+  const snap = await userAccessRef.get();
+  const beforeData = snap.exists ? snap.data()! : null;
+  const currentVersion = beforeData?.version || 0;
+
+  const now = new Date().toISOString();
+  const afterData = {
+    uid: targetUserId,
+    orgId,
+    tabs: tabs || [],
+    permissions: permissions || {},
+    assignedTableId: assignedTableId || null,
+    version: currentVersion + 1,
+    updatedAt: now,
+    updatedBy: caller.email,
+  };
+
+  await userAccessRef.set(afterData, { merge: true });
+
+  await appendPlatformAuditLog({
+    actorUid: caller.uid,
+    actorEmail: caller.email,
+    actorRole: caller.platformRole,
+    action: 'SET_USER_ACCESS',
+    detail: `Modification des accès de l'utilisateur "${targetUserId}" dans "${orgId}".`,
+    reason: reason.trim(),
+    ticketNumber,
+    targetOrgId: orgId,
+    before: beforeData,
+    after: afterData,
+  });
+
+  return { success: true, userAccess: afterData };
+}
+
+// ---------------------------------------------------------------------------
+// 16. Configuration d'une règle d'exploitation tenant (setTenantRule)
+// ---------------------------------------------------------------------------
+export async function handleSetTenantRule(
+  request: CallableRequest<SetTenantRuleRequest>
+) {
+  const caller = getCallerPlatformContext(request);
+  assertPlatformRole(caller, ['platform_owner', 'platform_admin']);
+
+  const { orgId, ruleKey, value, delegable, reason, ticketNumber } = request.data || {};
+
+  if (!orgId || !ruleKey || !reason || reason.trim().length < 5) {
+    throw new HttpsError(
+      'invalid-argument',
+      'orgId, ruleKey et motif explicite (min. 5 caractères) requis.'
+    );
+  }
+
+  // Validation d'entrée contre OPERATION_RULES
+  const ruleDef = OPERATION_RULES.find((r) => r.key === ruleKey);
+  if (!ruleDef) {
+    throw new HttpsError(
+      'invalid-argument',
+      `La règle "${ruleKey}" n'existe pas dans le référentiel officiel.`
+    );
+  }
+
+  const entRef = db.collection('tenants').doc(orgId).collection('entitlements').doc('current');
+  const snap = await entRef.get();
+  const beforeEntitlements = snap.exists ? snap.data()! : {};
+
+  const currentRules = { ...(beforeEntitlements.operationRules || {}) };
+  currentRules[ruleKey] = Boolean(value);
+
+  const lockedConfigKeys = new Set<string>(beforeEntitlements.lockedConfigKeys || []);
+  if (delegable === false) {
+    lockedConfigKeys.add(ruleKey);
+  } else if (delegable === true) {
+    lockedConfigKeys.delete(ruleKey);
+  }
+
+  const now = new Date().toISOString();
+  const afterEntitlements = {
+    ...beforeEntitlements,
+    operationRules: currentRules,
+    lockedConfigKeys: Array.from(lockedConfigKeys),
+    updatedAt: now,
+    updatedBy: caller.email,
+  };
+
+  await entRef.set(afterEntitlements, { merge: true });
+
+  await appendPlatformAuditLog({
+    actorUid: caller.uid,
+    actorEmail: caller.email,
+    actorRole: caller.platformRole,
+    action: 'SET_TENANT_RULE',
+    detail: `Règle "${ruleKey}" mise à jour pour "${orgId}" (valeur=${value}, délégable=${
+      delegable ?? 'inchangé'
+    }).`,
+    reason: reason.trim(),
+    ticketNumber,
+    targetOrgId: orgId,
+    before: beforeEntitlements,
+    after: afterEntitlements,
+  });
+
+  return { success: true, entitlements: afterEntitlements };
 }
