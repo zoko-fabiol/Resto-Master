@@ -167,13 +167,15 @@ export const MenuView: React.FC = () => {
 
     try {
       if (cloudinaryService.getConfig().isConfigured) {
+        const currentRestoName = activeRestaurant?.name || settings.name || 'Restaurant';
         const asset = await cloudinaryService.upload(file, {
           organizationId: activeRestaurant?.organizationId || '',
           restaurantId: activeRestaurant?.id || '',
+          restaurantName: currentRestoName,
           category: 'food',
           entityType: 'product',
           confidentialityLevel: 'public',
-          tags: ['menu', 'plat', 'restomaster'],
+          tags: [currentRestoName, 'menu', 'plat', 'restomaster'],
         });
 
         setUploadProgress(100);

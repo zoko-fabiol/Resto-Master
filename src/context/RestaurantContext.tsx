@@ -2649,13 +2649,16 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     entityType?: string,
     entityId?: string
   ): Promise<MediaAsset> => {
+    const currentRestoName = activeRestaurant?.name || settings.name || 'Restaurant';
     const asset = await cloudinaryService.upload(file, {
-      folder,
+      folder: folder || undefined,
       category: category as any,
       organizationId: organization.id,
       restaurantId: selectedOutletId,
+      restaurantName: currentRestoName,
       entityType: entityType as any,
       entityId,
+      tags: [currentRestoName, category],
     });
 
     setMediaAssets((prev) => [asset, ...prev]);

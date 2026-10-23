@@ -12,6 +12,7 @@ export interface ImageTransformOptions {
 export interface CloudinaryUploadOptions {
   organizationId: string;
   restaurantId?: string;
+  restaurantName?: string; // Nom officiel du restaurant pour création du dossier Cloudinary
   category:
     | 'branding'
     | 'products'
@@ -34,6 +35,22 @@ export interface CloudinaryUploadOptions {
   confidentialityLevel?: ConfidentialityLevel;
   tags?: string[];
   customFileName?: string;
+}
+
+/**
+ * Assainit le nom du restaurant pour nommer fidèlement le dossier Cloudinary.
+ * Exemple : "Le Grand Gourmet" -> "Le Grand Gourmet"
+ * Supprime les caractères interdits par l'API Cloudinary tout en conservant les espaces et accents lisibles.
+ */
+export function sanitizeCloudinaryFolderName(name: string): string {
+  if (!name || !name.trim()) return 'Restaurant_Principal';
+  return (
+    name
+      .replace(/[\\?#%<>"*|:]/g, '')
+      .replace(/\//g, '-')
+      .replace(/\s+/g, ' ')
+      .trim() || 'Restaurant_Principal'
+  );
 }
 
 export interface CloudinaryUploadResult {
@@ -114,14 +131,44 @@ class CloudinaryService {
   }
 
   /**
-   * Construct standard hierarchical folder path based on Section 7
-   * restomaster/organizations/{organizationId}/restaurants/{restaurantId}/{category}
+   * Construit le chemin de stockage Cloudinary au nom officiel du restaurant.
+   * Chaque restaurant dispose de son propre dossier racine portant fidèlement son nom.
+   * Exemple : "Le Grand Gourmet/food" ou "Chez Wou/documents"
    */
-  public buildFolderPath(organizationId: string, restaurantId?: string, category: string = 'documents'): string {
-    const cleanOrg = organizationId.replace(/[^a-zA-Z0-9_-]/g, '_');
-    const cleanResto = (restaurantId || 'central').replace(/[^a-zA-Z0-9_-]/g, '_');
-    const cleanCat = category.replace(/[^a-zA-Z0-9_-]/g, '_');
-    return `restomaster/organizations/${cleanOrg}/restaurants/${cleanResto}/${cleanCat}`;
+  public buildFolderPath(
+    organizationIdOrOptions?:
+      | string
+      | {
+          restaurantName?: string;
+          restaurantId?: string;
+          organizationId?: string;
+          category?: string;
+          folder?: string;
+        },
+    restaurantId?: string,
+    category: string = 'documents',
+    restaurantName?: string
+  ): string {
+    let effectiveRestoName = '';
+    let effectiveCategory = category;
+    let customFolder = '';
+
+    if (typeof organizationIdOrOptions === 'object' && organizationIdOrOptions !== null) {
+      effectiveRestoName = organizationIdOrOptions.restaurantName || organizationIdOrOptions.restaurantId || '';
+      effectiveCategory = organizationIdOrOptions.category || 'documents';
+      customFolder = organizationIdOrOptions.folder || '';
+    } else {
+      effectiveRestoName = restaurantName || restaurantId || 'Restaurant';
+    }
+
+    if (customFolder && customFolder.trim()) {
+      return customFolder.trim().replace(/^\/+|\/+$/g, '');
+    }
+
+    const cleanRestoFolder = sanitizeCloudinaryFolderName(effectiveRestoName);
+    const cleanCat = (effectiveCategory || 'documents').replace(/[^a-zA-Z0-9_-]/g, '_');
+
+    return `${cleanRestoFolder}/${cleanCat}`;
   }
 
   /**
@@ -169,7 +216,7 @@ class CloudinaryService {
   }
 
   /**
-   * Upload File to Cloudinary
+   * Upload File to Cloudinary dans le dossier dédié au restaurant
    */
   public async upload(file: File, options: CloudinaryUploadOptions): Promise<MediaAsset> {
     if (!this.cloudName || !this.uploadPreset) {
@@ -184,7 +231,15 @@ class CloudinaryService {
     }
 
     const resourceType = this.detectResourceType(file.type);
-    const folder = this.buildFolderPath(options.organizationId, options.restaurantId, options.category);
+    const folder = options.folder && options.folder.trim()
+      ? options.folder.trim()
+      : this.buildFolderPath({
+          restaurantName: options.restaurantName,
+          restaurantId: options.restaurantId,
+          organizationId: options.organizationId,
+          category: options.category,
+        });
+
     const timestamp = Date.now();
     const cleanBaseName = file.name.replace(/\.[^/.]+$/, '').replace(/[^a-zA-Z0-9_-]/g, '_');
     const publicId = `${folder}/${cleanBaseName}_${timestamp}`;
@@ -197,8 +252,12 @@ class CloudinaryService {
       formData.append('folder', folder);
       formData.append('public_id', `${cleanBaseName}_${timestamp}`);
 
-      if (options.tags && options.tags.length > 0) {
-        formData.append('tags', options.tags.join(','));
+      const tags = [...(options.tags || [])];
+      if (options.restaurantName && !tags.includes(options.restaurantName)) {
+        tags.push(options.restaurantName);
+      }
+      if (tags.length > 0) {
+        formData.append('tags', tags.join(','));
       }
 
       const uploadUrl = `https://api.cloudinary.com/v1_1/${this.cloudName}/${resourceType}/upload`;
