@@ -469,7 +469,7 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const [attendances, setAttendances] = useState<Attendance[]>([]);
   const [userAccounts, setUserAccounts] = useState<UserAccount[]>([]);
   const [cashSession, setCashSession] = useState<CashRegisterSession>(() => loadState('cashSession', DEFAULT_CASH_SESSION));
-  const [cashMovements, setCashMovements] = useState<CashMovement[]>([]);
+  const [cashMovements, setCashMovements] = useState<CashMovement[]>(() => loadState('cashMovements', []));
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [documents, setDocuments] = useState<DocumentItem[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
@@ -573,6 +573,19 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       window.removeEventListener('offline', handleOffline);
     };
   }, []);
+
+  // Persistance continue de la session de caisse et des mouvements (Tolérance aux coupures électriques)
+  useEffect(() => {
+    if (cashSession && cashSession.status) {
+      saveState('cashSession', cashSession);
+    }
+  }, [cashSession]);
+
+  useEffect(() => {
+    if (cashMovements && cashMovements.length > 0) {
+      saveState('cashMovements', cashMovements);
+    }
+  }, [cashMovements]);
 
   // Offline sync queue subscriber
   useEffect(() => {

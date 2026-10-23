@@ -115,6 +115,54 @@ export const PosView: React.FC<PosViewProps> = ({ initialTableId, onOpenPayment,
   const [companyBillingNiu, setCompanyBillingNiu] = useState('');
   const [isMobileCartOpen, setIsMobileCartOpen] = useState(false);
 
+  // Résilience Coupures de Courant : Persistance continue de l'ébauche de panier
+  const DRAFT_STORAGE_KEY = `restomaster_pos_draft_${selectedTableId || 'comptoir'}`;
+
+  // Sauvegarde automatique en continu du panier actif
+  useEffect(() => {
+    if (cart.length > 0) {
+      try {
+        localStorage.setItem(
+          DRAFT_STORAGE_KEY,
+          JSON.stringify({
+            cart,
+            orderNotes,
+            discountPercent,
+            tableId: selectedTableId,
+            timestamp: Date.now(),
+          })
+        );
+      } catch {}
+    } else {
+      try {
+        localStorage.removeItem(DRAFT_STORAGE_KEY);
+      } catch {}
+    }
+  }, [cart, orderNotes, discountPercent, selectedTableId, DRAFT_STORAGE_KEY]);
+
+  // Récupération automatique au rechargement ou changement de table
+  useEffect(() => {
+    if (cart.length === 0) {
+      try {
+        const rawDraft = localStorage.getItem(DRAFT_STORAGE_KEY);
+        if (rawDraft) {
+          const draft = JSON.parse(rawDraft);
+          // Récupération si l'ébauche date de moins de 12 heures
+          if (draft.cart && draft.cart.length > 0 && Date.now() - (draft.timestamp || 0) < 12 * 3600 * 1000) {
+            setCart(draft.cart);
+            if (draft.orderNotes) setOrderNotes(draft.orderNotes);
+            if (draft.discountPercent) setDiscountPercent(draft.discountPercent);
+            showToast({
+              title: 'Panier Restauré',
+              message: 'Vos articles en cours de saisie ont été restaurés.',
+              type: 'info',
+            });
+          }
+        }
+      } catch {}
+    }
+  }, [selectedTableId, DRAFT_STORAGE_KEY]);
+
   // Top articles plus vendus calculés dynamiquement sur les commandes existantes
   const topSoldProductIds = useMemo(() => {
     const counts: Record<string, number> = {};

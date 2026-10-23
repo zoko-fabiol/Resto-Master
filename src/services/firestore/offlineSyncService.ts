@@ -213,6 +213,29 @@ class OfflineSyncService {
       this.isProcessing = false;
     }
   }
+
+  /**
+   * Relance toutes les opérations en échec après rétablissement du réseau
+   */
+  public retryAllFailed(): void {
+    this.queue.forEach((a) => {
+      if (a.status === 'failed') {
+        a.status = 'pending';
+        a.retryCount = 0;
+        delete a.errorMessage;
+      }
+    });
+    this.saveQueue();
+    this.processQueue();
+  }
+
+  /**
+   * Purge manuelle des actions en échec définitif
+   */
+  public clearFailed(): void {
+    this.queue = this.queue.filter((a) => a.status !== 'failed');
+    this.saveQueue();
+  }
 }
 
 export const offlineSyncService = new OfflineSyncService();
