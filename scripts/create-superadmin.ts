@@ -229,39 +229,34 @@ async function main() {
       console.log(`Nouveau compte créé dans Firebase Auth (UID: ${uid}).`);
     }
 
-    console.log('Attribution des Custom Claims { role: "superadmin", active: true, outlets: ["*"] }...');
+    console.log('Attribution des Custom Claims Plateforme { platformRole: "platform_owner", active: true }...');
     await auth.setCustomUserClaims(uid, {
-      role: 'superadmin',
+      platformRole: 'platform_owner',
       active: true,
-      outlets: ['*'],
-      organizationId: 'org-main',
     });
 
-    console.log(`Enregistrement du profil dans Firestore (users/${uid})...`);
-    await db.collection('users').doc(uid).set(
+    console.log(`Enregistrement du profil Administrateur Plateforme dans Firestore (platform_admins/${uid})...`);
+    await db.collection('platform_admins').doc(uid).set(
       {
         id: uid,
         email,
         name,
-        role: 'superadmin',
+        role: 'platform_owner',
         active: true,
-        accessibleRestaurantIds: ['*'],
-        organizationId: 'org-main',
-        mustChangePassword: false,
         updatedAt: FieldValue.serverTimestamp(),
         createdAt: FieldValue.serverTimestamp(),
       },
       { merge: true }
     );
 
-    console.log('Journalisation de sécurité dans audit_logs...');
-    await db.collection('audit_logs').add({
-      action: 'Création Super Administrateur',
-      module: 'Sécurité',
-      details: `Compte superadmin ${name} (${email}) activé avec privilèges universels`,
-      userId: uid,
-      userName: name,
-      userRole: 'superadmin',
+    console.log('Journalisation de sécurité dans platform_audit_logs...');
+    await db.collection('platform_audit_logs').add({
+      action: 'CREATION_SUPERADMIN',
+      module: 'Sécurité Plateforme',
+      detail: `Compte Propriétaire Plateforme ${name} (${email}) initialisé avec privilèges exclusifs`,
+      actorUid: uid,
+      actorEmail: email,
+      actorRole: 'platform_owner',
       timestamp: FieldValue.serverTimestamp(),
     });
 

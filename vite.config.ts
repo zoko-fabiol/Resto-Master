@@ -11,6 +11,9 @@ const __dirname = path.dirname(__filename);
 export default defineConfig(({ mode }) => {
   const isDesktopBuild = mode === 'tauri' || mode === 'electron';
   return {
+    test: {
+      exclude: ['**/node_modules/**', '**/dist/**', 'tests/rules/**'],
+    },
     base: isDesktopBuild ? './' : '/',
     define: {
       __BUILD_ID__: JSON.stringify(new Date().toISOString()),
