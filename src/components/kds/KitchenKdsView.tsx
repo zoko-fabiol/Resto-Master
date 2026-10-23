@@ -26,9 +26,11 @@ import {
   AlertOctagon,
   Ban,
   X,
+  MessageSquare,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { EmptyState } from '../ui/EmptyState';
+import { restaurantWhatsAppService } from '../../services/whatsapp/restaurantWhatsAppService';
 
 const CRITICAL_KEYWORDS = ['arachide', 'sel', 'piment', 'allergie', 'saignant', 'bien cuit', 'sans', 'urgent'];
 
@@ -43,6 +45,7 @@ export const KitchenKdsView: React.FC = () => {
     products,
     toggleProduct86,
     settings,
+    activeRestaurant,
   } = useRestaurant();
   const { showToast, playAudioChime } = useToast();
 
@@ -342,6 +345,36 @@ export const KitchenKdsView: React.FC = () => {
         'Cuisine',
         'moyenne'
       );
+    }
+
+    // Notification WhatsApp automatique au client si activée et numéro présent
+    const clientPhone = order.customerPhone || (order as any).phone;
+    if (clientPhone && restaurantWhatsAppService.isTriggerEnabled(settings, 'order_ready')) {
+      const restaurantName = activeRestaurant?.name || 'Notre Restaurant';
+      const text = restaurantWhatsAppService.buildOrderReadyMessage({
+        restaurantName,
+        customerName: order.customerName || 'Client',
+        orderNumber: order.orderNumber,
+        tableName: order.tableName,
+      });
+
+      restaurantWhatsAppService.sendMessage({
+        to: clientPhone,
+        text,
+        settings,
+        restaurantName,
+        trigger: 'order_ready',
+      }).then((res) => {
+        if (res.success && res.mode === 'automatic_webhook') {
+          showToast({
+            type: 'success',
+            title: 'WhatsApp Client Expédié',
+            message: `Avis de commande prête envoyé à ${order.customerName || clientPhone}.`,
+          });
+        }
+      }).catch((err) => {
+        console.warn('Erreur envoi WhatsApp KDS:', err);
+      });
     }
 
     showToast({
@@ -1202,8 +1235,36 @@ export const KitchenKdsView: React.FC = () => {
                         </div>
                       )}
 
-                      {isPrintTicketAllowed && (
-                        <div className="pt-2 flex justify-end">
+                      <div className="pt-2 flex items-center justify-between gap-2">
+                        {(order.customerPhone || (order as any).phone) ? (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const phone = order.customerPhone || (order as any).phone;
+                              const restaurantName = activeRestaurant?.name || 'Notre Restaurant';
+                              const text = restaurantWhatsAppService.buildOrderReadyMessage({
+                                restaurantName,
+                                customerName: order.customerName || 'Client',
+                                orderNumber: order.orderNumber,
+                                tableName: order.tableName,
+                              });
+                              restaurantWhatsAppService.sendMessage({
+                                to: phone,
+                                text,
+                                settings,
+                                restaurantName,
+                                trigger: 'order_ready',
+                              });
+                            }}
+                            className="flex items-center gap-1.5 text-[11px] font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 py-1 px-2.5 rounded-lg transition-colors cursor-pointer"
+                            title="Envoyer notification WhatsApp au client"
+                          >
+                            <MessageSquare className="w-3.5 h-3.5 text-emerald-600" />
+                            <span>WhatsApp Client</span>
+                          </button>
+                        ) : <span />}
+
+                        {isPrintTicketAllowed && (
                           <button
                             type="button"
                             onClick={() => {
@@ -1216,10 +1277,10 @@ export const KitchenKdsView: React.FC = () => {
                             className="flex items-center gap-1.5 text-[11px] font-bold text-slate-500 hover:text-slate-900 py-1 px-2.5 rounded-lg hover:bg-slate-200 transition-colors"
                           >
                             <Printer className="w-3.5 h-3.5 text-slate-700" />
-                            <span>Imprimer Bon Cuisine</span>
+                            <span>Imprimer Bon</span>
                           </button>
-                        </div>
-                      )}
+                        )}
+                      </div>
                     </div>
                   </div>
                 );

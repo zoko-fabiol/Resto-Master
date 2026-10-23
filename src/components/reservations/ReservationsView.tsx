@@ -14,10 +14,11 @@ import {
   XCircle,
   Utensils,
   Search,
-  Filter,
-  X,
   Wand2,
+  MessageSquare,
+  X,
 } from 'lucide-react';
+import { restaurantWhatsAppService } from '../../services/whatsapp/restaurantWhatsAppService';
 
 interface ReservationsViewProps {
   onSeatGuest: (reservationId: string, tableId: string) => void;
@@ -31,6 +32,8 @@ export const ReservationsView: React.FC<ReservationsViewProps> = ({ onSeatGuest 
     updateReservationStatus,
     updateTableStatus,
     isRuleEnabled,
+    activeRestaurant,
+    settings,
   } = useRestaurant();
   const { showToast } = useToast();
 
@@ -155,6 +158,37 @@ export const ReservationsView: React.FC<ReservationsViewProps> = ({ onSeatGuest 
     // Marquer la table comme réservée sur le plan de salle
     if (tableId) {
       await updateTableStatus(tableId, 'reservee');
+    }
+
+    // Déclencher notification WhatsApp si activée dans l'offre et les paramètres
+    if (phone.trim() && restaurantWhatsAppService.isTriggerEnabled(settings, 'reservation_confirmed')) {
+      const restaurantName = activeRestaurant?.name || 'Notre Restaurant';
+      const waText = restaurantWhatsAppService.buildReservationMessage({
+        restaurantName,
+        customerName: customerName.trim(),
+        date,
+        time,
+        guestCount: numGuests > 0 ? numGuests : 1,
+        tableName: assignedTable ? assignedTable.number : undefined,
+      });
+
+      restaurantWhatsAppService.sendMessage({
+        to: phone.trim(),
+        text: waText,
+        settings,
+        restaurantName,
+        trigger: 'reservation_confirmed',
+      }).then((result) => {
+        if (result.success && result.mode === 'automatic_webhook') {
+          showToast({
+            type: 'success',
+            title: 'WhatsApp automatique envoyé',
+            message: `Confirmation expédiée avec succès à ${customerName}.`,
+          });
+        }
+      }).catch((err) => {
+        console.warn('Erreur envoi WhatsApp auto:', err);
+      });
     }
 
     setModalOpen(false);
@@ -316,6 +350,35 @@ export const ReservationsView: React.FC<ReservationsViewProps> = ({ onSeatGuest 
 
                       <td className="py-3 px-4 text-right">
                         <div className="flex items-center justify-end gap-1.5">
+                          {res.phone && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const restaurantName = activeRestaurant?.name || 'Notre Restaurant';
+                                const text = restaurantWhatsAppService.buildReservationMessage({
+                                  restaurantName,
+                                  customerName: res.customerName,
+                                  date: res.date,
+                                  time: res.time,
+                                  guestCount: res.guestCount,
+                                  tableName: res.tableName,
+                                });
+                                restaurantWhatsAppService.sendMessage({
+                                  to: res.phone,
+                                  text,
+                                  settings,
+                                  restaurantName,
+                                  trigger: 'reservation_confirmed',
+                                });
+                              }}
+                              className="px-2 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold text-[10px] border border-emerald-200 flex items-center gap-1 transition-colors"
+                              title="Envoyer ou renvoyer la confirmation WhatsApp"
+                            >
+                              <MessageSquare className="w-3 h-3 text-emerald-600" />
+                              <span>WhatsApp</span>
+                            </button>
+                          )}
+
                           {res.status === 'confirmee' && (
                             <button
                               onClick={() => {

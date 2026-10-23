@@ -27,8 +27,10 @@ import {
   CheckSquare,
   Square,
   QrCode,
+  MessageSquare,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
+import { restaurantWhatsAppService } from '../../services/whatsapp/restaurantWhatsAppService';
 
 interface PaymentModalProps {
   orderId: string | null;
@@ -47,6 +49,8 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, onClose }) 
     peripherals,
     printerSettings,
     roleLimits,
+    activeRestaurant,
+    isModuleEntitled,
   } = useRestaurant();
   const { currentUser } = useAuth();
   const { showToast } = useToast();
@@ -160,6 +164,67 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, onClose }) 
   const [a5ModalOpen, setA5ModalOpen] = useState(false);
   const [thermalModalOpen, setThermalModalOpen] = useState(false);
   const [qrDataUrl, setQrDataUrl] = useState<string>('');
+  const [whatsappPhone, setWhatsappPhone] = useState<string>(() => targetOrder?.customerPhone || '');
+  const [isSendingWhatsApp, setIsSendingWhatsApp] = useState<boolean>(false);
+  const [whatsAppSentSuccess, setWhatsAppSentSuccess] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (targetOrder?.customerPhone) {
+      setWhatsappPhone(targetOrder.customerPhone);
+    }
+  }, [targetOrder?.customerPhone]);
+
+  const handleSendWhatsAppReceipt = async () => {
+    if (!whatsappPhone.trim() || !targetOrder) {
+      showToast({
+        type: 'warning',
+        title: 'Numéro manquant',
+        message: 'Veuillez renseigner le numéro WhatsApp du client.',
+      });
+      return;
+    }
+
+    setIsSendingWhatsApp(true);
+    try {
+      const restaurantName = activeRestaurant?.name || 'Notre Restaurant';
+      const text = restaurantWhatsAppService.buildReceiptMessage({
+        restaurantName,
+        customerName: targetOrder.customerName || 'Cher Client',
+        receiptNumber: targetOrder.orderNumber,
+        date: new Date().toLocaleDateString('fr-FR'),
+        totalFcfa: certifiedAmount,
+        paymentMethod: paymentMethod.toUpperCase(),
+      });
+
+      const res = await restaurantWhatsAppService.sendMessage({
+        to: whatsappPhone.trim(),
+        text,
+        settings,
+        restaurantName,
+        trigger: 'receipt_sent',
+        openInBrowser: true,
+      });
+
+      if (res.success) {
+        setWhatsAppSentSuccess(true);
+        showToast({
+          type: 'success',
+          title: 'Reçu WhatsApp généré',
+          message: res.mode === 'automatic_webhook'
+            ? `Reçu numérique transmis automatiquement à ${whatsappPhone}.`
+            : `Ouverture de la discussion WhatsApp pour l'envoi du reçu.`,
+        });
+      }
+    } catch {
+      showToast({
+        type: 'error',
+        title: 'Erreur envoi',
+        message: 'Impossible de transmettre le reçu WhatsApp.',
+      });
+    } finally {
+      setIsSendingWhatsApp(false);
+    }
+  };
 
   // Synchronize amountTendered based on splitMode
   useEffect(() => {
@@ -960,10 +1025,50 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, onClose }) 
                 </div>
               )}
 
-              {/* Legal French Words Formula */}
-              <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-xs text-amber-950 font-serif italic text-center">
-                « Arrêtée la présente facture à la somme de : {numberToFrenchWords(certifiedAmount).toUpperCase()} FRANCS CFA. »
-              </div>
+              {/* WhatsApp Digital Receipt Delivery */}
+              {isModuleEntitled('mod_pos') && (
+                <div className="bg-emerald-50/70 border border-emerald-200 p-3.5 rounded-2xl space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="w-7 h-7 rounded-lg bg-emerald-600 text-white flex items-center justify-center shadow-xs">
+                        <MessageSquare className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <span className="text-xs font-bold text-emerald-950 block">Reçu Client WhatsApp</span>
+                        <span className="text-[10px] text-emerald-700">Expédiez le ticket certifié directement sur le mobile du client</span>
+                      </div>
+                    </div>
+                    {whatsAppSentSuccess && (
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-200 text-emerald-900 border border-emerald-300">
+                        Envoyé ✓
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="tel"
+                      value={whatsappPhone}
+                      onChange={(e) => setWhatsappPhone(e.target.value)}
+                      placeholder="N° WhatsApp client (ex: 699 00 11 22)"
+                      className="flex-1 px-3 py-2 bg-white border border-emerald-300 rounded-xl text-xs font-semibold text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleSendWhatsAppReceipt}
+                      disabled={isSendingWhatsApp || !whatsappPhone.trim()}
+                      className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-xs cursor-pointer ${
+                        isSendingWhatsApp || !whatsappPhone.trim()
+                          ? 'bg-emerald-300 text-white cursor-not-allowed'
+                          : 'bg-emerald-600 hover:bg-emerald-700 text-white active:scale-98'
+                      }`}
+                    >
+                      <MessageSquare className="w-3.5 h-3.5" />
+                      <span>{isSendingWhatsApp ? 'Envoi...' : 'Envoyer Reçu'}</span>
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {/* Print Actions */}
               <div className="grid grid-cols-2 gap-3 pt-2">

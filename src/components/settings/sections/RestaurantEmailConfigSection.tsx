@@ -39,7 +39,7 @@ import {
 } from '../../../services/email/emailTemplates';
 
 export const RestaurantEmailConfigSection: React.FC = () => {
-  const { activeRestaurant, updateSettings, settings } = useRestaurant();
+  const { activeRestaurant, updateSettings, settings, isModuleEntitled } = useRestaurant();
   const { showToast } = useToast();
 
   const [loading, setLoading] = useState(true);
@@ -847,123 +847,155 @@ export const RestaurantEmailConfigSection: React.FC = () => {
             )}
           </div>
           
-          {/* Règle 1 : Alerte Seuil Critique Stock */}
-          <div className="p-4 rounded-2xl border border-slate-200 bg-slate-50/70 space-y-3">
-            <div className="flex items-start justify-between gap-3">
-              <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-xl bg-rose-50 border border-rose-200 text-rose-600 flex items-center justify-center shrink-0">
-                  <AlertTriangle className="w-4 h-4" />
+          {/* Règle 1 : Alerte Seuil Critique Stock (Conditionnée au module stock) */}
+          {isModuleEntitled('mod_stock') && (
+            <div className="p-4 rounded-2xl border border-slate-200 bg-slate-50/70 space-y-3">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-9 h-9 rounded-xl bg-rose-50 border border-rose-200 text-rose-600 flex items-center justify-center shrink-0">
+                    <AlertTriangle className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-xs text-slate-900">Alerte Seuil Critique de Stock</h4>
+                    <p className="text-[11px] text-slate-500">Expédié dès qu'un ingrédient passe sous le seuil d'alerte</p>
+                  </div>
                 </div>
-                <div>
-                  <h4 className="font-bold text-xs text-slate-900">Alerte Seuil Critique de Stock</h4>
-                  <p className="text-[11px] text-slate-500">Expédié dès qu'un ingrédient passe sous le seuil d'alerte</p>
-                </div>
-              </div>
 
-              <input
-                type="checkbox"
-                checked={stockAlertEnabled}
-                onChange={(e) => setStockAlertEnabled(e.target.checked)}
-                className="w-4 h-4 accent-amber-500 rounded cursor-pointer mt-1"
-              />
-            </div>
-
-            {stockAlertEnabled && (
-              <div className="pt-2 border-t border-slate-200/60">
-                <label className="text-[11px] font-bold text-slate-600 block mb-1">
-                  E-mail destinataire (Économe / Chef) :
-                </label>
                 <input
-                  type="email"
-                  value={stockAlertRecipient}
-                  onChange={(e) => setStockAlertRecipient(e.target.value)}
-                  placeholder="econome@restaurant.com"
-                  className="w-full px-3 py-1.5 rounded-lg border border-slate-200 text-xs bg-white text-slate-800 font-medium"
+                  type="checkbox"
+                  checked={stockAlertEnabled}
+                  onChange={(e) => setStockAlertEnabled(e.target.checked)}
+                  className="w-4 h-4 accent-amber-500 rounded cursor-pointer mt-1"
                 />
               </div>
-            )}
-          </div>
 
-          {/* Règle 2 : Clôture Journalière Caisse (Rapport Z) */}
-          <div className="p-4 rounded-2xl border border-slate-200 bg-slate-50/70 space-y-3">
-            <div className="flex items-start justify-between gap-3">
-              <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-xl bg-blue-50 border border-blue-200 text-blue-600 flex items-center justify-center shrink-0">
-                  <FileSpreadsheet className="w-4 h-4" />
+              {stockAlertEnabled && (
+                <div className="pt-2 border-t border-slate-200/60">
+                  <label className="text-[11px] font-bold text-slate-600 block mb-1">
+                    E-mail destinataire (Économe / Chef) :
+                  </label>
+                  <input
+                    type="email"
+                    value={stockAlertRecipient}
+                    onChange={(e) => setStockAlertRecipient(e.target.value)}
+                    placeholder="econome@restaurant.com"
+                    className="w-full px-3 py-1.5 rounded-lg border border-slate-200 text-xs bg-white text-slate-800 font-medium"
+                  />
                 </div>
-                <div>
-                  <h4 className="font-bold text-xs text-slate-900">Clôture Journalière de Caisse (Rapport Z)</h4>
-                  <p className="text-[11px] text-slate-500">Envoyé à la direction lors de la fermeture de caisse</p>
-                </div>
-              </div>
-
-              <input
-                type="checkbox"
-                checked={zReportEmailEnabled}
-                onChange={(e) => setZReportEmailEnabled(e.target.checked)}
-                className="w-4 h-4 accent-amber-500 rounded cursor-pointer mt-1"
-              />
+              )}
             </div>
+          )}
 
-            {zReportEmailEnabled && (
-              <div className="pt-2 border-t border-slate-200/60">
-                <label className="text-[11px] font-bold text-slate-600 block mb-1">
-                  E-mail destinataire (Direction / Gérant) :
-                </label>
+          {/* Règle 2 : Clôture Journalière Caisse / Rapport Z (Conditionnée au module caisse) */}
+          {isModuleEntitled('mod_caisse') && (
+            <div className="p-4 rounded-2xl border border-slate-200 bg-slate-50/70 space-y-3">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-9 h-9 rounded-xl bg-blue-50 border border-blue-200 text-blue-600 flex items-center justify-center shrink-0">
+                    <FileSpreadsheet className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-xs text-slate-900">Clôture Journalière de Caisse (Rapport Z)</h4>
+                    <p className="text-[11px] text-slate-500">Envoyé à la direction lors de la fermeture de caisse</p>
+                  </div>
+                </div>
+
                 <input
-                  type="email"
-                  value={zReportRecipient}
-                  onChange={(e) => setZReportRecipient(e.target.value)}
-                  placeholder="direction@restaurant.com"
-                  className="w-full px-3 py-1.5 rounded-lg border border-slate-200 text-xs bg-white text-slate-800 font-medium"
+                  type="checkbox"
+                  checked={zReportEmailEnabled}
+                  onChange={(e) => setZReportEmailEnabled(e.target.checked)}
+                  className="w-4 h-4 accent-amber-500 rounded cursor-pointer mt-1"
                 />
               </div>
-            )}
-          </div>
 
-          {/* Règle 3 : Confirmation Réservation de Table */}
-          <div className="p-4 rounded-2xl border border-slate-200 bg-slate-50/70 space-y-2">
-            <div className="flex items-start justify-between gap-3">
-              <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-xl bg-purple-50 border border-purple-200 text-purple-600 flex items-center justify-center shrink-0">
-                  <UtensilsCrossed className="w-4 h-4" />
+              {zReportEmailEnabled && (
+                <div className="pt-2 border-t border-slate-200/60">
+                  <label className="text-[11px] font-bold text-slate-600 block mb-1">
+                    E-mail destinataire (Direction / Gérant) :
+                  </label>
+                  <input
+                    type="email"
+                    value={zReportRecipient}
+                    onChange={(e) => setZReportRecipient(e.target.value)}
+                    placeholder="direction@restaurant.com"
+                    className="w-full px-3 py-1.5 rounded-lg border border-slate-200 text-xs bg-white text-slate-800 font-medium"
+                  />
                 </div>
-                <div>
-                  <h4 className="font-bold text-xs text-slate-900">Confirmation de Réservation de Table</h4>
-                  <p className="text-[11px] text-slate-500">Envoyé directement au client avec numéro de résa et couverts</p>
-                </div>
-              </div>
-
-              <input
-                type="checkbox"
-                checked={reservationConfirmationEnabled}
-                onChange={(e) => setReservationConfirmationEnabled(e.target.checked)}
-                className="w-4 h-4 accent-amber-500 rounded cursor-pointer mt-1"
-              />
+              )}
             </div>
-          </div>
+          )}
 
-          {/* Règle 4 : Ticket de Caisse Dématérialisé */}
-          <div className="p-4 rounded-2xl border border-slate-200 bg-slate-50/70 space-y-2">
-            <div className="flex items-start justify-between gap-3">
-              <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-600 flex items-center justify-center shrink-0">
-                  <Receipt className="w-4 h-4" />
+          {/* Règle 3 : Confirmation Réservation de Table (Conditionnée au module tables/réservations) */}
+          {isModuleEntitled('mod_tables') && (
+            <div className="p-4 rounded-2xl border border-slate-200 bg-slate-50/70 space-y-2">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-9 h-9 rounded-xl bg-purple-50 border border-purple-200 text-purple-600 flex items-center justify-center shrink-0">
+                    <UtensilsCrossed className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-xs text-slate-900">Confirmation de Réservation de Table</h4>
+                    <p className="text-[11px] text-slate-500">Envoyé directement au client avec numéro de résa et couverts</p>
+                  </div>
                 </div>
-                <div>
-                  <h4 className="font-bold text-xs text-slate-900">Ticket de Caisse & Reçu Électronique</h4>
-                  <p className="text-[11px] text-slate-500">Permet au caissier d'envoyer le reçu par e-mail en 1 clic</p>
-                </div>
+
+                <input
+                  type="checkbox"
+                  checked={reservationConfirmationEnabled}
+                  onChange={(e) => setReservationConfirmationEnabled(e.target.checked)}
+                  className="w-4 h-4 accent-amber-500 rounded cursor-pointer mt-1"
+                />
               </div>
-
-              <input
-                type="checkbox"
-                checked={digitalReceiptEnabled}
-                onChange={(e) => setDigitalReceiptEnabled(e.target.checked)}
-                className="w-4 h-4 accent-amber-500 rounded cursor-pointer mt-1"
-              />
             </div>
-          </div>
+          )}
+
+          {/* Règle 4 : Ticket de Caisse Dématérialisé (Conditionné au module pos) */}
+          {isModuleEntitled('mod_pos') && (
+            <div className="p-4 rounded-2xl border border-slate-200 bg-slate-50/70 space-y-2">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-9 h-9 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-600 flex items-center justify-center shrink-0">
+                    <Receipt className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-xs text-slate-900">Ticket de Caisse & Reçu Électronique</h4>
+                    <p className="text-[11px] text-slate-500">Permet au caissier d'envoyer le reçu par e-mail en 1 clic</p>
+                  </div>
+                </div>
+
+                <input
+                  type="checkbox"
+                  checked={digitalReceiptEnabled}
+                  onChange={(e) => setDigitalReceiptEnabled(e.target.checked)}
+                  className="w-4 h-4 accent-amber-500 rounded cursor-pointer mt-1"
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Règle 5 : Commande Prête Passe KDS (Conditionnée au module cuisine) */}
+          {isModuleEntitled('mod_cuisine') && (
+            <div className="p-4 rounded-2xl border border-slate-200 bg-slate-50/70 space-y-2">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-9 h-9 rounded-xl bg-amber-50 border border-amber-200 text-amber-600 flex items-center justify-center shrink-0">
+                    <BellRing className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-xs text-slate-900">Notification Commande Prête (Passe KDS)</h4>
+                    <p className="text-[11px] text-slate-500">Expédié dès que la cuisine ou le bar marque le bon prêt</p>
+                  </div>
+                </div>
+
+                <input
+                  type="checkbox"
+                  checked={orderReadyEnabled}
+                  onChange={(e) => setOrderReadyEnabled(e.target.checked)}
+                  className="w-4 h-4 accent-amber-500 rounded cursor-pointer mt-1"
+                />
+              </div>
+            </div>
+          )}
 
         </div>
 

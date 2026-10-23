@@ -188,6 +188,28 @@ export interface RestaurantSettings {
     directorReportFrequency?: 'jour' | 'semaine' | 'mois' | 'tous';
     directorEmailRecipient?: string;
   };
+
+  // Passerelle WhatsApp & Alertes Clients
+  whatsappConfig?: {
+    enabled?: boolean;
+    restaurantPhoneNumber?: string;
+    senderTitle?: string;
+    gatewayMode?: 'automatic_webhook' | 'click_to_chat';
+    webhookUrl?: string;
+    apiKey?: string;
+    reservationAlertEnabled?: boolean;
+    orderReadyAlertEnabled?: boolean;
+    digitalReceiptAlertEnabled?: boolean;
+  };
+  whatsappGatewayEnabled?: boolean;
+  whatsappGatewayMode?: 'automatic_webhook' | 'click_to_chat';
+  whatsappPhoneNumber?: string;
+  whatsappSenderTitle?: string;
+  whatsappWebhookUrl?: string;
+  whatsappApiKey?: string;
+  whatsappReservationAlertEnabled?: boolean;
+  whatsappOrderReadyAlertEnabled?: boolean;
+  whatsappReceiptAlertEnabled?: boolean;
 }
 
 export interface Organization {
@@ -469,6 +491,8 @@ export interface Order {
   tableName?: string;
   customerId?: string;
   customerName?: string;
+  customerPhone?: string;
+  phone?: string;
   serverId: string;
   serverName: string;
   guestCount?: number; // Nombre de personnes / couverts
