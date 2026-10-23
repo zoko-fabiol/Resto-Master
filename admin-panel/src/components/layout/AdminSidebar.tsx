@@ -4,6 +4,7 @@ import {
   Store,
   Package,
   UserPlus,
+  CreditCard,
   Megaphone,
   ShieldAlert,
   Headphones,
@@ -17,6 +18,7 @@ interface AdminSidebarProps {
   currentTab: string;
   setCurrentTab: (tab: string) => void;
   pendingSignupsCount?: number;
+  pendingPaymentsCount?: number;
   activeSupportSessionsCount?: number;
   mobileOpen?: boolean;
   setMobileOpen?: (open: boolean) => void;
@@ -29,6 +31,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
   currentTab,
   setCurrentTab,
   pendingSignupsCount = 0,
+  pendingPaymentsCount = 0,
   activeSupportSessionsCount = 0,
   mobileOpen = false,
   setMobileOpen,
@@ -64,6 +67,13 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
       icon: UserPlus,
       badge: pendingSignupsCount > 0 ? pendingSignupsCount : null,
       badgeColor: 'bg-amber-500 text-slate-950 font-bold',
+    },
+    {
+      id: 'subscriptions',
+      label: 'Paiements à Valider',
+      icon: CreditCard,
+      badge: pendingPaymentsCount > 0 ? pendingPaymentsCount : null,
+      badgeColor: 'bg-emerald-500 text-slate-950 font-bold',
     },
     {
       id: 'announcements',

@@ -303,6 +303,26 @@ Ce document consigne les décisions d'architecture prises pour la livraison d'un
   5. **Console Admin Plateforme** : Ajout de la vue « Catalogue & Tarifs » (`CatalogPricingView`) et d'un modal de changement de formule avec motif d'audit dans `BillingTab`.
 - **Conséquences** : Zéro divergence tarifaire possible, transparence totale pour le client, sécurité anti-falsification du montant à payer, et traçabilité immuable des changements d'offre.
 
+---
+
+### ADR-018 : Flux de Souscription, Paiements Manuels (Virement / MoMo) et Activation Idempotente
+- **Date** : 2026-10-23
+- **Statut** : Accepté & Implémenté (Phase 3 du Chantier Installation & Abonnements)
+- **Contexte** : Dans l'écosystème commercial de l'Afrique centrale (Cameroun, zone CEMAC), la majorité des règlements B2B d'abonnements s'effectuent par virement bancaire, Orange Money, MTN MoMo ou chèque certifié. Un système d'activation automatique sans contrôle comptable préalable ouvrirait un risque financier d'impayé, tandis qu'un flux entièrement manuel sans traçabilité bloquerait les exploitants lors de la mise en service.
+- **Décision** :
+  1. **Cycle d'État Commercial Strict** :
+     - `installation` $\rightarrow$ configuration autorisée, vente en caisse formellement bloquée.
+     - `paiement_en_attente` $\rightarrow$ émission d'une référence d'ordre lisible `RM-AAAA-NNNNNN` avec devis serveur infalsifiable.
+     - `paiement_a_verifier` $\rightarrow$ justificatif déclaré par l'exploitant avec référence de transaction bancaire/MoMo.
+     - `actif` $\rightarrow$ validation administrative requérant le rôle plateforme `billing`, `platform_admin` ou `platform_owner`.
+     - `impaye` $\rightarrow$ période de grâce de 7 jours (lecture seule, vente suspendue).
+     - `suspendu` $\rightarrow$ suspension au-delà de 7 jours d'impayé.
+  2. **Activation Idempotente et Facture Scellée** : L'activation atomique émet systématiquement une facture officielle `RM-FACT-AAAA-NNNNNN`, écrit la souscription dans `tenants/{orgId}/subscription/current`, calcule `endsAt` (mensuel +1m, annuel +12m, à vie +99 ans) et applique `resolveEntitlements` sans duplication possible.
+  3. **Interface Dédiée `PendingPaymentsListView`** : Tableau de bord centralisé pour les équipes de gestion avec filtrage prioritaire des règlements à valider et possibilité de rejet motivé.
+  4. **Bandeau d'État Client `TenantStatusBanner`** : Affichage discret et contextualisé de l'état de l'abonnement et actions immédiates (coordonnées de paiement, renouvellement).
+- **Conséquences** : Sécurité financière totale, zéro risque de double activation ou de fraude de devis, expérience fluide pour le client avec instructions de paiement locales claires.
+
+
 
 
 

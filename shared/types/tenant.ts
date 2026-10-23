@@ -1,5 +1,9 @@
 export type TenantStatus =
+  | 'demande'
   | 'inscription_en_attente'
+  | 'installation'
+  | 'paiement_en_attente'
+  | 'paiement_a_verifier'
   | 'onboarding'
   | 'essai'
   | 'actif'
@@ -122,6 +126,7 @@ export interface Tenant {
   packId?: string;
   restaurantType?: string;
   trialEndsAt?: string;
+  subscriptionEndsAt?: string;
   company: TenantCompanyInfo;
   owner: TenantOwnerInfo;
   creationSource: 'inscription_libre' | 'cree_par_admin';

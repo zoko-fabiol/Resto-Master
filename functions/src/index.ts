@@ -114,5 +114,21 @@ import { handleComputeQuote, handleUpdateCatalog } from './modules/catalog.js';
 export const computeQuote = onCall(FUNCTION_OPTIONS, handleComputeQuote);
 export const updateCatalog = onCall(FUNCTION_OPTIONS, handleUpdateCatalog);
 
+// 15. Commandes d'Abonnement, Paiements et Activations Idempotentes (Phase 3)
+import {
+  handleSubmitSubscriptionOrder,
+  handleMarkPaymentSent,
+  handleValidateSubscriptionPayment,
+  handleRejectSubscriptionPayment,
+  handleDailySubscriptionCheck,
+} from './modules/subscriptions.js';
+
+export const submitSubscriptionOrder = onCall(FUNCTION_OPTIONS, handleSubmitSubscriptionOrder);
+export const markPaymentSent = onCall(FUNCTION_OPTIONS, handleMarkPaymentSent);
+export const validateSubscriptionPayment = onCall(FUNCTION_OPTIONS, handleValidateSubscriptionPayment);
+export const rejectSubscriptionPayment = onCall(FUNCTION_OPTIONS, handleRejectSubscriptionPayment);
+export const dailySubscriptionCheck = onCall(FUNCTION_OPTIONS, handleDailySubscriptionCheck);
+
+
 
 
