@@ -260,11 +260,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             };
 
             try {
-              await setDoc(userDocRef, {
-                ...newProfile,
-                createdAt: new Date().toISOString(),
-                updatedAt: new Date().toISOString(),
-              }, { merge: true });
+              const cleanProfile = JSON.parse(
+                JSON.stringify({
+                  ...newProfile,
+                  createdAt: new Date().toISOString(),
+                  updatedAt: new Date().toISOString(),
+                })
+              );
+              await setDoc(userDocRef, cleanProfile, { merge: true });
             } catch (writeErr) {
               console.warn('[AuthContext] Écriture profil Firestore différée:', writeErr);
             }
