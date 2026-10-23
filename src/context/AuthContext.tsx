@@ -16,6 +16,10 @@ import { RolePermissionMatrix, PermissionModule, PermissionAction } from '../typ
 import { cloudFunctionsService } from '../services/functions/cloudFunctionsService';
 import { hashPin, verifyPin } from '../services/security/cryptoService';
 import { offlineSyncService } from '../services/firestore/offlineSyncService';
+import { resolveAccess, UserAccessDocument, TabPermissions } from '../../shared/types/accessCatalog';
+import { userAccessService } from '../services/firestore/userAccessService';
+import { tenantFirestoreService } from '../services/firestore/tenantFirestoreService';
+import { TenantEntitlements } from '../../shared/types/tenant';
 
 const MODULE_TO_PERMISSION: Record<string, PermissionModule> = {
   pos: 'pos',
@@ -91,6 +95,39 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Le profil utilisateur n'est JAMAIS restauré depuis localStorage : Firestore et Claims sont la seule source de vérité
   const [currentUser, setCurrentUser] = useState<UserProfile>(defaultUnauthenticatedUser);
+  const [userAccess, setUserAccess] = useState<UserAccessDocument | null>(null);
+  const [activeEntitlements, setActiveEntitlements] = useState<TenantEntitlements | null>(null);
+
+  // Synchronisation des droits d'accès temps réel (userAccess)
+  useEffect(() => {
+    if (!currentUser.organizationId || !currentUser.id || currentUser.role === 'aucun') {
+      setUserAccess(null);
+      return;
+    }
+    const unsub = userAccessService.subscribeToUserAccess(
+      currentUser.organizationId,
+      currentUser.id,
+      (access) => {
+        setUserAccess(access);
+      }
+    );
+    return () => unsub();
+  }, [currentUser.organizationId, currentUser.id, currentUser.role]);
+
+  // Synchronisation des modules et fonctionnalités activés (entitlements)
+  useEffect(() => {
+    if (!currentUser.organizationId) {
+      setActiveEntitlements(null);
+      return;
+    }
+    const unsub = tenantFirestoreService.subscribeToEntitlements(
+      currentUser.organizationId,
+      (ent) => {
+        setActiveEntitlements(ent);
+      }
+    );
+    return () => unsub();
+  }, [currentUser.organizationId]);
 
   // Synchronisation stricte avec Firebase Authentication & Firestore (Claims + users/{uid})
   useEffect(() => {
@@ -667,109 +704,47 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  // RBAC : Matrice de permissions connectée dynamiquement à Firestore
-  const canAccess = (module: string): boolean => {
-    // Si compte inactif ou rôle 'aucun' : accès strictement interdit
+  // Résolution unifiée des accès (Phase 1) : Tenant actif ET Module activé ET Onglet accordé ET Action autorisée
+  const canAccess = (moduleOrTab: string): boolean => {
     if (!currentUser.active || currentUser.role === 'aucun') {
       return false;
     }
-
-    // 1. Super Administrateur et Direction possèdent un accès universel absolu
-    if (currentUser.role === 'superadmin' || currentUser.role === 'direction') {
-      return true;
-    }
-
-    // 2. Les comptes Tablettes n'ont accès qu'au Kiosk
-    if (currentUser.role === 'tablette') {
-      return module === 'kiosk';
-    }
-
-    // 3. Onglets additionnels explicitement accordés à cet utilisateur
-    if (currentUser.additionalTabs && currentUser.additionalTabs.includes(module)) {
-      return true;
-    }
-
-    // 4. Si permission personnalisée explicite configurée au niveau utilisateur
-    if (currentUser.tabPermissions && currentUser.tabPermissions[module]) {
-      return currentUser.tabPermissions[module].view;
-    }
-
-    // 5. Modules opérationnels spécifiques (KDS, Kiosk, Menu, Dashboard)
-    if (module === 'kitchen_kds') {
-      return currentUser.role === 'cuisine' || currentUser.role === 'manager';
-    }
-    if (module === 'bar_kds') {
-      return currentUser.role === 'bar' || currentUser.role === 'manager';
-    }
-    if (module === 'menu') {
-      return currentUser.role === 'cuisine' || currentUser.role === 'manager' || currentUser.role === 'stock';
-    }
-    if (module === 'dashboard') {
-      return ['manager', 'caisse', 'finance'].includes(currentUser.role);
-    }
-
-    // 6. Matrice RBAC dynamique synchronisée avec Firestore
-    const permModule = MODULE_TO_PERMISSION[module];
-    if (permModule && rolePermissions[currentUser.role]?.[permModule]) {
-      return Boolean(rolePermissions[currentUser.role][permModule].view);
-    }
-
-    // Manager a accès étendu par défaut si non expressément restreint
-    if (currentUser.role === 'manager' && module !== 'settings' && module !== 'audit') {
-      return true;
-    }
-
-    return false;
+    return resolveAccess({
+      entitlements: activeEntitlements,
+      userAccess,
+      fallbackPermissions: {
+        additionalTabs: currentUser.additionalTabs,
+        tabPermissions: currentUser.tabPermissions as any,
+      },
+      role: currentUser.role,
+      tab: moduleOrTab,
+      action: 'view',
+    });
   };
 
   const hasPermission = (
-    module: string,
+    moduleOrTab: string,
     action: 'view' | 'create' | 'edit' | 'delete' = 'view'
   ): boolean => {
-    if (currentUser.role === 'superadmin' || currentUser.role === 'direction') {
-      return true;
+    if (!currentUser.active || currentUser.role === 'aucun') {
+      return false;
     }
-
-    if (currentUser.role === 'tablette') {
-      return module === 'kiosk' && action !== 'delete';
-    }
-
-    // Si permission granulaire explicite sur l'utilisateur
-    if (currentUser.tabPermissions && currentUser.tabPermissions[module]) {
-      return currentUser.tabPermissions[module][action];
-    }
-
-    // Si action de consultation (view)
-    if (action === 'view') {
-      return canAccess(module);
-    }
-
-    // Matrice des permissions Firestore
-    const permModule = MODULE_TO_PERMISSION[module];
-    if (permModule && rolePermissions[currentUser.role]?.[permModule]) {
-      const act = action as PermissionAction;
-      if (rolePermissions[currentUser.role][permModule][act] !== undefined) {
-        return Boolean(rolePermissions[currentUser.role][permModule][act]);
-      }
-    }
-
-    // Par défaut pour create / edit / delete
-    if (currentUser.role === 'manager') {
-      return action !== 'delete' || canAccess(module);
-    }
-    if (action === 'delete') return false;
-    return canAccess(module);
+    return resolveAccess({
+      entitlements: activeEntitlements,
+      userAccess,
+      fallbackPermissions: {
+        additionalTabs: currentUser.additionalTabs,
+        tabPermissions: currentUser.tabPermissions as any,
+      },
+      role: currentUser.role,
+      tab: moduleOrTab,
+      action,
+    });
   };
 
-  const hasAccess = (module: string, action?: string): boolean => {
-    if (currentUser.role === 'superadmin' || currentUser.role === 'direction' || currentUser.role === 'manager') {
-      return true;
-    }
-    if (!action || action === 'view') {
-      return canAccess(module);
-    }
-    const act = action === 'add' ? 'create' : (action as 'create' | 'edit' | 'delete');
-    return hasPermission(module, act);
+  const hasAccess = (moduleOrTab: string, action?: string): boolean => {
+    const act = (action === 'add' ? 'create' : action || 'view') as 'view' | 'create' | 'edit' | 'delete';
+    return hasPermission(moduleOrTab, act);
   };
 
   const isSuperadmin = currentUser.role === 'superadmin';

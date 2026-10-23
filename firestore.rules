@@ -244,6 +244,13 @@ service cloud.firestore {
         // Strictement réservé aux administrateurs de la plateforme
         allow read, write: if isPlatformAdmin();
       }
+
+      match /userAccess/{userId} {
+        // Lecture : l'utilisateur concerné ou un admin plateforme
+        allow read: if isPlatformAdmin() || (isTenantMember(orgId) && request.auth.uid == userId);
+        // Écriture : réservée aux Cloud Functions (Admin SDK) et administrateurs plateforme
+        allow write: if isPlatformWriter();
+      }
     }
 
     // =========================================================================

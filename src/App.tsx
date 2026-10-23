@@ -248,28 +248,24 @@ const AppContent: React.FC = () => {
     }
   }, [currentUser, currentDeviceProfile, currentTab, kioskTableId, isTabletKioskUnlocked, navigate]);
 
-  // Switch tab if permission restricts currentTab or feature is disabled or module rule is disabled
+  // Route guard : refus immédiat de tout accès direct par URL si l'onglet ou le module est interdit
   useEffect(() => {
     if (currentUser.role === 'tablette' || currentUser.accountType === 'tablette') {
       return;
     }
 
-    const requiredFeature = TAB_FEATURE_MAP[currentTab];
-    const isFeatureDisabled = requiredFeature && !isFeatureEnabled(requiredFeature);
-    const requiredRule = ITEM_RULE_MAP[currentTab];
-    const isRuleDisabled = requiredRule && !isRuleEnabled(requiredRule, true);
-
-    if (!canAccess(currentTab) || isFeatureDisabled || isRuleDisabled) {
+    if (!canAccess(currentTab)) {
       let fallback = 'dashboard';
-      if (canAccess('pos') && isFeatureEnabled('pos_core') && isRuleEnabled('mod_pos', true)) fallback = 'pos';
-      else if (canAccess('kitchen_kds') && isFeatureEnabled('kds_kitchen') && isRuleEnabled('mod_cuisine', true)) fallback = 'kitchen_kds';
-      else if (canAccess('bar_kds') && isFeatureEnabled('kds_bar') && isRuleEnabled('mod_bar', true)) fallback = 'bar_kds';
-      else if (canAccess('stock') && isFeatureEnabled('stock_lots_fefo') && isRuleEnabled('mod_stock', true)) fallback = 'stock';
-      else if (canAccess('tables') && isFeatureEnabled('tables_management') && isRuleEnabled('mod_tables', true)) fallback = 'tables';
+      if (canAccess('pos')) fallback = 'pos';
+      else if (canAccess('kitchen_kds')) fallback = 'kitchen_kds';
+      else if (canAccess('bar_kds')) fallback = 'bar_kds';
+      else if (canAccess('stock')) fallback = 'stock';
+      else if (canAccess('tables')) fallback = 'tables';
+      else if (canAccess('caisse')) fallback = 'caisse';
 
       navigate(`/${fallback}`, { replace: true });
     }
-  }, [currentUser.role, currentUser.accountType, currentTab, canAccess, isFeatureEnabled, isRuleEnabled, navigate]);
+  }, [currentUser.role, currentUser.accountType, currentTab, canAccess, navigate]);
 
   const handleOpenOrderOnTable = (tableId: string) => {
     setPosInitialTableId(tableId);

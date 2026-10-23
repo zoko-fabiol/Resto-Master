@@ -44,6 +44,7 @@
     "test:rules": "tsx scripts/run-test-rules.ts",
     "audit:config": "tsx scripts/audit-config.ts",
     "purge:test-data": "tsx scripts/purge-test-data.ts",
+    "migrate:user-access": "tsx scripts/migrate-user-access.ts",
     "release:zip": "tsx scripts/make-release-zip.ts"
   },
   "dependencies": {

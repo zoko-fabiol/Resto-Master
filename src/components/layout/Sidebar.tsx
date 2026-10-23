@@ -425,21 +425,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {/* Navigation Sections */}
         <nav className="flex-1 overflow-y-auto px-2 py-3 space-y-4 custom-scrollbar">
           {navSections.map((section) => {
-            // Filter visible items in section
+            // Filter visible items in section via unified resolveAccess
             const visibleItems = section.items.filter((item) => {
-              if (!canAccess(item.id)) return false;
-              if (item.featureKey && !isFeatureEnabled(item.featureKey)) return false;
-              const ruleKey = ITEM_RULE_MAP[item.id];
-              if (ruleKey && !isRuleEnabled(ruleKey, true)) return false;
-              if (ruleKey && !isModuleEntitled(ruleKey)) return false;
-
-              // Raccordement des règles d'opération fonctionnelles
-              if (item.id === 'pos' && !isRuleEnabled('pos_active', true)) return false;
-              if (item.id === 'kitchen_kds' && !isRuleEnabled('cuisine_kds', true)) return false;
-              if (item.id === 'bar_kds' && !isRuleEnabled('bar_module', true)) return false;
-              if (item.id === 'delivery' && !isRuleEnabled('delivery_active', true)) return false;
-
-              return true;
+              return canAccess(item.id);
             });
 
             if (visibleItems.length === 0) return null;
