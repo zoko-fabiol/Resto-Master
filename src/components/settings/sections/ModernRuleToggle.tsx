@@ -23,6 +23,9 @@ export interface ModernRuleToggleProps {
   children?: React.ReactNode;
 }
 
+import { useRestaurant } from '../../../context/RestaurantContext';
+import { Lock } from 'lucide-react';
+
 export const ModernRuleToggle: React.FC<ModernRuleToggleProps> = ({
   id,
   label,
@@ -38,6 +41,16 @@ export const ModernRuleToggle: React.FC<ModernRuleToggleProps> = ({
   className = '',
   children,
 }) => {
+  const { isConfigKeyLocked } = useRestaurant();
+  const isLocked = isConfigKeyLocked(id);
+
+  const effectiveDisabled = disabled || isLocked;
+  const effectiveDisabledReason = isLocked
+    ? 'Ce réglage est verrouillé par la plateforme RestoMaster (clé non déléguée).'
+    : disabledReason;
+  const effectiveBadge = isLocked ? 'Géré par RestoMaster' : badge;
+  const effectiveIcon = isLocked ? Lock : icon;
+
   return (
     <ConfigToggleRow
       id={id}
@@ -45,10 +58,10 @@ export const ModernRuleToggle: React.FC<ModernRuleToggleProps> = ({
       description={description}
       checked={checked}
       onChange={() => onChange()}
-      icon={icon}
-      badge={badge}
-      disabled={disabled}
-      disabledReason={disabledReason}
+      icon={effectiveIcon}
+      badge={effectiveBadge}
+      disabled={effectiveDisabled}
+      disabledReason={effectiveDisabledReason}
       isSensitive={isSensitive}
       sensitiveWarning={sensitiveWarning}
       className={className}

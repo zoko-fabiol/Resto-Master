@@ -96,17 +96,18 @@ L'accès à l'Admin Panel requiert une authentification forte MFA/TOTP et la pr�
 - Filtres combinés par statut et formule contractuelle.
 - Suspension rapide en lecture seule (`read_only`) ou blocage total (`full_block`).
 
-### 4.3. Fiche Établissement — Les 10 Onglets Experts
+### 4.3. Fiche Établissement — Les Onglets Experts
 1. **Matrice des Droits & Modules (`FeaturesTab`)** : Activation chirurgicale des fonctionnalités avec sélection de la source (`plan`, `profil`, `override`).
-2. **Fiche Société & Contacts (`OverviewTab`)** : Raison sociale, forme juridique (SARL, SA...), NIU fiscal, RCCM, adresse du siège, coordonnées du gérant.
-3. **Comptes Collaborateurs (`UsersTab`)** : Liste des utilisateurs avec rôles métier, statut d'activation du PIN (masqué, non stocké en clair).
-4. **Succursales & Points de Vente (`OutletsTab`)** : Suivi des établissements rattachés (salle principale, terrasse, bar annexe).
-5. **Limites Contractuelles (`LimitsTab`)** : Plafonds de terminaux, collaborateurs, points de vente et volume mensuel de commandes.
-6. **Abonnement & Règlements (`BillingTab`)** : Suivi des échéances, historique des encaissements en FCFA, passage en statut impayé.
-7. **Santé & Diagnostics (`DiagnosticsTab`)** : Inspection automatique côté serveur de l'intégrité de l'établissement (conformité fiscale CGI 2026, caisses ouvertes, cohérence des données).
-8. **Journal d'Audit Crypté (`AuditTab`)** : Historique inaltérable des actions administratives avec horodatage UTC et signature SHA-256 chaînée.
-9. **Télémaintenance Support (`SupportTab`)** : Génération d'une session temporaire en lecture seule avec affichage d'un bandeau actif côté restaurant.
-10. **Zone Critique & Cycle de Vie (`DangerZoneTab`)** : Révocation forcée des sessions (`forceSignOut`), réinitialisation de mot de passe sans secret en clair, export des données, et déclenchement de la suppression à double validation.
+2. **Configuration & Délégation (`ConfigurationTab`)** : Matrice exhaustive des règles d'exploitation regroupées par module avec interrupteur et drapeau de verrouillage/délégation. Seules les clés déclarées délégables peuvent être ajustées par le restaurant. Snapshot automatique scellé avant modification et rollback en 1 clic.
+3. **Fiche Société & Contacts (`OverviewTab`)** : Raison sociale, forme juridique (SARL, SA...), NIU fiscal, RCCM, adresse du siège, coordonnées du gérant.
+4. **Comptes & Dérogations d'Accès (`UsersTab` & `UserAccessEditorModal`)** : Liste des utilisateurs avec gestion fine des accès. Modèle à trois états (hérité du rôle / accordé / retiré) pour chaque onglet avec cases CRUD (voir, créer, modifier, supprimer), modèles d'accès en 1 clic et calcul en temps réel des droits effectifs via `resolveAccess`.
+5. **Succursales & Points de Vente (`OutletsTab`)** : Suivi des établissements rattachés (salle principale, terrasse, bar annexe).
+6. **Limites Contractuelles (`LimitsTab`)** : Plafonds de terminaux, collaborateurs, points de vente et volume mensuel de commandes.
+7. **Abonnement & Règlements (`BillingTab`)** : Suivi des échéances, historique des encaissements en FCFA, passage en statut impayé.
+8. **Santé & Diagnostics (`DiagnosticsTab`)** : Inspection automatique côté serveur de l'intégrité de l'établissement (conformité fiscale CGI 2026, caisses ouvertes, cohérence des données).
+9. **Journal d'Audit Crypté (`AuditTab`)** : Historique inaltérable des actions administratives avec horodatage UTC et signature SHA-256 chaînée.
+10. **Télémaintenance Support (`SupportTab`)** : Génération d'une session temporaire en lecture seule avec affichage d'un bandeau actif côté restaurant.
+11. **Zone Critique & Cycle de Vie (`DangerZoneTab`)** : Révocation forcée des sessions (`forceSignOut`), réinitialisation de mot de passe sans secret en clair, export des données, et déclenchement de la suppression à double validation.
 
 ### 4.4. Assistant Guidé Interactif (`SetupWizardModal`)
 Permet de configurer un restaurant en 3 questions simples :

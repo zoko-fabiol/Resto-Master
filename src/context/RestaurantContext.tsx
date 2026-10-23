@@ -3703,7 +3703,29 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   );
 
   const updateOperationRules = async (updates: Partial<OperationRules>) => {
-    const next = { ...operationRules, ...updates } as unknown as OperationRules;
+    // Filtrer les clés verrouillées par la plateforme (non déléguées au restaurant)
+    const lockedKeys = entitlements?.lockedConfigKeys || [];
+    const sanitizedUpdates: Partial<OperationRules> = {};
+    const blockedKeys: string[] = [];
+
+    for (const [key, value] of Object.entries(updates)) {
+      if (lockedKeys.includes(key)) {
+        blockedKeys.push(key);
+      } else {
+        (sanitizedUpdates as any)[key] = value;
+      }
+    }
+
+    if (blockedKeys.length > 0 && Object.keys(sanitizedUpdates).length === 0) {
+      showToast({
+        title: 'Réglage Géré par RestoMaster',
+        message: `Ce réglage est verrouillé par la plateforme (${blockedKeys.join(', ')}).`,
+        type: 'warning',
+      });
+      return;
+    }
+
+    const next = { ...operationRules, ...sanitizedUpdates } as unknown as OperationRules;
     setOperationRules(next);
     saveState('operations_rules', next);
     try {
@@ -3711,7 +3733,7 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       await logConfigHistory(
         'Règles opérationnelles',
         'Mise à jour règles',
-        `${Object.keys(updates).length} règle(s) opérationnelle(s) mise(s) à jour`
+        `${Object.keys(sanitizedUpdates).length} règle(s) opérationnelle(s) mise(s) à jour`
       );
       showToast({
         title: 'Règles enregistrées',
@@ -3725,7 +3747,7 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     addAuditLog(
       'Mise à jour règles opérationnelles',
       'Paramètres',
-      `${Object.keys(updates).length} règle(s) opérationnelle(s) mise(s) à jour`
+      `${Object.keys(sanitizedUpdates).length} règle(s) opérationnelle(s) mise(s) à jour`
     );
   };
 

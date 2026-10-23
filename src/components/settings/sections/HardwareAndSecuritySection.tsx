@@ -10,7 +10,6 @@ import {
   ConfigurationProfileType,
 } from '../../../types/configuration';
 import { PrintingHardwareSection } from './PrintingHardwareSection';
-import { AuditView } from '../../audit/AuditView';
 import {
   Users,
   Bell,
@@ -50,10 +49,8 @@ import { RestaurantEmailConfigSection } from './RestaurantEmailConfigSection';
 interface Props {
   subTab:
     | 'notifications'
-    | 'permissions'
     | 'impression'
     | 'terminaux'
-    | 'audit'
     | 'offline';
 }
 
@@ -102,199 +99,6 @@ export const HardwareAndSecuritySection: React.FC<Props> = ({ subTab }) => {
     { role: 'rh', label: 'Ressources Humaines', desc: 'Gestion des contrats, pointage des heures et documents administratifs.' },
     { role: 'auditeur', label: 'Auditeur Interne / Commissaire', desc: 'Consultation exclusive en lecture seule des journaux et traçabilité.' },
   ];
-
-  // 1. PERMISSIONS RBAC GRANULAIRES & PLAFONDS FINANCIERS
-  if (subTab === 'permissions') {
-    const modules: { module: PermissionModule; label: string }[] = [
-      { module: 'pos', label: 'POS & Prise de commande' },
-      { module: 'tables', label: 'Plan des tables & Salles' },
-      { module: 'caisse', label: 'Caisse & Clôture Z' },
-      { module: 'invoices', label: 'Facturation Officielle & Avoirs' },
-      { module: 'stock', label: 'Stocks & Lots FEFO' },
-      { module: 'purchases', label: 'Achats & Fournisseurs' },
-      { module: 'clients', label: 'Clients & Fidélité' },
-      { module: 'finance', label: 'Finances & Décaissements' },
-      { module: 'fiscal', label: 'Fiscalité Cameroun & E-Billing' },
-      { module: 'staff', label: 'Personnel & Présences' },
-      { module: 'audit', label: 'Journal d’Audit & Sécurité' },
-      { module: 'events', label: 'Événements & Banquets' },
-      { module: 'delivery', label: 'Livraisons & Courses' },
-      { module: 'settings', label: 'Configuration Système' },
-    ];
-
-    const roles: UserRole[] = ['direction', 'manager', 'caisse', 'serveur', 'cuisine', 'bar', 'stock', 'finance', 'comptable'];
-
-    return (
-      <div className="space-y-6">
-        {/* Matrice RBAC */}
-        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-4">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-rose-600 text-white flex items-center justify-center font-bold shadow-md shadow-rose-600/20 shrink-0">
-                <ShieldCheck className="w-5 h-5" />
-              </div>
-              <div>
-                <h3 className="text-sm font-bold text-slate-900">Matrice de Permissions Granulaires (RBAC)</h3>
-                <p className="text-xs text-slate-500">
-                  Définissez les droits d'accès détaillés par module et rôle métier
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2 self-end sm:self-auto">
-              <button
-                type="button"
-                onClick={() => setShowRolesGuide((prev) => !prev)}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs font-bold transition-colors cursor-pointer"
-              >
-                <Users className="w-3.5 h-3.5 text-slate-500" />
-                <span>{showRolesGuide ? 'Masquer le Référentiel des Rôles' : 'Consulter le Référentiel des Rôles'}</span>
-              </button>
-              <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-3 py-1.5 rounded-xl border border-emerald-200">
-                Traçabilité active
-              </span>
-            </div>
-          </div>
-
-          {/* Guide Référentiel des Rôles (Accordéon) */}
-          {showRolesGuide && (
-            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3 animate-in fade-in duration-200">
-              <div className="flex items-center justify-between">
-                <h4 className="text-xs font-black uppercase tracking-wider text-slate-700">
-                  Référentiel des Rôles & Définitions de Postes (11 Rôles)
-                </h4>
-                <span className="text-[10px] text-slate-400">Attributions et privilèges système</span>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
-                {rolesList.map((r) => (
-                  <div key={r.role} className="p-3 rounded-xl border border-slate-200 bg-white space-y-1 text-xs">
-                    <div className="flex items-center justify-between">
-                      <span className="font-bold text-slate-900">{r.label}</span>
-                      <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-slate-100 font-bold border border-slate-200">
-                        {r.role}
-                      </span>
-                    </div>
-                    <p className="text-slate-600 text-[11px] leading-relaxed">{r.desc}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          <div className="overflow-x-auto custom-scrollbar">
-            <table className="w-full text-left border-collapse text-xs">
-              <thead>
-                <tr className="bg-slate-100 text-slate-700 font-bold uppercase text-[10px] border-b border-slate-200">
-                  <th className="py-2.5 px-3">Module</th>
-                  {roles.map((r) => (
-                    <th key={r} className="py-2.5 px-2 text-center uppercase">
-                      {r}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {modules.map((m) => (
-                  <tr key={m.module} className="hover:bg-slate-50">
-                    <td className="py-3 px-3 font-bold text-slate-900">{m.label}</td>
-                    {roles.map((r) => {
-                      const canView = (rolePermissions as any)?.[r]?.[m.module]?.view ?? false;
-                      const isDirection = r === 'direction';
-
-                      return (
-                        <td key={r} className="py-3 px-2 text-center">
-                          <button
-                            type="button"
-                            disabled={isDirection}
-                            onClick={() => updateRolePermission(r, m.module, 'view', !canView)}
-                            className={`relative inline-flex h-4 w-7 shrink-0 cursor-pointer rounded-full border border-transparent transition-colors duration-200 ease-in-out disabled:cursor-not-allowed ${
-                              (isDirection || canView) ? 'bg-amber-500' : 'bg-slate-200'
-                            }`}
-                          >
-                            <span
-                              className={`pointer-events-none inline-block h-3 w-3 transform rounded-full bg-white shadow-xs transition duration-200 ease-in-out ${
-                                (isDirection || canView) ? 'translate-x-3' : 'translate-x-0.5'
-                              } mt-0.5`}
-                            />
-                          </button>
-                        </td>
-                      );
-                    })}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        {/* Plafonds Financiers par Rôle */}
-        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-6">
-          <div className="border-b border-slate-100 pb-4">
-            <h3 className="text-sm font-bold text-slate-900">Plafonds Financiers & Limites de Rôles</h3>
-            <p className="text-xs text-slate-500">
-              Plafonds stricts de remises (%) et de remboursements (FCFA) applicables sans code PIN Superviseur
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {(['serveur', 'caisse', 'manager'] as UserRole[]).map((role) => {
-              const currentLimit = roleLimits[role] || {
-                maxDiscountPercent: 5,
-                maxRefundAmount: 10000,
-                maxExpenseAmount: 50000,
-              };
-
-              return (
-                <div key={role} className="p-4 rounded-xl border border-slate-200 bg-slate-50 space-y-3 text-xs">
-                  <div className="font-bold text-slate-900 uppercase text-xs flex items-center justify-between">
-                    <span>Rôle : {role}</span>
-                    <span className="text-[10px] px-2 py-0.5 rounded bg-white font-bold border border-slate-200">
-                      Actif
-                    </span>
-                  </div>
-
-                  <div>
-                    <label className="text-slate-600 block mb-1">Remise max sans accord (%) :</label>
-                    <input
-                      type="number"
-                      min={0}
-                      max={100}
-                      value={currentLimit.maxDiscountPercent}
-                      onChange={(e) => updateRoleLimits(role, { maxDiscountPercent: Number(e.target.value) })}
-                      className="w-full p-2 bg-white rounded-lg border border-slate-300 font-bold font-mono"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-slate-600 block mb-1">Remboursement max (FCFA) :</label>
-                    <input
-                      type="number"
-                      min={0}
-                      step={5000}
-                      value={currentLimit.maxRefundAmount}
-                      onChange={(e) => updateRoleLimits(role, { maxRefundAmount: Number(e.target.value) })}
-                      className="w-full p-2 bg-white rounded-lg border border-slate-300 font-bold font-mono"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-slate-600 block mb-1">Dépense de caisse max (FCFA) :</label>
-                    <input
-                      type="number"
-                      min={0}
-                      step={10000}
-                      value={currentLimit.maxExpenseAmount}
-                      onChange={(e) => updateRoleLimits(role, { maxExpenseAmount: Number(e.target.value) })}
-                      className="w-full p-2 bg-white rounded-lg border border-slate-300 font-bold font-mono"
-                    />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   // 4. IMPRESSION & MATÉRIEL
   if (subTab === 'impression') {
@@ -649,14 +453,7 @@ export const HardwareAndSecuritySection: React.FC<Props> = ({ subTab }) => {
     );
   }
 
-  // 7. AUDIT UNIFIÉ (Fusion avec le Journal d'Audit global B.3)
-  if (subTab === 'audit') {
-    return (
-      <div className="space-y-4">
-        <AuditView />
-      </div>
-    );
-  }
+
 
   // 9. OFFLINE & SYNCHRONISATION (Section 30)
   if (subTab === 'offline') {

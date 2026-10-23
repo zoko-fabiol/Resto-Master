@@ -39,12 +39,10 @@ import { useConfirm } from '../ui/ConfirmDialog';
 import { ConfigurationProfileType } from '../../types/configuration';
 
 import { GeneralAndOutletsSection } from './sections/GeneralAndOutletsSection';
-import { FeaturesAndModulesSection } from './sections/FeaturesAndModulesSection';
 import { OperationsOptionsSection } from './sections/OperationsOptionsSection';
 import { StockAndPurchasesSection } from './sections/StockAndPurchasesSection';
 import { FiscalBillingPaymentsSection } from './sections/FiscalBillingPaymentsSection';
 import { HardwareAndSecuritySection } from './sections/HardwareAndSecuritySection';
-import { OrganizationSection } from './sections/OrganizationSection';
 import { RestaurantSubscriptionSection } from './sections/RestaurantSubscriptionSection';
 import { OnboardingWizard } from '../admin/OnboardingWizard';
 
@@ -60,7 +58,6 @@ export type SubMenuKey =
   | 'tables'
   | 'caisse'
   | 'paiements'
-  | 'features_modules'
   // Parcours 3 : Cuisine & Bar
   | 'cuisine'
   | 'bar'
@@ -68,15 +65,12 @@ export type SubMenuKey =
   | 'stock'
   | 'achats'
   // Parcours 5 : Équipe & Accès
-  | 'permissions'
   | 'notifications'
   | 'audit'
   // Parcours 6 : Matériel & Système
   | 'impression'
   | 'terminaux'
-  | 'offline'
-  // Groupe (Multi-Sites, conditionnel)
-  | 'organisation';
+  | 'offline';
 
 export type AppCategory =
   | 'all'
@@ -307,18 +301,6 @@ export const AdminCenterView: React.FC = () => {
         badge: 'Multi-Paiement & MoMo',
         tags: ['paiement', 'encaissement', 'cb', 'especes', 'cheque', 'virement', 'gimac', 'momo', 'orange money', 'mtn'],
       },
-      {
-        key: 'features_modules',
-        orderNumber: 8,
-        title: 'Modules & Fonctionnalités',
-        category: 'sales_floor',
-        categoryLabel: 'Salle & Ventes',
-        description: 'Gouvernance unifiée : activation des modules du menu latéral et catalogue des packs fonctionnels métier.',
-        icon: Layers,
-        gradient: 'from-violet-600 to-indigo-700',
-        badge: 'Gouvernance Unifiée',
-        tags: ['features', 'modules', 'menu', 'sidebar', 'packs', 'catalogue', 'activation'],
-      },
 
       // =========================================================================
       // 3. CUISINE ET BAR
@@ -387,18 +369,7 @@ export const AdminCenterView: React.FC = () => {
       // =========================================================================
       // 5. ÉQUIPE ET ACCÈS
       // =========================================================================
-      {
-        key: 'permissions',
-        orderNumber: 13,
-        title: 'Permissions RBAC & Référentiel des Rôles',
-        category: 'team_access',
-        categoryLabel: 'Équipe & Accès',
-        description: 'Sécurité anti-fraude, autorisations d’accès par module, référentiel des 11 rôles et plafonds financiers.',
-        icon: ShieldCheck,
-        gradient: 'from-rose-600 to-red-700',
-        badge: 'Anti-Fraude RBAC',
-        tags: ['permission', 'rbac', 'securite', 'pin', 'autorisation', 'superviseur', 'remise', 'plafond', 'roles', 'personnel'],
-      },
+
       {
         key: 'notifications',
         orderNumber: 14,
@@ -466,22 +437,6 @@ export const AdminCenterView: React.FC = () => {
         tags: ['offline', 'hors ligne', 'pwa', 'sync', 'stockage local'],
       },
     ];
-
-    // Groupe Multi-Sites : masqué si établissement unique (outlets.length <= 1)
-    if (outlets.length > 1) {
-      list.push({
-        key: 'organisation',
-        orderNumber: 19,
-        title: 'Organisation & Groupe Multi-Sites',
-        category: 'group',
-        categoryLabel: 'Groupe Multi-Sites',
-        description: 'Consolidation de chaîne de restaurants, enseignes, succursales et transferts multi-établissements.',
-        icon: Building2,
-        gradient: 'from-slate-700 to-slate-900',
-        badge: 'Multi-Sites',
-        tags: ['organisation', 'groupe', 'chaine', 'succursale', 'reseau', 'multi-sites'],
-      });
-    }
 
     // Filtrage strict : seules les applications autorisées par l'administrateur de plateforme s'affichent
     const isAppEntitled = (app: AppMetadata): boolean => {
@@ -600,12 +555,8 @@ export const AdminCenterView: React.FC = () => {
     switch (activeSubMenu) {
       case 'subscription':
         return <RestaurantSubscriptionSection />;
-      case 'organisation':
-        return <OrganizationSection />;
       case 'general':
         return <GeneralAndOutletsSection subTab="general" />;
-      case 'features_modules':
-        return <FeaturesAndModulesSection />;
       case 'pos':
       case 'tables':
       case 'caisse':
@@ -619,13 +570,37 @@ export const AdminCenterView: React.FC = () => {
       case 'fiscalite':
       case 'paiements':
         return <FiscalBillingPaymentsSection subTab={activeSubMenu} />;
-      case 'permissions':
       case 'notifications':
       case 'impression':
       case 'terminaux':
-      case 'audit':
       case 'offline':
         return <HardwareAndSecuritySection subTab={activeSubMenu} />;
+      case 'audit':
+        return (
+          <div className="bg-white rounded-3xl border border-slate-200 p-8 shadow-xs max-w-xl mx-auto text-center space-y-4">
+            <div className="w-14 h-14 rounded-2xl bg-slate-900 text-white flex items-center justify-center mx-auto shadow-md">
+              <History className="w-7 h-7 text-amber-400" />
+            </div>
+            <div>
+              <h3 className="text-base font-black text-slate-900">Journal d'Audit & Sécurité</h3>
+              <p className="text-xs text-slate-500 mt-1 max-w-md mx-auto">
+                La traçabilité immuable SHA-256 et l'historique complet des opérations sensibles sont accessibles dans le module dédié.
+              </p>
+            </div>
+            <div className="pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  window.location.hash = '#/audit';
+                }}
+                className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs shadow-md transition-colors cursor-pointer"
+              >
+                <span>Accéder au Module Audit</span>
+                <ChevronRight className="w-4 h-4 text-amber-400" />
+              </button>
+            </div>
+          </div>
+        );
       default:
         return null;
     }

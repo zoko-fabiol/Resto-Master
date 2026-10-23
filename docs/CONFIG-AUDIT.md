@@ -1,28 +1,20 @@
-# RestoMaster OS — Rapport Officiel d'Audit & Assainissement de la Configuration (Phase 2)
+# RestoMaster OS — Rapport Officiel d'Audit & Assainissement de la Configuration (Phase 3)
 
-**Date d'exécution** : 21 Octobre 2026  
-**Branche** : `feature/floorplan-config-hygiene`  
-**Outil de contrôle automatisé** : `scripts/audit-config.ts`  
+**Date d'exécution** : 23 Octobre 2026  
+**Branche** : `feat/phase3-restaurant-cleanup`  
+**Gouvernance** : Contrôle plateforme centralisé (Admin-Panel) & Délégation Restreinte  
 **Statut final de l'audit** : **ZÉRO DÉFAUT (0 erreur, code de sortie 0)**
 
 ---
 
-## 1. Résumé Exécutif
+## 1. Résumé Exécutif & Gouvernance de Configuration
 
-Avant l'assainissement de la Phase 2, le système de configuration de RestoMaster OS présentait des disparités architecturales :
-- **45 à 83 règles opérationnelles orphelines** déclarées dans `DEFAULT_OPERATION_RULES` mais sans effet dans les composants applicatifs (`PosView`, `StockView`, `PurchasesView`, `ClientsView`, `DeliveryView`, `CameroonInvoiceA5`).
-- **Deux sources de vérité concurrentes** entre les modules latéraux du menu (`Sidebar.tsx`) et le catalogue des fonctionnalités (`FeaturesAndModulesSection.tsx`).
-- **Écran de réglages mort** : `SettingsView.tsx` (472 lignes) subsistait sans être importé ni routé dans `App.tsx`.
-- **Organisation forcée** : La tuile d'administration multi-établissements était affichée même pour les restaurants mono-site.
-- **Libellés techniques en dur** : Présence de mentions telles que "Section 7 POS", "Section 11 Stocks", etc.
-
-À l'issue de la Phase 2 :
-- **100% des règles opérationnelles (189/189)** sont raccordées et actives dans leurs flux métiers respectifs.
-- **100% des fonctionnalités (40/40)** sont branchées et opérationnelles.
-- **`SettingsView.tsx` a été définitivement supprimé**.
-- **`FeaturesAndModulesSection.tsx` unifie** les modules du menu latéral et le catalogue des packs avec persistance Firestore atomique.
-- **La tuile `organisation` est masquée dynamiquement** si l'établissement est unique (`outlets.length <= 1`).
-- **Audit automatisé** (`npx tsx scripts/audit-config.ts`) validé avec succès (0 défaut).
+À l'issue de la restructuration Phase 3 :
+- **Source unique de vérité plateforme** : Les modules souscrits et les 35+ règles d'exploitation (`OPERATION_RULES`) sont gérés dans l'Admin-Panel via `ConfigurationTab.tsx` avec auto-snapshot et rollback.
+- **Suppression des doublons et interrupteurs locaux** : Les composants d'auto-activation `FeaturesAndModulesSection.tsx` et `FeatureCatalogSection.tsx` ont été définitivement supprimés de l'application restaurant.
+- **Verrouillage strict des clés non déléguées** : Dans `ModernRuleToggle.tsx` et `updateOperationRules`, toute règle non déclarée délégable par la plateforme est affichée avec un cadenas en lecture seule (`Géré par RestoMaster`) et son écriture est interceptée.
+- **Sécurisation des comptes collaborateurs** : `UserAccountsSection.tsx` est allégé pour se concentrer sur l'essentiel (création de compte, rôle, PIN, matricule). La gestion des onglets et droits fins est réservée aux administrateurs de plateforme via `UserAccessEditorModal.tsx`.
+- **Audit immuable scellé** : La tuile Audit dans `AdminCenterView.tsx` redirige vers le module d'audit dédié, évitant le doublon d'interface.
 
 ---
 

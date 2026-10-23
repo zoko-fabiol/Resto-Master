@@ -38,42 +38,6 @@ import {
   Loader2,
 } from 'lucide-react';
 
-// Modules configurables avec leurs métadonnées
-const SYSTEM_MODULES: { id: string; label: string; category: string; icon: string }[] = [
-  // Services & Ventes
-  { id: 'tables', label: 'Plan des Tables', category: 'Services & Ventes', icon: 'LayoutGrid' },
-  { id: 'pos', label: 'Prise de Commande / POS', category: 'Services & Ventes', icon: 'ShoppingCart' },
-  { id: 'kitchen_kds', label: 'Cuisine KDS', category: 'Services & Ventes', icon: 'UtensilsCrossed' },
-  { id: 'bar_kds', label: 'Bar & Boissons KDS', category: 'Services & Ventes', icon: 'Wine' },
-  { id: 'reservations', label: 'Réservations de Tables', category: 'Services & Ventes', icon: 'Calendar' },
-  { id: 'delivery', label: 'Livraisons & Emporter', category: 'Services & Ventes', icon: 'Truck' },
-  { id: 'events', label: 'Banquets & Événements', category: 'Services & Ventes', icon: 'PartyPopper' },
-
-  // Production & Stocks
-  { id: 'menu', label: 'Carte des Plats & Recettes', category: 'Production & Stocks', icon: 'BookOpen' },
-  { id: 'stock', label: 'Stocks & Lots FEFO', category: 'Production & Stocks', icon: 'Package' },
-  { id: 'purchases', label: 'Achats & Fournisseurs', category: 'Production & Stocks', icon: 'Truck' },
-  { id: 'hygiene', label: 'Hygiène & Contrôles HACCP', category: 'Production & Stocks', icon: 'ShieldAlert' },
-
-  // Caisse & Fiscalité
-  { id: 'caisse', label: 'Caisse & Clôture Z', category: 'Caisse & Finances', icon: 'DollarSign' },
-  { id: 'main_courante', label: 'Main Courante HotelPro', category: 'Caisse & Finances', icon: 'FileSpreadsheet' },
-  { id: 'fiscal', label: 'Fiscalité Cameroun & DGI', category: 'Caisse & Finances', icon: 'Receipt' },
-  { id: 'finance', label: 'Finances & Dépenses', category: 'Caisse & Finances', icon: 'TrendingUp' },
-
-  // Gestion & Pilotage
-  { id: 'dashboard', label: 'Tableau de Bord Exécutif', category: 'Gestion & Pilotage', icon: 'LayoutDashboard' },
-  { id: 'clients', label: 'Clients & Programmes Fidélité', category: 'Gestion & Pilotage', icon: 'Heart' },
-  { id: 'staff', label: 'Personnel & Comptes Utilisateurs', category: 'Gestion & Pilotage', icon: 'Users' },
-  { id: 'documents', label: 'Scanner & GED Numérique', category: 'Gestion & Pilotage', icon: 'Folder' },
-  { id: 'reports', label: 'Rapports Statistiques & Ventes', category: 'Gestion & Pilotage', icon: 'BarChart3' },
-  { id: 'audit', label: 'Piste d\'Audit Inaltérable', category: 'Gestion & Pilotage', icon: 'FileText' },
-  { id: 'settings', label: 'Paramètres Système', category: 'Gestion & Pilotage', icon: 'Settings' },
-
-  // Borne Tablette
-  { id: 'kiosk', label: 'Borne Tablette Tactile (Kiosk Client)', category: 'Mode Borne', icon: 'Tablet' },
-];
-
 export const UserAccountsSection: React.FC = () => {
   const {
     userAccounts,
@@ -81,7 +45,6 @@ export const UserAccountsSection: React.FC = () => {
     updateUserAccount,
     deleteUserAccount,
     toggleUserAccountStatus,
-    updateUserAccountPermissions,
     tables,
     employees,
     settings,
@@ -97,7 +60,6 @@ export const UserAccountsSection: React.FC = () => {
 
   // Modales
   const [createModalOpen, setCreateModalOpen] = useState(false);
-  const [permissionsModalOpen, setPermissionsModalOpen] = useState(false);
   const [editingAccount, setEditingAccount] = useState<UserAccount | null>(null);
 
   // Fiche de Remise Sécurisée d'Identifiants (Phase F - Exigence F3)
@@ -123,10 +85,6 @@ export const UserAccountsSection: React.FC = () => {
     phone: '',
     assignedTableId: '',
   });
-
-  // Permissions temporaires en cours d'édition dans la modale
-  const [tempPermissions, setTempPermissions] = useState<Record<string, TabPermission>>({});
-  const [tempAdditionalTabs, setTempAdditionalTabs] = useState<string[]>([]);
 
   // Générateur de PIN aléatoire à 4 chiffres
   const generateRandomPin = (): string => {
@@ -348,10 +306,6 @@ export const UserAccountsSection: React.FC = () => {
           phone: formData.phone.trim(),
           assignedTableId: formData.accountType === 'tablette' ? formData.assignedTableId : undefined,
           assignedTableName,
-          tabPermissions: formData.accountType === 'tablette'
-            ? { kiosk: { view: true, create: true, edit: false, delete: false } }
-            : undefined,
-          additionalTabs: [],
         });
 
         setCreateModalOpen(false);
@@ -374,81 +328,7 @@ export const UserAccountsSection: React.FC = () => {
     }
   };
 
-  // Ouvrir l'éditeur de permissions
-  const handleOpenPermissions = (acc: UserAccount) => {
-    setEditingAccount(acc);
-    setTempPermissions(acc.tabPermissions || {});
-    setTempAdditionalTabs(acc.additionalTabs || []);
-    setPermissionsModalOpen(true);
-  };
 
-  // Basculer un droit granulaire (view, create, edit, delete)
-  const handleToggleAction = (moduleId: string, action: keyof TabPermission) => {
-    setTempPermissions((prev) => {
-      const current = prev[moduleId] || { view: false, create: false, edit: false, delete: false };
-      const nextVal = !current[action];
-      const updated: TabPermission = { ...current, [action]: nextVal };
-
-      // Si on active create/edit/delete, on active automatiquement 'view'
-      if (nextVal && action !== 'view') {
-        updated.view = true;
-      }
-      // Si on désactive 'view', on désactive tout
-      if (!nextVal && action === 'view') {
-        updated.create = false;
-        updated.edit = false;
-        updated.delete = false;
-      }
-
-      return {
-        ...prev,
-        [moduleId]: updated,
-      };
-    });
-  };
-
-  // Basculer l'attribution d'un onglet supplémentaire
-  const handleToggleAdditionalTab = (moduleId: string) => {
-    setTempAdditionalTabs((prev) => {
-      if (prev.includes(moduleId)) {
-        return prev.filter((id) => id !== moduleId);
-      } else {
-        // En l'ajoutant, on donne au moins le droit 'view'
-        setTempPermissions((p) => ({
-          ...p,
-          [moduleId]: p[moduleId] || { view: true, create: false, edit: false, delete: false },
-        }));
-        return [...prev, moduleId];
-      }
-    });
-  };
-
-  // Présets rapides
-  const applyPreset = (type: 'full' | 'readonly' | 'clear') => {
-    if (type === 'full') {
-      const all: Record<string, TabPermission> = {};
-      SYSTEM_MODULES.forEach((m) => {
-        all[m.id] = { view: true, create: true, edit: true, delete: true };
-      });
-      setTempPermissions(all);
-    } else if (type === 'readonly') {
-      const ro: Record<string, TabPermission> = {};
-      SYSTEM_MODULES.forEach((m) => {
-        ro[m.id] = { view: true, create: false, edit: false, delete: false };
-      });
-      setTempPermissions(ro);
-    } else if (type === 'clear') {
-      setTempPermissions({});
-      setTempAdditionalTabs([]);
-    }
-  };
-
-  // Sauvegarder les permissions
-  const handleSavePermissions = async () => {
-    if (!editingAccount) return;
-    await updateUserAccountPermissions(editingAccount.id, tempPermissions, tempAdditionalTabs);
-    setPermissionsModalOpen(false);
-  };
 
   // Tester la tablette directement
   const handleTestTablet = async (tablet: UserAccount) => {
@@ -573,13 +453,7 @@ export const UserAccountsSection: React.FC = () => {
                   >
                     <Key className="w-4 h-4" />
                   </button>
-                  <button
-                    onClick={() => handleOpenPermissions(tablet)}
-                    className="p-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-slate-200 hover:text-white transition-all"
-                    title="Droits d'accès"
-                  >
-                    <Shield className="w-4 h-4" />
-                  </button>
+
                   <button
                     onClick={() => {
                       setEditingAccount(tablet);
@@ -817,14 +691,7 @@ export const UserAccountsSection: React.FC = () => {
                           <Key className="w-3.5 h-3.5" />
                         </button>
 
-                        <button
-                          onClick={() => handleOpenPermissions(acc)}
-                          className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-xs transition-colors border border-indigo-200 cursor-pointer"
-                          title="Paramétrer les permissions fines (CRUD par onglet)"
-                        >
-                          <ShieldCheck className="w-3.5 h-3.5" />
-                          <span>Droits Granulaires</span>
-                        </button>
+
 
                         <button
                           onClick={() => {
@@ -1158,229 +1025,7 @@ export const UserAccountsSection: React.FC = () => {
         </div>
       )}
 
-      {/* 5. MODALE DE CONFIGURATION DES DROITS GRANULAIRES (CRUD PAR ONGLET - Exigence Audio 1) */}
-      {permissionsModalOpen && editingAccount && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-4xl w-full max-h-[90vh] flex flex-col shadow-2xl border border-slate-200 animate-in fade-in zoom-in-95 duration-150">
-            {/* Header */}
-            <div className="p-6 border-b border-slate-100 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-2xl bg-indigo-50 border border-indigo-200 flex items-center justify-center text-indigo-600 font-black">
-                  <ShieldCheck className="w-6 h-6" />
-                </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h3 className="font-black text-base text-slate-900">
-                      Permissions & Droits d'Accès Granulaires : {editingAccount.name}
-                    </h3>
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-100 text-indigo-800">
-                      Rôle : {ROLE_LABELS[editingAccount.role]?.label || editingAccount.role}
-                    </span>
-                  </div>
-                  <p className="text-xs text-slate-500">
-                    Cochez précisément les opérations permises pour chaque onglet : Voir, Ajouter (+), Modifier (Éditer), Supprimer (Annuler).
-                  </p>
-                </div>
-              </div>
 
-              <button
-                onClick={() => setPermissionsModalOpen(false)}
-                className="p-2 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            {/* Barre de présets rapides */}
-            <div className="px-6 py-3 bg-slate-50 border-b border-slate-200/80 flex flex-wrap items-center justify-between gap-3 text-xs">
-              <div className="flex items-center gap-2">
-                <span className="font-bold text-slate-700">Présets Rapides :</span>
-                <button
-                  type="button"
-                  onClick={() => applyPreset('full')}
-                  className="px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-700 font-bold border border-emerald-200 hover:bg-emerald-100 transition-colors"
-                >
-                  Tout Autoriser (Full Admin)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => applyPreset('readonly')}
-                  className="px-2.5 py-1 rounded-lg bg-blue-50 text-blue-700 font-bold border border-blue-200 hover:bg-blue-100 transition-colors"
-                >
-                  Lecture Seule Partout
-                </button>
-                <button
-                  type="button"
-                  onClick={() => applyPreset('clear')}
-                  className="px-2.5 py-1 rounded-lg bg-red-50 text-red-700 font-bold border border-red-200 hover:bg-red-100 transition-colors"
-                >
-                  Révoquer Tout
-                </button>
-              </div>
-
-              <div className="text-[11px] text-slate-500">
-                <span className="font-bold text-slate-900">{tempAdditionalTabs.length}</span> onglet(s) additionnel(s) accordé(s)
-              </div>
-            </div>
-
-            {/* Matrice Granulaire Interactive (Scrollable) */}
-            <div className="flex-1 overflow-y-auto p-6 space-y-6">
-              {['Services & Ventes', 'Production & Stocks', 'Caisse & Finances', 'Gestion & Pilotage', 'Mode Borne'].map((category) => {
-                const modules = SYSTEM_MODULES.filter((m) => m.category === category);
-                if (modules.length === 0) return null;
-
-                return (
-                  <div key={category} className="space-y-3">
-                    <h4 className="text-xs font-black uppercase tracking-wider text-slate-400">
-                      {category}
-                    </h4>
-
-                    <div className="bg-slate-50/50 rounded-2xl border border-slate-200 overflow-hidden divide-y divide-slate-200/70">
-                      {modules.map((mod) => {
-                        const perm = tempPermissions[mod.id] || { view: false, create: false, edit: false, delete: false };
-                        const isAdditional = tempAdditionalTabs.includes(mod.id);
-
-                        return (
-                          <div
-                            key={mod.id}
-                            className={`p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition-colors ${
-                              perm.view ? 'bg-white' : 'bg-slate-50/40 opacity-75'
-                            }`}
-                          >
-                            <div className="flex items-center gap-3">
-                              <div
-                                className={`w-8 h-8 rounded-xl flex items-center justify-center font-bold text-xs transition-colors ${
-                                  perm.view
-                                    ? 'bg-amber-100 text-amber-800 border border-amber-300'
-                                    : 'bg-slate-200 text-slate-500'
-                                }`}
-                              >
-                                {mod.label.slice(0, 1)}
-                              </div>
-                              <div>
-                                <div className="font-bold text-xs text-slate-900 flex items-center gap-2">
-                                  <span>{mod.label}</span>
-                                  {isAdditional && (
-                                    <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
-                                      Onglet Additionnel
-                                    </span>
-                                  )}
-                                </div>
-                                <span className="text-[10px] font-mono text-slate-400">Module ID: {mod.id}</span>
-                              </div>
-                            </div>
-
-                            {/* 4 Boutons / Checkboxes CRUD */}
-                            <div className="flex items-center gap-2 flex-wrap">
-                              {/* Voir */}
-                              <button
-                                type="button"
-                                onClick={() => handleToggleAction(mod.id, 'view')}
-                                className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold border transition-all ${
-                                  perm.view
-                                    ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
-                                    : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300'
-                                }`}
-                              >
-                                <Eye className="w-3.5 h-3.5" />
-                                <span>Voir</span>
-                              </button>
-
-                              {/* Ajouter */}
-                              <button
-                                type="button"
-                                onClick={() => handleToggleAction(mod.id, 'create')}
-                                className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold border transition-all ${
-                                  perm.create
-                                    ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
-                                    : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300'
-                                }`}
-                              >
-                                <Plus className="w-3.5 h-3.5" />
-                                <span>Ajouter (+)</span>
-                              </button>
-
-                              {/* Modifier */}
-                              <button
-                                type="button"
-                                onClick={() => handleToggleAction(mod.id, 'edit')}
-                                className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold border transition-all ${
-                                  perm.edit
-                                    ? 'bg-amber-600 text-white border-amber-600 shadow-xs'
-                                    : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300'
-                                }`}
-                              >
-                                <Edit2 className="w-3.5 h-3.5" />
-                                <span>Modifier</span>
-                              </button>
-
-                              {/* Supprimer */}
-                              <button
-                                type="button"
-                                onClick={() => handleToggleAction(mod.id, 'delete')}
-                                className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold border transition-all ${
-                                  perm.delete
-                                    ? 'bg-red-600 text-white border-red-600 shadow-xs'
-                                    : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300'
-                                }`}
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                                <span>Supprimer</span>
-                              </button>
-
-                              {/* Bouton pour marquer comme Onglet Additionnel */}
-                              <button
-                                type="button"
-                                onClick={() => handleToggleAdditionalTab(mod.id)}
-                                className={`p-1.5 rounded-lg border text-xs font-bold transition-all ${
-                                  isAdditional
-                                    ? 'bg-amber-100 text-amber-800 border-amber-300'
-                                    : 'bg-white text-slate-400 border-slate-200 hover:text-slate-700'
-                                }`}
-                                title={
-                                  isAdditional
-                                    ? 'Onglet accordé en extra au-delà du rôle par défaut'
-                                    : 'Définir comme onglet accordé en extra'
-                                }
-                              >
-                                <Key className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* Footer */}
-            <div className="p-4 sm:p-6 border-t border-slate-100 bg-white flex items-center justify-between">
-              <div className="text-xs text-slate-500">
-                Droits immédiatement effectifs à la sauvegarde.
-              </div>
-              <div className="flex items-center gap-3">
-                <button
-                  type="button"
-                  onClick={() => setPermissionsModalOpen(false)}
-                  className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition-colors"
-                >
-                  Annuler
-                </button>
-                <button
-                  type="button"
-                  onClick={handleSavePermissions}
-                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-md shadow-indigo-600/20 transition-all"
-                >
-                  <Check className="w-4 h-4" />
-                  <span>Enregistrer les Droits Granulaires</span>
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* 6. MODALE MODIFICATION RAPIDE DE CODE PIN */}
       {pinModalOpen && selectedAccountForPin && (
