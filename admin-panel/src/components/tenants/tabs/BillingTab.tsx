@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { CreditCard, Plus, Clock, CheckCircle2, AlertTriangle, Calendar, Receipt } from 'lucide-react';
+import { CreditCard, Plus, Clock, CheckCircle2, AlertTriangle, Calendar, Receipt, Sparkles, RefreshCw } from 'lucide-react';
 import { Tenant, DEFAULT_PLANS, Plan } from '@shared';
+import { CATALOG_PACKS, PackId } from '../../../../../shared/catalog/packs';
 import { adminPlatformService } from '../../../services/adminPlatformService';
 import { db } from '../../../../../src/lib/firebase';
 import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
@@ -85,6 +86,40 @@ export const BillingTab: React.FC<BillingTabProps> = ({ tenant }) => {
     }
   };
 
+  const currentPackId: PackId =
+    (tenant.packId as PackId) ||
+    (tenant.planId?.includes('starter') ? 'minimum' : tenant.planId?.includes('enterprise') ? 'premium' : 'medium');
+  const packDef = CATALOG_PACKS[currentPackId] || CATALOG_PACKS.medium;
+
+  const [showChangePlanModal, setShowChangePlanModal] = useState(false);
+  const [targetPackId, setTargetPackId] = useState<PackId>(currentPackId);
+  const [changePlanReason, setChangePlanReason] = useState('');
+  const [isChangingPlan, setIsChangingPlan] = useState(false);
+
+  const handleChangePlanSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!changePlanReason || changePlanReason.trim().length < 5) {
+      alert('Veuillez indiquer un motif valable (au moins 5 caractères).');
+      return;
+    }
+
+    try {
+      setIsChangingPlan(true);
+      await adminPlatformService.changeTenantPlan({
+        orgId: tenant.id,
+        newPlanId: targetPackId,
+        reason: changePlanReason.trim(),
+      });
+      setShowChangePlanModal(false);
+      setChangePlanReason('');
+      alert(`Pack mis à jour vers "${CATALOG_PACKS[targetPackId].name}" avec synchronisation des droits.`);
+    } catch (err: any) {
+      alert(`Erreur : ${err?.message || 'Échec du changement de pack'}`);
+    } finally {
+      setIsChangingPlan(false);
+    }
+  };
+
   return (
     <div className="space-y-6 text-xs">
       {/* Overview Cards */}
@@ -93,13 +128,18 @@ export const BillingTab: React.FC<BillingTabProps> = ({ tenant }) => {
         <div className="p-5 rounded-2xl bg-slate-900/60 border border-slate-800 space-y-2 flex flex-col justify-between">
           <div>
             <div className="text-[10px] text-slate-500 font-semibold uppercase">Formule Contractuelle</div>
-            <div className="text-base font-bold text-white mt-1">{plan?.name || tenant.planId}</div>
+            <div className="text-base font-bold text-white mt-1 flex items-center justify-between">
+              <span>{packDef.name}</span>
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                {packDef.badge}
+              </span>
+            </div>
             <div className="text-amber-400 font-mono text-sm font-black mt-0.5 tabular-nums">
-              {plan?.priceFcfaMonthly?.toLocaleString('fr-FR')} FCFA / mois
+              {packDef.priceMonthly.toLocaleString('fr-FR')} FCFA / mois
             </div>
           </div>
           <div className="text-[11px] text-slate-400">
-            Engagement : Facturation mensuelle ou annuelle au choix
+            {packDef.limits.maxTerminals} caisse(s) • {packDef.limits.maxUsers} utilisateurs • {packDef.limits.maxOrdersPerMonth.toLocaleString('fr-FR')} cdes/m
           </div>
         </div>
 
@@ -136,15 +176,16 @@ export const BillingTab: React.FC<BillingTabProps> = ({ tenant }) => {
               <span>Enregistrer un Règlement</span>
             </button>
 
-            {tenant.status === 'essai' && (
-              <button
-                onClick={handleExtendTrial}
-                className="w-full py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold transition-colors flex items-center justify-center gap-2 cursor-pointer border border-slate-700"
-              >
-                <Clock className="w-3.5 h-3.5" />
-                <span>Prolonger l'Essai Gratuit</span>
-              </button>
-            )}
+            <button
+              onClick={() => {
+                setTargetPackId(currentPackId);
+                setShowChangePlanModal(true);
+              }}
+              className="w-full py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold transition-colors flex items-center justify-center gap-2 cursor-pointer border border-slate-700"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              <span>Modifier le Pack (Formule)</span>
+            </button>
           </div>
         </div>
       </div>
@@ -298,6 +339,94 @@ export const BillingTab: React.FC<BillingTabProps> = ({ tenant }) => {
                   className="px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold transition-all shadow-md shadow-amber-500/20"
                 >
                   {isSubmitting ? 'Validation...' : 'Valider le Paiement'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Changement de Formule (Pack) */}
+      {showChangePlanModal && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+              <div className="font-bold text-white text-base flex items-center gap-2">
+                <RefreshCw className="w-5 h-5 text-amber-400" />
+                <span>Modifier le Pack Contractuel</span>
+              </div>
+              <button
+                onClick={() => setShowChangePlanModal(false)}
+                className="text-slate-400 hover:text-white"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleChangePlanSubmit} className="space-y-4">
+              <div>
+                <label className="block text-slate-300 font-semibold mb-2">Sélectionnez la nouvelle formule :</label>
+                <div className="space-y-2">
+                  {Object.values(CATALOG_PACKS).map((pack) => (
+                    <label
+                      key={pack.id}
+                      className={`p-3 rounded-xl border flex items-center justify-between cursor-pointer transition-all ${
+                        targetPackId === pack.id
+                          ? 'bg-amber-500/10 border-amber-500 text-white'
+                          : 'bg-slate-950/40 border-slate-800 text-slate-400 hover:border-slate-700'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <input
+                          type="radio"
+                          name="targetPack"
+                          value={pack.id}
+                          checked={targetPackId === pack.id}
+                          onChange={() => setTargetPackId(pack.id)}
+                          className="text-amber-500 focus:ring-amber-500 bg-slate-900 border-slate-700"
+                        />
+                        <div>
+                          <div className="font-bold text-white">{pack.name} ({pack.badge})</div>
+                          <div className="text-[11px] text-slate-400">
+                            {pack.limits.maxTerminals} caisse(s) • {pack.limits.maxUsers} users • {pack.limits.maxOrdersPerMonth.toLocaleString('fr-FR')} cdes/m
+                          </div>
+                        </div>
+                      </div>
+                      <div className="font-mono font-bold text-amber-400 tabular-nums">
+                        {pack.priceMonthly.toLocaleString('fr-FR')} F/m
+                      </div>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-slate-300 font-semibold mb-1">Motif de la modification (Requis pour l'audit) *</label>
+                <textarea
+                  required
+                  minLength={5}
+                  value={changePlanReason}
+                  onChange={(e) => setChangePlanReason(e.target.value)}
+                  placeholder="Ex: Demande client, surclassement suite à ouverture 2ème caisse..."
+                  rows={2}
+                  className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-white placeholder-slate-600"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowChangePlanModal(false)}
+                  className="px-4 py-2 text-slate-400 hover:text-white"
+                >
+                  Annuler
+                </button>
+                <button
+                  type="submit"
+                  disabled={isChangingPlan}
+                  className="px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold transition-all shadow-md shadow-amber-500/20"
+                >
+                  {isChangingPlan ? 'Enregistrement...' : 'Appliquer et Recalculer les Droits'}
                 </button>
               </div>
             </form>

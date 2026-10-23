@@ -20,6 +20,8 @@ import {
   ChangeTenantPlanRequest,
   ExportTenantDataRequest,
 } from '../types.js';
+import { resolveEntitlements } from '../shared/catalog/resolver.js';
+import { PackId, RestaurantTypeId } from '../shared/catalog/packs.js';
 
 // Matrice des profils de configuration intégrée pour exécution serveur sécurisée
 const SERVER_PROFILES: Record<
@@ -1048,25 +1050,55 @@ export async function handleChangeTenantPlan(
     throw new HttpsError('not-found', 'Tenant introuvable.');
   }
 
-  const beforePlanId = snap.data()?.planId;
+  const tenantData = snap.data() || {};
+  const beforePlanId = tenantData.planId || tenantData.packId;
   const now = new Date().toISOString();
 
-  await tenantRef.update({
-    planId: newPlanId,
+  // Détermination du pack normalisé
+  let targetPackId: PackId = 'medium';
+  const cleanPlan = newPlanId.toLowerCase();
+  if (cleanPlan.includes('minimum') || cleanPlan.includes('starter')) targetPackId = 'minimum';
+  else if (cleanPlan.includes('premium') || cleanPlan.includes('enterprise')) targetPackId = 'premium';
+  else targetPackId = 'medium';
+
+  const restaurantType: RestaurantTypeId = tenantData.restaurantType || tenantData.type || 'restaurant_classique';
+  const selectedAddons: string[] = tenantData.selectedAddons || [];
+  const additionalCapacities = tenantData.additionalCapacities || {};
+
+  // Résolution certifiée des droits pour le nouveau pack
+  const newEntitlements = resolveEntitlements({
+    orgId,
+    restaurantType,
+    packId: targetPackId,
+    subscribedAddons: selectedAddons,
+    capacities: additionalCapacities,
+    updatedBy: caller.email || caller.uid,
+  });
+
+  const batch = db.batch();
+  batch.update(tenantRef, {
+    planId: targetPackId,
+    packId: targetPackId,
+    entitlements: newEntitlements,
     updatedAt: now,
   });
+
+  const entitlementsDocRef = tenantRef.collection('entitlements').doc('current');
+  batch.set(entitlementsDocRef, newEntitlements, { merge: true });
+
+  await batch.commit();
 
   await appendPlatformAuditLog({
     actorUid: caller.uid,
     actorEmail: caller.email,
     actorRole: caller.platformRole,
     action: 'CHANGE_PLAN',
-    detail: `Migration de formule : "${beforePlanId}" -> "${newPlanId}".`,
+    detail: `Migration de formule : "${beforePlanId}" -> "${targetPackId}" avec recalcul certifié des entitlements.`,
     reason: reason.trim(),
     targetOrgId: orgId,
   });
 
-  return { success: true, oldPlanId: beforePlanId, newPlanId };
+  return { success: true, oldPlanId: beforePlanId, newPlanId: targetPackId, entitlements: newEntitlements };
 }
 
 // ---------------------------------------------------------------------------

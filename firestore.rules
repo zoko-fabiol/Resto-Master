@@ -189,6 +189,11 @@ service cloud.firestore {
       allow write: if isPlatformWriter();
     }
 
+    match /catalog/{document=**} {
+      allow read: if true;
+      allow write: if isPlatformWriter();
+    }
+
     match /feature_catalog/{featureId} {
       allow read: if isAuthenticated();
       allow write: if isPlatformWriter();

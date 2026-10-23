@@ -11,6 +11,8 @@ import { CreateTenantModal } from './components/tenants/CreateTenantModal';
 import { SignupsListView } from './components/signups/SignupsListView';
 import { AnnouncementsView } from './components/announcements/AnnouncementsView';
 import { PlatformAdminsView } from './components/admins/PlatformAdminsView';
+import { EmailManagementView } from './components/emails/EmailManagementView';
+import { CatalogPricingView } from './components/catalog/CatalogPricingView';
 import { adminPlatformService, PlatformAnnouncement } from './services/adminPlatformService';
 import { Tenant, TenantSignupRequest, PlatformAuditLog, SupportSession } from '../../shared/types';
 import { ShieldCheck, RefreshCw, ShieldAlert, Sparkles } from 'lucide-react';
@@ -139,6 +141,8 @@ const AdminPanelInner: React.FC = () => {
             </>
           )}
 
+          {currentTab === 'catalog' && <CatalogPricingView />}
+
           {currentTab === 'signups' && <SignupsListView signups={signups} />}
 
           {currentTab === 'announcements' && <AnnouncementsView announcements={announcements} />}
@@ -266,6 +270,8 @@ const AdminPanelInner: React.FC = () => {
               </div>
             </div>
           )}
+
+          {currentTab === 'emails' && <EmailManagementView />}
 
           {currentTab === 'admins' && <PlatformAdminsView />}
         </main>

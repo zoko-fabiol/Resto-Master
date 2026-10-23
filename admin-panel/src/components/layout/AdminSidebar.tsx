@@ -2,6 +2,7 @@ import React from 'react';
 import {
   LayoutDashboard,
   Store,
+  Package,
   UserPlus,
   Megaphone,
   ShieldAlert,
@@ -9,6 +10,7 @@ import {
   Settings,
   UserCheck,
   X,
+  Mail,
 } from 'lucide-react';
 
 interface AdminSidebarProps {
@@ -52,6 +54,11 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
       icon: Store,
     },
     {
+      id: 'catalog',
+      label: 'Catalogue & Tarifs',
+      icon: Package,
+    },
+    {
       id: 'signups',
       label: 'Demandes d’Inscription',
       icon: UserPlus,
@@ -74,6 +81,11 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
       id: 'audit',
       label: 'Journal d’Audit Crypté',
       icon: ShieldAlert,
+    },
+    {
+      id: 'emails',
+      label: 'E-mails & Modèles',
+      icon: Mail,
     },
     {
       id: 'admins',

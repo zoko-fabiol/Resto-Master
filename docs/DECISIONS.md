@@ -286,5 +286,23 @@ Ce document consigne les décisions d'architecture prises pour la livraison d'un
   5. **Données Internes Plateforme** : Les annotations internes (`internalNotes`, `labels`, `healthScore`) sont isolées dans le sous-document `tenants/{orgId}/admin/private`, invisible pour le propriétaire et ses employés.
 - **Conséquences** : Cloisonnement étanche entre les privilèges SaaS plateforme et la gestion quotidienne d'un restaurant, prévention absolue de l'escalade de privilèges, et conformité de sécurité multi-locataires.
 
+---
+
+### ADR-017 : Catalogue Officiel des Packs, Moteur de Devis Serveur et Synchronisation Idempotente des Entitlements
+- **Date** : 2026-10-23
+- **Statut** : Accepté & Implémenté (Phase 2 du Chantier Installation & Abonnements)
+- **Contexte** : La tarification de la plateforme comportait historiquement des plans non harmonisés (`plan_starter`, `plan_pro`, `plan_enterprise`) et permettait à l'interface client de recalculer les droits sans garantie d'infalsifiabilité ni contrôle centralisé des options à la carte.
+- **Décision** :
+  1. **Nomenclature Officielle des Packs** : 3 packs stricts et universels :
+     - **Minimum** : 25 000 FCFA/mois (1 caisse, 3 utilisateurs, 1 500 commandes/mois).
+     - **Médium** : 35 000 FCFA/mois (3 caisses, 8 utilisateurs, 6 000 commandes/mois, KDS et stocks inclus).
+     - **Premium** : 50 000 FCFA/mois (8 caisses, 20 utilisateurs, 20 000 commandes/mois, tous modules inclus).
+  2. **8 Profils Métiers Adaptés** : Dotations de base et recommandations calibrées pour 8 types (Snack, Fast-Food, Classique, Maquis, Bar Lounge, Boulangerie/Café, Traiteur, Hôtel).
+  3. **Moteur Tarifaire Serveur (`computeQuote`)** : Le calcul de devis financier est désormais exclusivement assuré par la Cloud Function v2 `computeQuote` (règle des 10 mois en annuel avec 2 mois offerts, multiplicateur x25 pour licence à vie avec maintenance annuelle 2.4x, et suggestion intelligente d'upsell dès que les options dépassent 80% de l'écart).
+  4. **Résolution Idempotente des Droits (`resolveEntitlements`)** : Les modules activés, fonctionnalités et plafonds (`effectiveLimits`) sont calculés de manière pure et déterministe via `shared/catalog/resolver.ts`, avec synchronisation atomique dans `tenants/{orgId}/entitlements/current`.
+  5. **Console Admin Plateforme** : Ajout de la vue « Catalogue & Tarifs » (`CatalogPricingView`) et d'un modal de changement de formule avec motif d'audit dans `BillingTab`.
+- **Conséquences** : Zéro divergence tarifaire possible, transparence totale pour le client, sécurité anti-falsification du montant à payer, et traçabilité immuable des changements d'offre.
+
+
 
 

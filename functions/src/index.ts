@@ -14,6 +14,9 @@ import {
   handleRejectSignup,
   handleCreateTenant,
   handleSetTenantStatus,
+  handleProvisionRestaurantInitialSetup,
+  handleValidateRestaurantAccessCode,
+  handleCompleteRestaurantSetup,
 } from './modules/provisioning.js';
 import {
   handleUpdateTenantEntitlements,
@@ -81,6 +84,9 @@ export const approveSignup = onCall(FUNCTION_OPTIONS, handleApproveSignup);
 export const rejectSignup = onCall(FUNCTION_OPTIONS, handleRejectSignup);
 export const createTenant = onCall(FUNCTION_OPTIONS, handleCreateTenant);
 export const setTenantStatus = onCall(FUNCTION_OPTIONS, handleSetTenantStatus);
+export const provisionRestaurantInitialSetup = onCall(FUNCTION_OPTIONS, handleProvisionRestaurantInitialSetup);
+export const validateRestaurantAccessCode = onCall(FUNCTION_OPTIONS, handleValidateRestaurantAccessCode);
+export const completeRestaurantSetup = onCall(FUNCTION_OPTIONS, handleCompleteRestaurantSetup);
 
 // 11. Configuration Distante, Abonnements & Support
 export const updateTenantEntitlements = onCall(FUNCTION_OPTIONS, handleUpdateTenantEntitlements);
@@ -102,6 +108,11 @@ export const forceSignOut = onCall(FUNCTION_OPTIONS, handleForceSignOut);
 export const resetOwnerPassword = onCall(FUNCTION_OPTIONS, handleResetOwnerPassword);
 export const changeTenantPlan = onCall(FUNCTION_OPTIONS, handleChangeTenantPlan);
 export const exportTenantData = onCall(FUNCTION_OPTIONS, handleExportTenantData);
+
+// 14. Catalogue & Tarifs Officiels RestoMaster OS (Phase 2)
+import { handleComputeQuote, handleUpdateCatalog } from './modules/catalog.js';
+export const computeQuote = onCall(FUNCTION_OPTIONS, handleComputeQuote);
+export const updateCatalog = onCall(FUNCTION_OPTIONS, handleUpdateCatalog);
 
 
 
