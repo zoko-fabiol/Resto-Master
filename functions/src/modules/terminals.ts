@@ -31,6 +31,41 @@ export async function handleGeneratePairingCode(request: CallableRequest<Generat
     throw new HttpsError('not-found', `Terminal ${terminalId} introuvable.`);
   }
 
+  // Contrôle du plafond de postes/terminaux (effectiveLimits.maxTerminals)
+  const termOrgId = termSnap.data()?.organizationId || caller.organizationId;
+  if (caller.role !== 'superadmin' && termOrgId) {
+    try {
+      const entitlementsDoc = await db
+        .collection('tenants')
+        .doc(termOrgId)
+        .collection('entitlements')
+        .doc('current')
+        .get();
+      if (entitlementsDoc.exists) {
+        const entData = entitlementsDoc.data();
+        const maxTerminals = entData?.effectiveLimits?.maxTerminals;
+        if (typeof maxTerminals === 'number' && maxTerminals > 0) {
+          const terminalsSnap = await db
+            .collection('terminals')
+            .where('organizationId', '==', termOrgId)
+            .where('active', '==', true)
+            .count()
+            .get();
+          const currentCount = terminalsSnap.data().count;
+          if (currentCount >= maxTerminals && !termSnap.data()?.active) {
+            throw new HttpsError(
+              'resource-exhausted',
+              `Plafond de terminaux / caisses atteint (${currentCount}/${maxTerminals}). Souscrivez à des postes supplémentaires (3 000 FCFA/mois) ou mettez à niveau votre formule.`
+            );
+          }
+        }
+      }
+    } catch (quotaErr: any) {
+      if (quotaErr instanceof HttpsError) throw quotaErr;
+      console.warn('Vérification quota terminaux Firestore non bloquante:', quotaErr);
+    }
+  }
+
   const code = `TRM-${Math.floor(1000 + Math.random() * 9000)}`;
   const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString(); // 15 minutes
 

@@ -69,6 +69,43 @@ export async function handleCreateUser(request: CallableRequest<CreateUserData>)
     );
   }
 
+  const assignedOutlets = outlets || caller.outlets;
+  const assignedOrg = organizationId || caller.organizationId;
+
+  // Contrôle du plafond d'utilisateurs (effectiveLimits.maxUsers)
+  if (caller.role !== 'superadmin' && assignedOrg) {
+    try {
+      const entitlementsDoc = await db
+        .collection('tenants')
+        .doc(assignedOrg)
+        .collection('entitlements')
+        .doc('current')
+        .get();
+      if (entitlementsDoc.exists) {
+        const entData = entitlementsDoc.data();
+        const maxUsers = entData?.effectiveLimits?.maxUsers;
+        if (typeof maxUsers === 'number' && maxUsers > 0) {
+          const usersSnap = await db
+            .collection('users')
+            .where('organizationId', '==', assignedOrg)
+            .where('active', '==', true)
+            .count()
+            .get();
+          const currentCount = usersSnap.data().count;
+          if (currentCount >= maxUsers) {
+            throw new HttpsError(
+              'resource-exhausted',
+              `Plafond d'utilisateurs atteint (${currentCount}/${maxUsers}). Pour ajouter des collaborateurs supplémentaires, souscrivez à l'option utilisateurs ou passez au pack supérieur.`
+            );
+          }
+        }
+      }
+    } catch (quotaErr: any) {
+      if (quotaErr instanceof HttpsError) throw quotaErr;
+      console.warn('Vérification quota utilisateurs Firestore non bloquante:', quotaErr);
+    }
+  }
+
   // Génération d'un mot de passe temporaire aléatoire fort
   const temporaryPassword = generateSecureTemporaryPassword();
 
@@ -87,9 +124,6 @@ export async function handleCreateUser(request: CallableRequest<CreateUserData>)
     }
     throw new HttpsError('internal', err.message || 'Erreur lors de la création du compte Auth.');
   }
-
-  const assignedOutlets = outlets || caller.outlets;
-  const assignedOrg = organizationId || caller.organizationId;
 
   // Attribution des Custom Claims immuables
   await auth.setCustomUserClaims(userRecord.uid, {

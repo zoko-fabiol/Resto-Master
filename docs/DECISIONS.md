@@ -343,6 +343,24 @@ Ce document consigne les décisions d'architecture prises pour la livraison d'un
      - Accès de rappel permanent via le bouton « Poursuivre l'installation » du bandeau `TenantStatusBanner`.
 - **Conséquences** : Parcours d'accueil de niveau industriel, configuration personnalisée selon la spécialité culinaire du client, zéro friction lors du premier paiement et intégration transparente avec le moteur tarifaire serveur.
 
+---
+
+### ADR-020 : Application Réelle des Droits (FeatureGate) et Contrôle Strict des Plafonds de Quotas
+- **Date** : 2026-10-23
+- **Statut** : Accepté & Implémenté (Phase 5 du Chantier Installation & Abonnements)
+- **Contexte** : Dans un modèle SaaS avec abonnements différenciés (Minimum, Médium, Premium) et boutique d'options à la carte, il était impératif que les restrictions ne reposent pas uniquement sur le masquage des liens dans la barre latérale, mais soient appliquées de manière étanche au niveau du rendu des vues et dans les Cloud Functions qui exécutent les opérations sensibles.
+- **Décision** :
+  1. **Encapsulation Système des Vues (`FeatureGate`)** :
+     - Les 17 écrans opérationnels de l'application (`TablesView`, `PosView (bar)`, `KitchenKdsView`, `BarKdsView`, `ReservationsView`, `EventsView`, `DeliveryView`, `StockView`, `PurchasesView`, `HygieneView`, `MainCouranteView`, `FiscalCenterView`, `FinanceView`, `ClientsView`, `StaffView`, `DocumentsView`, `AuditView`) sont systématiquement encapsulés par `FeatureGate` associé à leur `moduleKey` (`mod_cuisine`, `mod_stock`, `mod_tables`, etc.).
+     - Si le module n'est pas souscrit, un écran de verrouillage explicite et élégant informe l'utilisateur avec proposition de demande de déblocage ou souscription.
+  2. **Contrôle Strict des Plafonds Côté Serveur (Cloud Functions)** :
+     - **Utilisateurs (`handleCreateUser`)** : Vérification du quota `effectiveLimits.maxUsers` avant création du compte Firebase Auth. Rejet avec erreur `resource-exhausted` si le plafond est atteint.
+     - **Terminaux & Caisses (`handleGeneratePairingCode`)** : Vérification du quota `effectiveLimits.maxTerminals` avant émission du code d'appairage. Rejet avec message incitant à souscrire à des postes supplémentaires (3 000 FCFA/mois).
+     - **Volume de Ventes (`handleCreateOrder`)** : Vérification du plafond mensuel `effectiveLimits.maxOrdersPerMonth` sur le mois calendaire en cours.
+  3. **Isolation et Mode Lecture Seule** :
+     - Application automatique du statut `isReadOnlyMode` pour les tenants impayés ou suspendus (`read_only`).
+- **Conséquences** : Étanchéité commerciale absolue, respect des formules tarifaires sans faille, protection contre les abus de ressources et incitation claire à l'upsell légitime.
+
 
 
 

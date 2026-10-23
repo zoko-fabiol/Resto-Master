@@ -48,6 +48,7 @@ import { PaymentModal } from './components/pos/PaymentModal';
 import { OnboardingWizard } from './components/admin/OnboardingWizard';
 import { SetupWizardModal } from './components/setup/SetupWizardModal';
 import { TenantStatusBanner } from './components/common/TenantStatusBanner';
+import { FeatureGate } from './components/common/FeatureGate';
 import { UserRole, UserProfile } from './types/restaurant';
 import { ShieldAlert, ShieldCheck, Utensils } from 'lucide-react';
 
@@ -433,15 +434,17 @@ const AppContent: React.FC = () => {
             <Suspense fallback={<ModuleSkeleton moduleName={currentTab} />}>
               {currentTab === 'dashboard' && <DashboardView navigateTo={handleSelectTab} />}
               {currentTab === 'tables' && (
-                <TablesView
-                  onOpenOrder={handleOpenOrderOnTable}
-                  onPayOrder={handleOpenPayment}
-                  onOpenKiosk={(tId) => {
-                    setIsTabletKioskUnlocked(false);
-                    setKioskTableId(tId);
-                    navigate('/kiosk');
-                  }}
-                />
+                <FeatureGate moduleKey="mod_tables" title="Plan de Salle Verrouillé" description="Le plan de salle interactif n'est pas inclus dans votre formule actuelle.">
+                  <TablesView
+                    onOpenOrder={handleOpenOrderOnTable}
+                    onPayOrder={handleOpenPayment}
+                    onOpenKiosk={(tId) => {
+                      setIsTabletKioskUnlocked(false);
+                      setKioskTableId(tId);
+                      navigate('/kiosk');
+                    }}
+                  />
+                </FeatureGate>
               )}
               {currentTab === 'pos' && (
                 <PosView
@@ -451,32 +454,92 @@ const AppContent: React.FC = () => {
                 />
               )}
               {currentTab === 'bar_pos' && (
-                <PosView
-                  initialTableId={posInitialTableId}
-                  onOpenPayment={handleOpenPayment}
-                  mode="bar"
-                />
+                <FeatureGate moduleKey="mod_bar_pos" title="Poste Bar Dédié Verrouillé">
+                  <PosView
+                    initialTableId={posInitialTableId}
+                    onOpenPayment={handleOpenPayment}
+                    mode="bar"
+                  />
+                </FeatureGate>
               )}
-              {currentTab === 'kitchen_kds' && <KitchenKdsView />}
-              {currentTab === 'bar_kds' && <BarKdsView />}
+              {currentTab === 'kitchen_kds' && (
+                <FeatureGate moduleKey="mod_cuisine" title="KDS Cuisine Verrouillé">
+                  <KitchenKdsView />
+                </FeatureGate>
+              )}
+              {currentTab === 'bar_kds' && (
+                <FeatureGate moduleKey="mod_bar" title="KDS Bar Verrouillé">
+                  <BarKdsView />
+                </FeatureGate>
+              )}
               {currentTab === 'reservations' && (
-                <ReservationsView onSeatGuest={handleSeatGuestFromReservation} />
+                <FeatureGate moduleKey="mod_tables" featureKey="table_reservations" title="Cahier de Réservations Verrouillé">
+                  <ReservationsView onSeatGuest={handleSeatGuestFromReservation} />
+                </FeatureGate>
               )}
-              {currentTab === 'events' && <EventsView />}
-              {currentTab === 'delivery' && <DeliveryView />}
+              {currentTab === 'events' && (
+                <FeatureGate moduleKey="mod_events" title="Événements & Banquets Verrouillés">
+                  <EventsView />
+                </FeatureGate>
+              )}
+              {currentTab === 'delivery' && (
+                <FeatureGate moduleKey="mod_delivery" title="Module Livraisons Verrouillé">
+                  <DeliveryView />
+                </FeatureGate>
+              )}
               {currentTab === 'menu' && <MenuView />}
-              {currentTab === 'stock' && <StockView />}
-              {currentTab === 'purchases' && <PurchasesView />}
-              {currentTab === 'hygiene' && <HygieneView />}
+              {currentTab === 'stock' && (
+                <FeatureGate moduleKey="mod_stock" title="Gestion des Stocks Verrouillée">
+                  <StockView />
+                </FeatureGate>
+              )}
+              {currentTab === 'purchases' && (
+                <FeatureGate moduleKey="mod_purchases" title="Gestion des Achats Verrouillée">
+                  <PurchasesView />
+                </FeatureGate>
+              )}
+              {currentTab === 'hygiene' && (
+                <FeatureGate moduleKey="mod_hygiene" title="Contrôle Hygiène & HACCP Verrouillé">
+                  <HygieneView />
+                </FeatureGate>
+              )}
               {currentTab === 'caisse' && <CashRegisterView onOpenPayment={handleOpenPayment} />}
-              {currentTab === 'main_courante' && <MainCouranteView />}
-              {currentTab === 'fiscal' && <FiscalCenterView />}
-              {currentTab === 'finance' && <FinanceView />}
-              {currentTab === 'clients' && <ClientsView />}
-              {currentTab === 'staff' && <StaffView />}
-              {currentTab === 'documents' && <DocumentsView />}
+              {currentTab === 'main_courante' && (
+                <FeatureGate moduleKey="mod_main_courante" title="Main Courante Hôtelière Verrouillée">
+                  <MainCouranteView />
+                </FeatureGate>
+              )}
+              {currentTab === 'fiscal' && (
+                <FeatureGate moduleKey="mod_fiscal" title="Module Fiscalité & DGI Verrouillé">
+                  <FiscalCenterView />
+                </FeatureGate>
+              )}
+              {currentTab === 'finance' && (
+                <FeatureGate moduleKey="mod_finance" title="Module Finances & Trésorerie Verrouillé">
+                  <FinanceView />
+                </FeatureGate>
+              )}
+              {currentTab === 'clients' && (
+                <FeatureGate moduleKey="mod_clients" title="Fichier Clients & Fidélité Verrouillé">
+                  <ClientsView />
+                </FeatureGate>
+              )}
+              {currentTab === 'staff' && (
+                <FeatureGate moduleKey="mod_staff" title="Personnel & Plannings Verrouillés">
+                  <StaffView />
+                </FeatureGate>
+              )}
+              {currentTab === 'documents' && (
+                <FeatureGate moduleKey="mod_documents" title="Documents & Scanner GED Verrouillés">
+                  <DocumentsView />
+                </FeatureGate>
+              )}
               {currentTab === 'reports' && <ReportsView />}
-              {currentTab === 'audit' && <AuditView />}
+              {currentTab === 'audit' && (
+                <FeatureGate moduleKey="mod_audit" title="Journal d’Audit Immuable Verrouillé">
+                  <AuditView />
+                </FeatureGate>
+              )}
               {currentTab === 'settings' && <AdminCenterView />}
             </Suspense>
           </ModuleErrorBoundary>

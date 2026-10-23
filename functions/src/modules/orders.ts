@@ -122,6 +122,44 @@ export async function handleCreateOrder(request: CallableRequest<CreateOrderRequ
     throw new HttpsError('permission-denied', 'Accès refusé pour cet établissement.');
   }
 
+  // Contrôle du plafond de commandes mensuelles (effectiveLimits.maxOrdersPerMonth)
+  if (caller.organizationId && caller.role !== 'superadmin') {
+    try {
+      const entitlementsDoc = await db
+        .collection('tenants')
+        .doc(caller.organizationId)
+        .collection('entitlements')
+        .doc('current')
+        .get();
+      if (entitlementsDoc.exists) {
+        const entData = entitlementsDoc.data();
+        const maxOrders = entData?.effectiveLimits?.maxOrdersPerMonth;
+        if (typeof maxOrders === 'number' && maxOrders > 0) {
+          const startOfMonth = new Date();
+          startOfMonth.setDate(1);
+          startOfMonth.setHours(0, 0, 0, 0);
+
+          const ordersCountSnap = await db
+            .collection('orders')
+            .where('restaurantId', '==', restaurantId)
+            .where('createdAt', '>=', startOfMonth.toISOString())
+            .count()
+            .get();
+          const currentOrdersCount = ordersCountSnap.data().count;
+          if (currentOrdersCount >= maxOrders) {
+            throw new HttpsError(
+              'resource-exhausted',
+              `Plafond mensuel de commandes atteint (${currentOrdersCount}/${maxOrders}). Pour continuer à encaisser ce mois-ci, ajoutez un bloc de commandes supplémentaires ou mettez à niveau votre formule.`
+            );
+          }
+        }
+      }
+    } catch (quotaErr: any) {
+      if (quotaErr instanceof HttpsError) throw quotaErr;
+      console.warn('Vérification quota commandes Firestore non bloquante:', quotaErr);
+    }
+  }
+
   // 1. Validation de la remise demandée selon role_limits dynamique
   const discountPercent = Math.min(100, Math.max(0, Number(data.discountPercentRequested) || 0));
   let maxAllowedDiscount = ROLE_MAX_DISCOUNT[caller.role] ?? 0;
