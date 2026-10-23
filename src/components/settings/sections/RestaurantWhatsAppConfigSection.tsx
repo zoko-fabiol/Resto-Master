@@ -21,6 +21,7 @@ import {
   ExternalLink,
   HelpCircle,
   Radio,
+  Sparkles,
 } from 'lucide-react';
 import {
   restaurantWhatsAppService,
@@ -38,24 +39,29 @@ export const RestaurantWhatsAppConfigSection: React.FC = () => {
   // Configuration Principale
   const [enabled, setEnabled] = useState(true);
   const [gatewayMode, setGatewayMode] = useState<'qr_connected' | 'click_to_chat'>('qr_connected');
+  const [activeEngine, setActiveEngine] = useState<'embedded' | 'ultramsg'>('embedded');
   const [restaurantPhoneNumber, setRestaurantPhoneNumber] = useState('');
   const [senderTitle, setSenderTitle] = useState('');
   const [sessionStatus, setSessionStatus] = useState<'connected' | 'disconnected'>('disconnected');
   const [connectedPhoneNumber, setConnectedPhoneNumber] = useState('');
   const [connectedAt, setConnectedAt] = useState<string | null>(null);
 
-  // Identifiants Instance WhatsApp (UltraMsg)
+  // Passerelle Embarquée Locale Baileys (0 compte, 100% gratuit)
+  const [embeddedQrDataUrl, setEmbeddedQrDataUrl] = useState<string>('');
+  const [embeddedStatusText, setEmbeddedStatusText] = useState<string>('Génération du QR Code officiel...');
+  const [isLoadingEmbeddedQr, setIsLoadingEmbeddedQr] = useState<boolean>(false);
+
+  // Identifiants Instance WhatsApp Cloud (UltraMsg Optionnel)
   const [instanceId, setInstanceId] = useState('');
   const [instanceToken, setInstanceToken] = useState('');
-
-  // Gestion du Vrai QR Code WhatsApp
-  const [qrTimestamp, setQrTimestamp] = useState<number>(Date.now());
-  const [qrCountdown, setQrCountdown] = useState<number>(60);
-  const [isCheckingStatus, setIsCheckingStatus] = useState<boolean>(false);
-  const [instanceStatusText, setInstanceStatusText] = useState<string>('En attente de scan');
+  const [instanceStatusText, setInstanceStatusText] = useState<string>('En attente');
   const [instanceErrorDetails, setInstanceErrorDetails] = useState<string>('');
   const [qrImageError, setQrImageError] = useState<boolean>(false);
   const [showHelpGuide, setShowHelpGuide] = useState<boolean>(false);
+
+  // Compte à rebours
+  const [qrCountdown, setQrCountdown] = useState<number>(60);
+  const [isCheckingStatus, setIsCheckingStatus] = useState<boolean>(false);
 
   // Déclencheurs (Alertes Métier)
   const [reservationAlertEnabled, setReservationAlertEnabled] = useState(true);
@@ -73,9 +79,27 @@ export const RestaurantWhatsAppConfigSection: React.FC = () => {
 
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
 
-  const refreshQrCode = useCallback(() => {
-    setQrTimestamp(Date.now());
-    setQrCountdown(60);
+  // Chargement du Vrai QR Code officiel émis en direct par Baileys
+  const fetchEmbeddedQr = useCallback(async () => {
+    setIsLoadingEmbeddedQr(true);
+    try {
+      const data = await restaurantWhatsAppService.getLocalEmbeddedQr();
+      if (data.qrDataUrl) {
+        setEmbeddedQrDataUrl(data.qrDataUrl);
+      }
+      if (data.connected) {
+        setSessionStatus('connected');
+        if (data.phone) setConnectedPhoneNumber(data.phone);
+        setEmbeddedStatusText('Appareil jumelé et actif');
+      } else {
+        setEmbeddedStatusText(data.qrDataUrl ? 'Prêt à être scanné' : 'Connexion aux serveurs WhatsApp...');
+      }
+      setQrCountdown(60);
+    } catch {
+      setEmbeddedStatusText('Passerelle locale en attente');
+    } finally {
+      setIsLoadingEmbeddedQr(false);
+    }
   }, []);
 
   const loadConfig = useCallback(async () => {
@@ -92,12 +116,18 @@ export const RestaurantWhatsAppConfigSection: React.FC = () => {
 
       if (config.instanceId) setInstanceId(config.instanceId);
       if (config.instanceToken) setInstanceToken(config.instanceToken);
+      if (config.instanceId && config.instanceToken) {
+        setActiveEngine('ultramsg');
+      } else {
+        setActiveEngine('embedded');
+      }
+
       if (config.gatewayMode) {
         setGatewayMode(config.gatewayMode === 'click_to_chat' ? 'click_to_chat' : 'qr_connected');
       }
 
-      if (config.sessionStatus) {
-        setSessionStatus(config.sessionStatus);
+      if (config.sessionStatus === 'connected') {
+        setSessionStatus('connected');
         setConnectedPhoneNumber(config.connectedPhoneNumber || phone);
         setConnectedAt(config.connectedAt || null);
       } else {
@@ -107,199 +137,111 @@ export const RestaurantWhatsAppConfigSection: React.FC = () => {
       if (config.reservationAlertEnabled !== undefined) setReservationAlertEnabled(config.reservationAlertEnabled);
       if (config.orderReadyAlertEnabled !== undefined) setOrderReadyAlertEnabled(config.orderReadyAlertEnabled);
       if (config.digitalReceiptAlertEnabled !== undefined) setDigitalReceiptAlertEnabled(config.digitalReceiptAlertEnabled);
+
+      // Charger le QR code local immédiat
+      fetchEmbeddedQr();
     } catch (err) {
       console.warn('[RestaurantWhatsAppConfig] Erreur lecture config:', err);
     } finally {
       setLoading(false);
     }
-  }, [restaurantId, activeRestaurant?.phone, restaurantName]);
+  }, [restaurantId, activeRestaurant?.phone, restaurantName, fetchEmbeddedQr]);
 
   useEffect(() => {
     loadConfig();
   }, [loadConfig]);
 
-  // Fonction de vérification du statut auprès de l'instance
-  const verifyInstanceStatus = useCallback(async (idToCheck = instanceId, tokenToCheck = instanceToken, silent = true) => {
-    const cleanId = idToCheck.trim();
-    const cleanToken = tokenToCheck.trim();
-
-    if (!cleanId || !cleanToken) {
-      if (!silent) {
-        showToast({
-          type: 'warning',
-          title: 'Identifiants Manquants',
-          message: 'Veuillez renseigner votre Instance ID et votre Token UltraMsg pour vérifier la connexion.',
-        });
-      }
-      return false;
-    }
-
-    if (!silent) setIsCheckingStatus(true);
-
-    try {
-      const result = await restaurantWhatsAppService.checkUltraMsgStatus(cleanId, cleanToken);
-      if (result.connected || result.status === 'authenticated') {
-        const cleanPhone = formatWhatsAppPhoneNumber(restaurantPhoneNumber);
-        const now = new Date().toISOString();
-
-        setSessionStatus('connected');
-        setConnectedPhoneNumber(cleanPhone);
-        setConnectedAt(now);
-        setInstanceStatusText('Appareil authentifié et connecté');
-        setInstanceErrorDetails('');
-        setQrImageError(false);
-
-        await restaurantWhatsAppService.saveWhatsAppSettings(restaurantId, {
-          enabled: true,
-          gatewayMode: 'qr_connected',
-          sessionStatus: 'connected',
-          connectedPhoneNumber: cleanPhone,
-          restaurantPhoneNumber: cleanPhone,
-          connectedAt: now,
-          instanceId: cleanId,
-          instanceToken: cleanToken,
-          senderTitle: senderTitle.trim() || restaurantName,
-          reservationAlertEnabled,
-          orderReadyAlertEnabled,
-          digitalReceiptAlertEnabled,
-        });
-
-        await updateSettings({
-          whatsappGatewayEnabled: true,
-          whatsappGatewayMode: 'qr_connected',
-          whatsappSessionStatus: 'connected',
-          whatsappConnectedPhoneNumber: cleanPhone,
-          whatsappPhoneNumber: cleanPhone,
-          whatsappInstanceId: cleanId,
-          whatsappInstanceToken: cleanToken,
-          whatsappSenderTitle: senderTitle.trim() || restaurantName,
-        });
-
-        showToast({
-          type: 'success',
-          title: 'WhatsApp Connecté avec Succès !',
-          message: 'Votre smartphone est jumelé. Les messages partiront désormais automatiquement depuis votre numéro.',
-        });
-        return true;
-      } else if (result.status === 'error') {
-        setInstanceStatusText(result.errorDetails || 'Erreur instance');
-        setInstanceErrorDetails(result.errorDetails || 'Instance introuvable ou inactive sur UltraMsg');
-        if (!silent) {
-          showToast({
-            type: 'error',
-            title: 'Erreur d’accès à l’instance',
-            message: result.errorDetails || 'Impossible de joindre cette instance UltraMsg. Vérifiez votre ID et votre Token.',
-          });
-        }
-      } else {
-        setInstanceStatusText(result.status ? `Statut : ${result.status}` : 'En attente de scan');
-        setInstanceErrorDetails('');
-        if (!silent) {
-          showToast({
-            type: 'info',
-            title: 'Scan en attente',
-            message: `L'instance est active mais le QR Code n'a pas encore été validé sur WhatsApp (Statut: ${result.status || 'attente'}).`,
-          });
-        }
-      }
-    } catch {
-      setInstanceStatusText('Erreur de vérification');
-      setInstanceErrorDetails('Impossible de contacter le service WhatsApp');
-    } finally {
-      if (!silent) setIsCheckingStatus(false);
-    }
-
-    return false;
-  }, [instanceId, instanceToken, restaurantPhoneNumber, restaurantId, senderTitle, restaurantName, reservationAlertEnabled, orderReadyAlertEnabled, digitalReceiptAlertEnabled, showToast, updateSettings]);
-
-  // Polling automatique toutes les 4s quand les identifiants sont saisis et que la session n'est pas encore connectée
+  // Polling automatique toutes les 2.5 secondes pour détecter la validation du scan
   useEffect(() => {
     if (sessionStatus === 'connected' || loading || gatewayMode !== 'qr_connected') {
       if (pollingRef.current) clearInterval(pollingRef.current);
       return;
     }
 
-    const cleanId = instanceId.trim();
-    const cleanToken = instanceToken.trim();
+    pollingRef.current = setInterval(async () => {
+      // 1. Vérifier la passerelle embarquée locale
+      if (activeEngine === 'embedded') {
+        const localStatus = await restaurantWhatsAppService.getLocalEmbeddedStatus();
+        if (localStatus.connected) {
+          const cleanPhone = localStatus.phone || formatWhatsAppPhoneNumber(restaurantPhoneNumber);
+          const now = new Date().toISOString();
 
-    if (cleanId && cleanToken) {
-      pollingRef.current = setInterval(() => {
-        verifyInstanceStatus(cleanId, cleanToken, true);
-      }, 4000);
-    }
+          setSessionStatus('connected');
+          setConnectedPhoneNumber(cleanPhone);
+          setConnectedAt(now);
+          setEmbeddedStatusText('Connecté avec succès');
+
+          await restaurantWhatsAppService.saveWhatsAppSettings(restaurantId, {
+            enabled: true,
+            gatewayMode: 'qr_connected',
+            sessionStatus: 'connected',
+            connectedPhoneNumber: cleanPhone,
+            restaurantPhoneNumber: cleanPhone,
+            connectedAt: now,
+            senderTitle: senderTitle.trim() || restaurantName,
+            reservationAlertEnabled,
+            orderReadyAlertEnabled,
+            digitalReceiptAlertEnabled,
+          });
+
+          await updateSettings({
+            whatsappGatewayEnabled: true,
+            whatsappGatewayMode: 'qr_connected',
+            whatsappSessionStatus: 'connected',
+            whatsappConnectedPhoneNumber: cleanPhone,
+            whatsappPhoneNumber: cleanPhone,
+          });
+
+          showToast({
+            type: 'success',
+            title: 'WhatsApp Connecté avec Succès !',
+            message: `Votre numéro (+${cleanPhone}) est jumelé. Vos alertes partiront automatiquement.`,
+          });
+          return;
+        } else if (!embeddedQrDataUrl) {
+          fetchEmbeddedQr();
+        }
+      }
+
+      // 2. Si mode UltraMsg actif
+      if (activeEngine === 'ultramsg' && instanceId.trim() && instanceToken.trim()) {
+        const res = await restaurantWhatsAppService.checkUltraMsgStatus(instanceId.trim(), instanceToken.trim());
+        if (res.connected) {
+          const cleanPhone = formatWhatsAppPhoneNumber(restaurantPhoneNumber);
+          setSessionStatus('connected');
+          setConnectedPhoneNumber(cleanPhone);
+          showToast({
+            type: 'success',
+            title: 'WhatsApp Connecté (UltraMsg) !',
+            message: 'Instance jumelée avec succès.',
+          });
+        }
+      }
+    }, 2500);
 
     return () => {
       if (pollingRef.current) clearInterval(pollingRef.current);
     };
-  }, [sessionStatus, loading, gatewayMode, instanceId, instanceToken, verifyInstanceStatus]);
+  }, [sessionStatus, loading, gatewayMode, activeEngine, instanceId, instanceToken, embeddedQrDataUrl, restaurantId, restaurantPhoneNumber, senderTitle, restaurantName, reservationAlertEnabled, orderReadyAlertEnabled, digitalReceiptAlertEnabled, fetchEmbeddedQr, showToast, updateSettings]);
 
-  // Compte à rebours du rafraîchissement du QR code
+  // Compte à rebours de rafraîchissement
   useEffect(() => {
     if (sessionStatus === 'connected' || loading || gatewayMode !== 'qr_connected') return;
     const interval = setInterval(() => {
       setQrCountdown((prev) => {
         if (prev <= 1) {
-          refreshQrCode();
+          if (activeEngine === 'embedded') {
+            fetchEmbeddedQr();
+          }
           return 60;
         }
         return prev - 1;
       });
     }, 1000);
     return () => clearInterval(interval);
-  }, [sessionStatus, loading, gatewayMode, refreshQrCode]);
+  }, [sessionStatus, loading, gatewayMode, activeEngine, fetchEmbeddedQr]);
 
-  // Sauvegarde des identifiants et rechargement immédiat du QR
-  const handleSaveCredentials = async () => {
-    setSaving(true);
-    try {
-      const cleanId = instanceId.trim();
-      const cleanToken = instanceToken.trim();
-      const cleanPhone = formatWhatsAppPhoneNumber(restaurantPhoneNumber);
-
-      await restaurantWhatsAppService.saveWhatsAppSettings(restaurantId, {
-        enabled,
-        gatewayMode,
-        instanceId: cleanId,
-        instanceToken: cleanToken,
-        restaurantPhoneNumber: cleanPhone,
-        senderTitle: senderTitle.trim(),
-        reservationAlertEnabled,
-        orderReadyAlertEnabled,
-        digitalReceiptAlertEnabled,
-      });
-
-      await updateSettings({
-        whatsappGatewayEnabled: enabled,
-        whatsappGatewayMode: gatewayMode,
-        whatsappInstanceId: cleanId,
-        whatsappInstanceToken: cleanToken,
-        whatsappPhoneNumber: cleanPhone,
-        whatsappSenderTitle: senderTitle.trim(),
-      });
-
-      refreshQrCode();
-
-      showToast({
-        type: 'success',
-        title: 'Paramètres Enregistrés',
-        message: 'Vos identifiants d’instance ont été mis à jour.',
-      });
-
-      if (cleanId && cleanToken) {
-        verifyInstanceStatus(cleanId, cleanToken, false);
-      }
-    } catch {
-      showToast({
-        type: 'error',
-        title: 'Erreur',
-        message: 'Impossible de sauvegarder les réglages.',
-      });
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  // Action directe : basculer immédiatement en mode Click-to-Chat (1-Clic gratuit)
+  // Basculer directement en Mode 1-Clic
   const handleSwitchToClickToChat = async () => {
     setGatewayMode('click_to_chat');
     setQrImageError(false);
@@ -324,20 +266,26 @@ export const RestaurantWhatsAppConfigSection: React.FC = () => {
       showToast({
         type: 'success',
         title: 'Mode 1-Clic Activé !',
-        message: 'Vous pouvez désormais envoyer tous les messages WhatsApp en 1 clic direct sans aucun compte tiers.',
+        message: 'Vous pouvez envoyer tous les messages WhatsApp en 1 clic direct sans aucun compte tiers.',
       });
     } catch {
       // Local state is already updated
     }
   };
 
-  // Déconnexion de l'appareil
+  // Déconnexion
   const handleDisconnect = async () => {
     setSaving(true);
     try {
-      await restaurantWhatsAppService.disconnectDevice(restaurantId, instanceId, instanceToken);
+      if (activeEngine === 'embedded') {
+        await restaurantWhatsAppService.disconnectLocalEmbedded();
+      } else {
+        await restaurantWhatsAppService.disconnectDevice(restaurantId, instanceId, instanceToken);
+      }
+
       setSessionStatus('disconnected');
       setConnectedAt(null);
+      setConnectedPhoneNumber('');
 
       await updateSettings({
         whatsappSessionStatus: 'disconnected',
@@ -350,7 +298,7 @@ export const RestaurantWhatsAppConfigSection: React.FC = () => {
         message: 'La session WhatsApp du restaurant a été dissociée.',
       });
 
-      refreshQrCode();
+      fetchEmbeddedQr();
     } catch {
       showToast({
         type: 'error',
@@ -369,8 +317,6 @@ export const RestaurantWhatsAppConfigSection: React.FC = () => {
       await restaurantWhatsAppService.saveWhatsAppSettings(restaurantId, {
         enabled,
         gatewayMode,
-        instanceId: instanceId.trim(),
-        instanceToken: instanceToken.trim(),
         sessionStatus,
         reservationAlertEnabled,
         orderReadyAlertEnabled,
@@ -450,8 +396,6 @@ export const RestaurantWhatsAppConfigSection: React.FC = () => {
         settings: {
           whatsappGatewayMode: gatewayMode,
           whatsappSessionStatus: sessionStatus,
-          whatsappInstanceId: instanceId.trim(),
-          whatsappInstanceToken: instanceToken.trim(),
           whatsappConnectedPhoneNumber: connectedPhoneNumber,
           whatsappPhoneNumber: restaurantPhoneNumber,
           whatsappSenderTitle: senderTitle,
@@ -495,12 +439,9 @@ export const RestaurantWhatsAppConfigSection: React.FC = () => {
   const isKdsEntitled = isModuleEntitled('mod_cuisine');
   const isPosEntitled = isModuleEntitled('mod_pos');
 
-  const hasCredentials = Boolean(instanceId.trim() && instanceToken.trim());
-  const ultraQrUrl = hasCredentials ? restaurantWhatsAppService.getUltraMsgQrUrl(instanceId, instanceToken) + `&t=${qrTimestamp}` : '';
-
   return (
     <div className="space-y-6">
-      {/* 1. En-tête Général & Mode d'Envoi */}
+      {/* 1. En-tête Principal & Choix du Mode */}
       <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-xs space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-5">
           <div className="flex items-center gap-3">
@@ -510,24 +451,24 @@ export const RestaurantWhatsAppConfigSection: React.FC = () => {
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="text-base font-black text-slate-900 tracking-tight">
-                  Passerelle WhatsApp Officielle du Restaurant
+                  Passerelle WhatsApp Directe du Restaurant
                 </h2>
-                <span className={`text-[10px] font-black px-2 py-0.5 rounded-full border uppercase ${
+                <span className={`text-[10px] font-black px-2.5 py-0.5 rounded-full border uppercase ${
                   sessionStatus === 'connected'
                     ? 'bg-emerald-100 text-emerald-800 border-emerald-200'
                     : gatewayMode === 'click_to_chat'
                     ? 'bg-blue-100 text-blue-800 border-blue-200'
-                    : 'bg-amber-100 text-amber-800 border-amber-200'
+                    : 'bg-emerald-50 text-emerald-700 border-emerald-200'
                 }`}>
                   {sessionStatus === 'connected'
-                    ? 'Jumelé & Automatique'
+                    ? 'Jumelé & 100% Automatique'
                     : gatewayMode === 'click_to_chat'
                     ? 'Repli 1-Clic Gratuit'
-                    : 'Scan en attente'}
+                    : 'Vrai QR Code Officiel'}
                 </span>
               </div>
               <p className="text-xs text-slate-500 mt-0.5">
-                Expédition des réservations, avis de plats prêts et tickets de caisse directement depuis votre propre numéro.
+                Expédition des réservations, avis de plats prêts et reçus directement depuis le WhatsApp de votre restaurant.
               </p>
             </div>
           </div>
@@ -548,7 +489,7 @@ export const RestaurantWhatsAppConfigSection: React.FC = () => {
           </div>
         </div>
 
-        {/* Sélecteur de Mode : Vrai QR Code Multi-Device vs Repli 1-Clic Gratuit */}
+        {/* Sélecteur de Mode */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <button
             type="button"
@@ -562,20 +503,21 @@ export const RestaurantWhatsAppConfigSection: React.FC = () => {
             <div className="flex items-center justify-between mb-1">
               <span className="text-xs font-black text-slate-900 flex items-center gap-1.5">
                 <Radio className={`w-3.5 h-3.5 ${gatewayMode === 'qr_connected' ? 'text-emerald-600' : 'text-slate-400'}`} />
-                <span>Mode 1 : Vrai QR Code WhatsApp (UltraMsg)</span>
+                <span>Mode 1 : Scan Direct du Vrai QR Code (Sans Inscription)</span>
               </span>
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800">
-                100% Automatique
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 flex items-center gap-1">
+                <Sparkles className="w-3 h-3" />
+                <span>100% Automatique</span>
               </span>
             </div>
             <p className="text-[11px] text-slate-500 leading-snug">
-              Affiche le <strong>vrai QR Code officiel émis par WhatsApp</strong>. Scannez-le avec l'application mobile WhatsApp pour un jumelage direct sans erreur.
+              Émis en direct par les serveurs WhatsApp via la passerelle embarquée. <strong>Zéro compte tiers, zéro frais</strong>. Scannez avec votre application WhatsApp et tout devient automatique.
             </p>
           </button>
 
           <button
             type="button"
-            onClick={() => setGatewayMode('click_to_chat')}
+            onClick={handleSwitchToClickToChat}
             className={`p-4 rounded-2xl border text-left transition-all cursor-pointer ${
               gatewayMode === 'click_to_chat'
                 ? 'bg-blue-50/50 border-blue-500 ring-2 ring-blue-500/20'
@@ -588,99 +530,18 @@ export const RestaurantWhatsAppConfigSection: React.FC = () => {
                 <span>Mode 2 : Repli Direct 1-Clic (Gratuit à Vie)</span>
               </span>
               <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-blue-100 text-blue-800">
-                0 Configuration
+                0 Scan · 0 Config
               </span>
             </div>
             <p className="text-[11px] text-slate-500 leading-snug">
-              Vos caissiers et chefs cliquent sur "WhatsApp" pour ouvrir l'application WhatsApp Web ou mobile avec le message déjà rédigé. Aucun abonnement tiers requis.
+              Vos caissiers et chefs cliquent sur "WhatsApp" pour ouvrir l'application WhatsApp Web ou mobile avec le message déjà rédigé.
             </p>
           </button>
         </div>
 
-        {/* SECTION MODE 1 : VRAI QR CODE MULTI-DEVICE */}
+        {/* SECTION 1 : VRAI QR CODE DIRECT EMBARQUÉ */}
         {gatewayMode === 'qr_connected' && (
           <div className="space-y-5 pt-2">
-            {/* Formulaire des identifiants d'instance */}
-            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                <div className="flex items-center gap-2">
-                  <Key className="w-4 h-4 text-emerald-600" />
-                  <h3 className="text-xs font-black text-slate-900">
-                    Identifiants de l'Instance WhatsApp (UltraMsg)
-                  </h3>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setShowHelpGuide(!showHelpGuide)}
-                  className="flex items-center gap-1 text-[11px] text-emerald-700 font-bold hover:underline cursor-pointer"
-                >
-                  <HelpCircle className="w-3.5 h-3.5" />
-                  <span>{showHelpGuide ? 'Masquer le guide' : 'Où trouver ces identifiants ? (2 min)'}</span>
-                </button>
-              </div>
-
-              {/* Guide déroulant pour obtenir les identifiants */}
-              {showHelpGuide && (
-                <div className="p-3.5 rounded-xl bg-white border border-emerald-200 text-xs text-slate-700 space-y-2">
-                  <p className="font-bold text-emerald-900">
-                    Pourquoi une instance est nécessaire ?
-                  </p>
-                  <p className="text-[11px] text-slate-600 leading-relaxed">
-                    Pour que votre application mobile WhatsApp accepte de se connecter sans l'erreur <em>« QR code non valide »</em>, WhatsApp exige un jeton cryptographique généré en direct par ses serveurs WebSocket. L'API UltraMsg fournit cette connexion officielle :
-                  </p>
-                  <ol className="list-decimal list-inside text-[11px] text-slate-700 space-y-1 font-medium">
-                    <li>Rendez-vous sur <a href="https://ultramsg.com/" target="_blank" rel="noreferrer" className="text-emerald-700 underline font-bold inline-flex items-center gap-0.5">UltraMsg.com <ExternalLink className="w-3 h-3" /></a> et créez un compte (essai gratuit sans carte bancaire).</li>
-                    <li>Cliquez sur <strong>« Create Instance »</strong> dans votre tableau de bord UltraMsg.</li>
-                    <li>Copiez l'<strong>Instance ID</strong> (ex: <code className="bg-slate-100 px-1 py-0.5 rounded text-slate-900">instance103450</code>) et le <strong>Token</strong>.</li>
-                    <li>Collez-les dans les deux champs ci-dessous puis cliquez sur <strong>« Charger le QR Code »</strong>.</li>
-                  </ol>
-                </div>
-              )}
-
-              <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
-                <div className="sm:col-span-5 space-y-1">
-                  <label className="text-[11px] font-bold text-slate-700 block">Instance ID :</label>
-                  <input
-                    type="text"
-                    value={instanceId}
-                    onChange={(e) => {
-                      setInstanceId(e.target.value);
-                      setQrImageError(false);
-                    }}
-                    placeholder="ex: instance103450"
-                    className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs bg-white text-slate-900 font-mono font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
-                  />
-                </div>
-
-                <div className="sm:col-span-5 space-y-1">
-                  <label className="text-[11px] font-bold text-slate-700 block">Token d'Instance :</label>
-                  <input
-                    type="password"
-                    value={instanceToken}
-                    onChange={(e) => {
-                      setInstanceToken(e.target.value);
-                      setQrImageError(false);
-                    }}
-                    placeholder="ex: m4k5d9f0s..."
-                    className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs bg-white text-slate-900 font-mono font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
-                  />
-                </div>
-
-                <div className="sm:col-span-2">
-                  <button
-                    type="button"
-                    onClick={handleSaveCredentials}
-                    disabled={saving || !instanceId.trim() || !instanceToken.trim()}
-                    className="w-full flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 text-white font-bold text-xs shadow-xs transition cursor-pointer"
-                  >
-                    {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
-                    <span>Valider</span>
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {/* État de Connexion : Connecté vs Jumelage en Cours */}
             {sessionStatus === 'connected' ? (
               /* Écran lorsque le restaurant est connecté avec succès */
               <div className="p-6 rounded-3xl bg-gradient-to-br from-emerald-500/10 via-emerald-50/60 to-white border-2 border-emerald-400 space-y-5">
@@ -695,10 +556,10 @@ export const RestaurantWhatsAppConfigSection: React.FC = () => {
                           <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
                           Appareil Jumelé & 100% Automatique
                         </span>
-                        <span className="text-xs text-slate-500 font-medium">Instance : {instanceId}</span>
+                        <span className="text-xs text-slate-500 font-medium">Session WhatsApp Web Active</span>
                       </div>
                       <h3 className="text-lg font-black text-slate-900 mt-1">
-                        Numéro Émetteur : +{connectedPhoneNumber || restaurantPhoneNumber}
+                        Numéro WhatsApp Jumelé : +{connectedPhoneNumber || restaurantPhoneNumber}
                       </h3>
                       <p className="text-xs text-emerald-800">
                         Vos clients reçoivent directement les reçus et avis de commande depuis ce compte WhatsApp sans intervention manuelle.
@@ -709,24 +570,13 @@ export const RestaurantWhatsAppConfigSection: React.FC = () => {
                   <div className="flex items-center gap-2 shrink-0">
                     <button
                       type="button"
-                      onClick={() => verifyInstanceStatus(instanceId, instanceToken, false)}
-                      disabled={isCheckingStatus}
-                      className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white hover:bg-slate-50 text-slate-700 font-bold text-xs border border-slate-200 transition-colors shadow-2xs cursor-pointer"
-                      title="Vérifier la connexion"
-                    >
-                      <RefreshCw className={`w-3.5 h-3.5 ${isCheckingStatus ? 'animate-spin' : ''}`} />
-                      <span>Vérifier</span>
-                    </button>
-
-                    <button
-                      type="button"
                       onClick={handleDisconnect}
                       disabled={saving}
                       className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white hover:bg-rose-50 text-rose-700 font-bold text-xs border border-rose-200 transition-colors shadow-2xs cursor-pointer"
                       title="Dissocier ce téléphone"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
-                      <span>Déconnecter</span>
+                      <span>Déconnecter l'appareil</span>
                     </button>
                   </div>
                 </div>
@@ -734,7 +584,7 @@ export const RestaurantWhatsAppConfigSection: React.FC = () => {
                 <div className="p-3.5 rounded-2xl bg-white border border-emerald-200/80 text-xs text-slate-600 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                   <span className="flex items-center gap-2">
                     <ShieldCheck className="w-4 h-4 text-emerald-600" />
-                    <span>Statut : Chiffrement WhatsApp actif · Synchronisé avec l'instance {instanceId}</span>
+                    <span>Statut : Protocole Noise WhatsApp actif · Passerelle autonome locale</span>
                   </span>
                   <span className="text-[11px] text-slate-400 font-mono">
                     Connecté le {connectedAt ? new Date(connectedAt).toLocaleDateString('fr-FR') : 'Aujourd’hui'}
@@ -742,121 +592,66 @@ export const RestaurantWhatsAppConfigSection: React.FC = () => {
                 </div>
               </div>
             ) : (
-              /* Écran de Jumelage par VRAI QR Code Officiel */
+              /* Écran de Scan du VRAI QR Code Officiel */
               <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-center p-6 rounded-3xl bg-slate-50 border border-slate-200">
                 {/* Colonne QR Code */}
                 <div className="md:col-span-5 flex flex-col items-center justify-center p-4 bg-white rounded-2xl border border-slate-200 shadow-xs relative">
-                  {hasCredentials ? (
-                    <div className="flex flex-col items-center space-y-3 w-full">
-                      {qrImageError ? (
-                        <div className="w-[240px] h-[240px] p-4 rounded-2xl border-2 border-dashed border-rose-300 bg-rose-50/70 flex flex-col items-center justify-center text-center space-y-2">
-                          <div className="w-10 h-10 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center">
-                            <AlertCircle className="w-5 h-5" />
-                          </div>
-                          <h4 className="text-xs font-black text-rose-900">QR Code Non Disponible</h4>
-                          <p className="text-[11px] text-rose-700 leading-snug">
-                            {instanceErrorDetails || 'Impossible de joindre cette instance UltraMsg. Vérifiez l’ID et le Token.'}
-                          </p>
-                          <div className="pt-1 flex flex-col gap-1.5 w-full">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setQrImageError(false);
-                                refreshQrCode();
-                                verifyInstanceStatus(instanceId, instanceToken, false);
-                              }}
-                              className="w-full py-1.5 px-2 bg-white hover:bg-rose-100 text-rose-800 font-bold text-[10px] rounded-lg border border-rose-300 shadow-2xs cursor-pointer"
-                            >
-                              Réessayer
-                            </button>
-                            <button
-                              type="button"
-                              onClick={handleSwitchToClickToChat}
-                              className="w-full py-1.5 px-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-[10px] rounded-lg shadow-2xs cursor-pointer"
-                            >
-                              Passer en Mode 1-Clic Gratuit
-                            </button>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="relative p-2 bg-white rounded-xl border border-slate-200 shadow-inner">
-                          <img
-                            src={ultraQrUrl}
-                            alt="Vrai QR Code Officiel WhatsApp"
-                            className="w-[240px] h-[240px] object-contain rounded-lg"
-                            onError={() => {
-                              setQrImageError(true);
-                            }}
-                            onLoad={() => {
-                              setQrImageError(false);
-                            }}
-                          />
-                        </div>
-                      )}
-
-                      {!qrImageError && (
-                        <div className="flex items-center justify-between w-full px-2 text-[11px] text-slate-500 font-medium">
-                          <span className="flex items-center gap-1">
-                            <RefreshCw className="w-3 h-3 text-slate-400 animate-spin" />
-                            <span>Expire dans {qrCountdown}s</span>
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setQrImageError(false);
-                              refreshQrCode();
-                            }}
-                            className="text-emerald-700 font-bold hover:underline cursor-pointer"
-                          >
-                            Rafraîchir le code
-                          </button>
-                        </div>
-                      )}
-
-                      {/* Indicateur d'état dynamique (Couleur adaptée selon l'erreur ou le succès) */}
-                      <div className={`w-full p-2.5 rounded-xl border text-center transition-colors ${
-                        instanceStatusText.toLowerCase().includes('error') || qrImageError
-                          ? 'bg-rose-50 border-rose-200 text-rose-800'
-                          : instanceStatusText.toLowerCase().includes('auth')
-                          ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
-                          : 'bg-amber-50 border-amber-200 text-amber-800'
-                      }`}>
-                        <span className="text-[11px] font-bold flex items-center justify-center gap-1.5">
-                          {instanceStatusText.toLowerCase().includes('error') || qrImageError ? (
-                            <AlertCircle className="w-3.5 h-3.5 text-rose-600 shrink-0" />
-                          ) : (
-                            <span className="w-2 h-2 rounded-full bg-current animate-ping" />
-                          )}
-                          <span>
-                            {instanceStatusText.toLowerCase().includes('error') || qrImageError
-                              ? `Problème : ${instanceErrorDetails || instanceStatusText}`
-                              : `Détection active : ${instanceStatusText}`}
-                          </span>
-                        </span>
+                  <div className="flex flex-col items-center space-y-3 w-full">
+                    {embeddedQrDataUrl ? (
+                      <div className="relative p-2.5 bg-white rounded-2xl border-2 border-emerald-500 shadow-md">
+                        <img
+                          src={embeddedQrDataUrl}
+                          alt="Vrai QR Code Officiel WhatsApp"
+                          className="w-[240px] h-[240px] object-contain rounded-xl"
+                        />
                       </div>
+                    ) : (
+                      <div className="w-[240px] h-[240px] flex flex-col items-center justify-center text-center p-4 text-slate-400 gap-2">
+                        <Loader2 className="w-8 h-8 animate-spin text-emerald-600" />
+                        <span className="text-xs font-bold text-slate-700">Génération du code officiel...</span>
+                        <p className="text-[11px] text-slate-400">
+                          Connexion en direct aux serveurs WhatsApp en cours.
+                        </p>
+                      </div>
+                    )}
+
+                    <div className="flex items-center justify-between w-full px-2 text-[11px] text-slate-500 font-medium">
+                      <span className="flex items-center gap-1">
+                        <RefreshCw className="w-3 h-3 text-slate-400 animate-spin" />
+                        <span>Expire dans {qrCountdown}s</span>
+                      </span>
+                      <button
+                        type="button"
+                        onClick={fetchEmbeddedQr}
+                        disabled={isLoadingEmbeddedQr}
+                        className="text-emerald-700 font-bold hover:underline cursor-pointer flex items-center gap-1"
+                      >
+                        {isLoadingEmbeddedQr && <Loader2 className="w-3 h-3 animate-spin" />}
+                        <span>Rafraîchir le code</span>
+                      </button>
                     </div>
-                  ) : (
-                    <div className="w-[240px] h-[240px] flex flex-col items-center justify-center text-center p-4 text-slate-400 gap-2">
-                      <Key className="w-10 h-10 text-slate-300" />
-                      <span className="text-xs font-bold text-slate-600">Instance non configurée</span>
-                      <p className="text-[11px] text-slate-400">
-                        Saisissez votre Instance ID et Token ci-dessus pour afficher le QR Code officiel.
-                      </p>
+
+                    {/* Indicateur de détection automatique en direct */}
+                    <div className="w-full p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-center">
+                      <span className="text-[11px] font-bold text-emerald-800 flex items-center justify-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
+                        <span>Détection automatique active : {embeddedStatusText}</span>
+                      </span>
                     </div>
-                  )}
+                  </div>
                 </div>
 
                 {/* Colonne Instructions officielles */}
                 <div className="md:col-span-7 space-y-4">
                   <div>
-                    <span className="text-[10px] font-black uppercase text-emerald-700 px-2 py-0.5 rounded-md bg-emerald-100">
-                      Jumelage Officiel WhatsApp
+                    <span className="text-[10px] font-black uppercase text-emerald-700 px-2.5 py-0.5 rounded-md bg-emerald-100">
+                      Jumelage Officiel Sans Frais
                     </span>
                     <h3 className="text-base font-black text-slate-900 mt-1">
-                      Scannez avec votre application WhatsApp mobile :
+                      Scannez directement avec votre téléphone portable :
                     </h3>
                     <p className="text-xs text-slate-500">
-                      Ce code est généré en direct par les serveurs WhatsApp. Il sera reconnu instantanément par votre téléphone sans message d'erreur.
+                      Ce code est généré en direct par les serveurs WhatsApp. <strong>Il est accepté instantanément</strong> par votre application sans aucune erreur.
                     </p>
                   </div>
 
@@ -884,29 +679,28 @@ export const RestaurantWhatsAppConfigSection: React.FC = () => {
                         3
                       </span>
                       <div className="text-xs text-slate-700">
-                        Touchez <strong>« Connecter un appareil »</strong> et visez le QR Code ci-contre. Dès le scan, la connexion est validée automatiquement !
+                        Touchez <strong>« Connecter un appareil »</strong> et visez le QR Code ci-contre. Dès le scan, la connexion passe en vert <strong>automatiquement</strong> !
                       </div>
                     </div>
                   </div>
 
-                  <div className="pt-2">
+                  <div className="pt-2 flex flex-col sm:flex-row gap-2">
                     <button
                       type="button"
-                      onClick={() => verifyInstanceStatus(instanceId, instanceToken, false)}
-                      disabled={isCheckingStatus || !hasCredentials}
-                      className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white font-black text-xs shadow-md shadow-emerald-600/20 transition-all cursor-pointer disabled:bg-slate-300 disabled:cursor-not-allowed"
+                      onClick={fetchEmbeddedQr}
+                      disabled={isLoadingEmbeddedQr}
+                      className="flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white font-black text-xs shadow-md shadow-emerald-600/20 transition-all cursor-pointer"
                     >
-                      {isCheckingStatus ? (
-                        <>
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                          <span>Vérification de la connexion...</span>
-                        </>
-                      ) : (
-                        <>
-                          <CheckCircle2 className="w-4 h-4" />
-                          <span>J'ai scanné le QR Code — Vérifier la connexion</span>
-                        </>
-                      )}
+                      <CheckCircle2 className="w-4 h-4" />
+                      <span>J'ai scanné le QR Code — Vérifier la connexion</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={handleSwitchToClickToChat}
+                      className="px-4 py-3 rounded-2xl bg-white hover:bg-slate-100 text-slate-700 font-bold text-xs border border-slate-300 transition-all cursor-pointer"
+                    >
+                      Passer en Mode 1-Clic Gratuit
                     </button>
                   </div>
                 </div>
@@ -915,7 +709,7 @@ export const RestaurantWhatsAppConfigSection: React.FC = () => {
           </div>
         )}
 
-        {/* SECTION MODE 2 : REPLI DIRECT 1-CLIC */}
+        {/* SECTION 2 : REPLI DIRECT 1-CLIC */}
         {gatewayMode === 'click_to_chat' && (
           <div className="p-6 rounded-3xl bg-blue-50/60 border border-blue-200 space-y-4">
             <div className="flex items-start gap-4">
@@ -927,7 +721,7 @@ export const RestaurantWhatsAppConfigSection: React.FC = () => {
                   Mode Repli 1-Clic WhatsApp Actif
                 </h3>
                 <p className="text-xs text-slate-600 leading-relaxed">
-                  Ce mode ne nécessite aucune inscription ni serveur tiers. Sur chaque écran opérationnel (Plan de table, Cuisine KDS, Clôture de caisse POS), un bouton <strong>« WhatsApp »</strong> permet à votre équipe d'ouvrir WhatsApp avec le message de réservation, de commande prête ou le ticket de caisse déjà composé pour le client.
+                  Ce mode ne nécessite aucun scan ni inscription. Sur chaque écran opérationnel (Plan de table, Cuisine KDS, Clôture de caisse POS), un bouton <strong>« WhatsApp »</strong> permet à votre équipe d'ouvrir WhatsApp avec le message de réservation, de commande prête ou le ticket de caisse déjà composé pour le client.
                 </p>
               </div>
             </div>
@@ -938,11 +732,10 @@ export const RestaurantWhatsAppConfigSection: React.FC = () => {
               </span>
               <button
                 type="button"
-                onClick={handleSwitchToClickToChat}
-                disabled={saving}
-                className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-xs cursor-pointer shadow-xs"
+                onClick={() => setGatewayMode('qr_connected')}
+                className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs cursor-pointer shadow-xs"
               >
-                Confirmer ce mode par défaut
+                Revenir au Scan QR Code Automatique
               </button>
             </div>
           </div>

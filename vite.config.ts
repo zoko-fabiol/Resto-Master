@@ -8,6 +8,76 @@ import { defineConfig } from 'vite';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+function whatsappGatewayPlugin() {
+  return {
+    name: 'whatsapp-embedded-gateway-plugin',
+    configureServer(server: any) {
+      server.middlewares.use(async (req: any, res: any, next: any) => {
+        const url = req.url?.split('?')[0];
+
+        if (url === '/api/whatsapp/qr') {
+          try {
+            const { getGatewayQr } = await import('./server/whatsappGateway.js');
+            const data = getGatewayQr();
+            res.setHeader('Content-Type', 'application/json');
+            res.end(JSON.stringify(data));
+          } catch (err: any) {
+            res.statusCode = 500;
+            res.end(JSON.stringify({ error: err.message }));
+          }
+          return;
+        }
+
+        if (url === '/api/whatsapp/status') {
+          try {
+            const { getGatewayStatus } = await import('./server/whatsappGateway.js');
+            const data = getGatewayStatus();
+            res.setHeader('Content-Type', 'application/json');
+            res.end(JSON.stringify(data));
+          } catch (err: any) {
+            res.statusCode = 500;
+            res.end(JSON.stringify({ error: err.message }));
+          }
+          return;
+        }
+
+        if (url === '/api/whatsapp/send' && req.method === 'POST') {
+          let body = '';
+          req.on('data', (chunk: any) => { body += chunk; });
+          req.on('end', async () => {
+            try {
+              const { sendGatewayMessage } = await import('./server/whatsappGateway.js');
+              const parsed = JSON.parse(body || '{}');
+              const result = await sendGatewayMessage(parsed.to, parsed.message || parsed.text);
+              res.setHeader('Content-Type', 'application/json');
+              res.end(JSON.stringify(result));
+            } catch (err: any) {
+              res.statusCode = 500;
+              res.end(JSON.stringify({ success: false, message: err.message }));
+            }
+          });
+          return;
+        }
+
+        if (url === '/api/whatsapp/disconnect' && req.method === 'POST') {
+          try {
+            const { disconnectGateway } = await import('./server/whatsappGateway.js');
+            const result = await disconnectGateway();
+            res.setHeader('Content-Type', 'application/json');
+            res.end(JSON.stringify(result));
+          } catch (err: any) {
+            res.statusCode = 500;
+            res.end(JSON.stringify({ error: err.message }));
+          }
+          return;
+        }
+
+        next();
+      });
+    },
+  };
+}
+
 export default defineConfig(({ mode }) => {
   const isDesktopBuild = mode === 'tauri' || mode === 'electron';
   return {
@@ -21,6 +91,7 @@ export default defineConfig(({ mode }) => {
     plugins: [
       react(),
       tailwindcss(),
+      whatsappGatewayPlugin(),
       ...(!isDesktopBuild ? [VitePWA({
         registerType: 'autoUpdate',
         includeAssets: [

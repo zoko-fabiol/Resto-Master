@@ -32,4 +32,5 @@ serviceAccountKey.json
 # Fichiers temporaires de tests et émulateurs
 scripts/.e2e-output/
 .firebase/
+.whatsapp_auth/
 

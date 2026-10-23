@@ -327,10 +327,86 @@ export const restaurantWhatsAppService = {
   },
 
   /**
+   * Récupère le Vrai QR Code officiel émis en direct par les serveurs WhatsApp via la passerelle embarquée
+   */
+  async getLocalEmbeddedQr(): Promise<{
+    connected: boolean;
+    status: string;
+    qr: string;
+    qrDataUrl: string;
+    phone: string;
+  }> {
+    try {
+      const res = await fetch('/api/whatsapp/qr');
+      if (res.ok) {
+        return await res.json();
+      }
+    } catch (e) {
+      console.warn('[restaurantWhatsAppService] Erreur lecture QR local:', e);
+    }
+    return { connected: false, status: 'disconnected', qr: '', qrDataUrl: '', phone: '' };
+  },
+
+  /**
+   * Interroge le statut de connexion de la passerelle embarquée
+   */
+  async getLocalEmbeddedStatus(): Promise<{
+    connected: boolean;
+    status: string;
+    phone: string;
+  }> {
+    try {
+      const res = await fetch('/api/whatsapp/status');
+      if (res.ok) {
+        return await res.json();
+      }
+    } catch {
+      // ignore
+    }
+    return { connected: false, status: 'disconnected', phone: '' };
+  },
+
+  /**
+   * Envoi direct d'un message WhatsApp via la passerelle embarquée
+   */
+  async sendLocalEmbeddedMessage(params: {
+    to: string;
+    message: string;
+  }): Promise<{ success: boolean; id?: string; message: string }> {
+    try {
+      const res = await fetch('/api/whatsapp/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ to: params.to, message: params.message }),
+      });
+      if (res.ok) {
+        return await res.json();
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Erreur réseau passerelle locale';
+      return { success: false, message: msg };
+    }
+    return { success: false, message: 'Échec de transmission locale WhatsApp' };
+  },
+
+  /**
+   * Déconnexion de la passerelle locale
+   */
+  async disconnectLocalEmbedded(): Promise<boolean> {
+    try {
+      const res = await fetch('/api/whatsapp/disconnect', { method: 'POST' });
+      return res.ok;
+    } catch {
+      return false;
+    }
+  },
+
+  /**
    * Envoi d'un message WhatsApp vers le numéro client :
-   * 1. Si instance configurée ou jumelée : expédition 100% automatique via l'API connectée du restaurant.
-   * 2. Si mode webhook : expédition via webhook existant.
-   * 3. Si non connecté ou repli : ouvre / renvoie l'URL Click-to-Chat 1-clic.
+   * 1. Si passerelle locale embarquée connectée : expédition directe 100% automatique (0 frais).
+   * 2. Si instance UltraMsg configurée : expédition via l'instance cloud.
+   * 3. Si mode webhook : expédition via webhook existant.
+   * 4. Si non connecté ou repli : ouvre / renvoie l'URL Click-to-Chat 1-clic.
    */
   async sendMessage(params: {
     restaurantId?: string;
@@ -377,7 +453,30 @@ export const restaurantWhatsAppService = {
 
     const clickToChatUrl = buildWhatsAppClickToChatUrl(cleanPhone, rawMessage);
 
-    // 1. Envoi via l'instance UltraMsg connectée (VRAI WhatsApp Connect)
+    // 1. Priorité 1 : Passerelle Locale Embarquée (Baileys) — 100% Automatique, Sans Inscription, 0 Frais
+    try {
+      const localStatus = await this.getLocalEmbeddedStatus();
+      if (localStatus.connected) {
+        const localResult = await this.sendLocalEmbeddedMessage({
+          to: cleanPhone,
+          message: rawMessage,
+        });
+
+        if (localResult.success) {
+          return {
+            success: true,
+            mode: 'qr_connected',
+            actionUrl: clickToChatUrl,
+            waUrl: clickToChatUrl,
+            message: `Message WhatsApp transmis automatiquement depuis votre numéro lié (+${localStatus.phone || cleanPhone}) vers ${cleanPhone}.`,
+          };
+        }
+      }
+    } catch {
+      // repli vers les autres méthodes
+    }
+
+    // 2. Priorité 2 : Passerelle Cloud UltraMsg (si configurée)
     if (config.instanceId && config.instanceToken) {
       const ultraResult = await this.sendUltraMsgMessage({
         instanceId: config.instanceId,
