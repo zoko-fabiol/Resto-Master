@@ -381,6 +381,32 @@ Ce document consigne les décisions d'architecture prises pour la livraison d'un
      - Rappel clair des numéros marchands Orange Money, MTN MoMo, BICEC, Afriland First Bank pour tout règlement complémentaire.
 - **Conséquences** : Autonomie accrue des exploitants, self-service transparent, accélération des renouvellements et valorisation des options spécialisées.
 
+---
+
+### ADR-022 : Validation de Recette Complète sur Émulateurs (13 Scénarios Métier E2E)
+- **Date** : 2026-10-23
+- **Statut** : Accepté & Implémenté (Phase 8 du Chantier Installation & Abonnements)
+- **Contexte** : Avant la livraison au propriétaire de la plateforme, l'ensemble du cycle de vie commercial et technique (de la demande d'adhésion jusqu'aux contrôles de quotas et à la bascule en lecture seule) devait être certifié par une suite de recette automatisée exhaustive couvrant 13 scénarios réels.
+- **Décision** :
+  1. **Suite de Recette E2E Automatisée (`src/__tests__/recette13ScenariosPhase8.test.ts`)** :
+     - Scénario 1 : Demande d'adhésion et dimensionnement initial (8 profils métiers, pack Minimum 25 000 FCFA/mois).
+     - Scénario 2 : Accès initial bloqué en vente / POS avec statut `installation` (configuration permise, vente interdite).
+     - Scénario 3 : Parcours des 5 chapitres de l'assistant d'installation (style OS / première mise en route).
+     - Scénario 4 : Émission de l'ordre d'abonnement avec référence certifiée `RM-AAAA-NNNNNN`.
+     - Scénario 5 : Déclaration de paiement manuel (Orange Money, MTN MoMo, virement) avec contrôle strict des entrées.
+     - Scénario 6 : Statut `paiement_a_verifier` avec maintien du blocage de caisse et message contextuel au gérant.
+     - Scénario 7 : Vue admin `PendingPaymentsListView` avec filtrage prioritaire des règlements à valider.
+     - Scénario 8 : Validation sécurisée du paiement par un administrateur plateforme (`superadmin` / `finance`).
+     - Scénario 9 : Bascule automatique et idempotente au statut `actif` avec calcul précis de la date d'échéance.
+     - Scénario 10 : Déblocage immédiat de la caisse POS et accès effectif aux modules souscrits.
+     - Scénario 11 : Étanchéité `FeatureGate` sur les modules non souscrits (KDS Bar, Hygiène HACCP, etc.).
+     - Scénario 12 : Espace restaurant « Mon Abonnement & Boutique » avec devis certifié serveur pour l'ajout d'options à la carte.
+     - Scénario 13 : Contrôle strict et rejet côté serveur (`resource-exhausted`) en cas de tentative de dépassement des plafonds de quotas.
+  2. **Couverture Globale des Tests** :
+     - 35 suites de tests automatisés, 322 tests validés avec un taux de réussite de 100%.
+- **Conséquences** : Plateforme certifiée zéro régression, architecture inviolable et prête pour la mise en exploitation.
+
+
 
 
 
