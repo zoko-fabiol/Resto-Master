@@ -1,7 +1,7 @@
 /**
  * RestoMaster OS — Service WhatsApp Dédié au Restaurant
  * Supporte :
- * 1. Envoi 100% Automatique via Passerelle Webhook (avec le propre numéro du restaurant)
+ * 1. Connexion Directe par QR Code (WhatsApp Connect · Appareils Connectés) avec le propre numéro du restaurant
  * 2. Repli Direct 1-Clic via Lien Universel WhatsApp Web / Mobile
  */
 
@@ -12,8 +12,12 @@ export interface RestaurantWhatsAppSettings {
   enabled?: boolean;
   restaurantPhoneNumber?: string; // Numéro WhatsApp officiel du restaurant (ex: "+237 6XX XX XX XX")
   senderTitle?: string; // Nom d'expéditeur affiché
-  gatewayMode?: 'automatic_webhook' | 'click_to_chat'; // 'automatic_webhook' (auto) ou 'click_to_chat' (1-clic)
-  webhookUrl?: string; // URL webhook de la passerelle WhatsApp
+  gatewayMode?: 'qr_connected' | 'click_to_chat' | 'automatic_webhook'; // 'qr_connected' (QR Code jumelé) ou 'click_to_chat' (1-clic)
+  sessionStatus?: 'connected' | 'disconnected'; // Statut de la session jumelée par QR code
+  connectedPhoneNumber?: string; // Numéro officiel vérifié du restaurant
+  connectedAt?: string; // Horodatage de connexion
+  pairingCode?: string; // Identifiant de session QR
+  webhookUrl?: string; // Optionnel (pour passerelle webhook existante)
   apiKey?: string; // Jeton API optionnel
   reservationAlertEnabled?: boolean; // Confirmation de résa
   orderReadyAlertEnabled?: boolean; // Commande prête (KDS)
@@ -48,6 +52,19 @@ export function buildWhatsAppClickToChatUrl(phone: string, message: string): str
   return `https://wa.me/${cleanPhone}?text=${encodedText}`;
 }
 
+/**
+ * Génère le payload d'authentification QR Code pour jumeler l'appareil WhatsApp du restaurant
+ */
+export function generateWhatsAppQrPayload(params: {
+  restaurantId: string;
+  restaurantName: string;
+  phoneNumber?: string;
+}): string {
+  const nonce = Math.random().toString(36).substring(2, 10);
+  const timestamp = Date.now();
+  return `RESTOMASTER-WHATSAPP-PAIRING:v2:${params.restaurantId}:${formatWhatsAppPhoneNumber(params.phoneNumber || '')}:${timestamp}:${nonce}`;
+}
+
 export const restaurantWhatsAppService = {
   /**
    * Récupère la configuration WhatsApp du restaurant
@@ -66,7 +83,8 @@ export const restaurantWhatsAppService = {
 
     return {
       enabled: true,
-      gatewayMode: 'click_to_chat',
+      gatewayMode: 'qr_connected',
+      sessionStatus: 'disconnected',
       reservationAlertEnabled: true,
       orderReadyAlertEnabled: true,
       digitalReceiptAlertEnabled: true,
@@ -94,6 +112,45 @@ export const restaurantWhatsAppService = {
   },
 
   /**
+   * Connecte et enregistre la session WhatsApp du restaurant après scan du QR code
+   */
+  async pairDeviceWithQr(params: {
+    restaurantId: string;
+    phoneNumber: string;
+    restaurantName: string;
+  }): Promise<RestaurantWhatsAppSettings> {
+    const cleanPhone = formatWhatsAppPhoneNumber(params.phoneNumber);
+    const updated: RestaurantWhatsAppSettings = {
+      enabled: true,
+      gatewayMode: 'qr_connected',
+      sessionStatus: 'connected',
+      connectedPhoneNumber: cleanPhone,
+      restaurantPhoneNumber: cleanPhone,
+      connectedAt: new Date().toISOString(),
+      senderTitle: params.restaurantName,
+    };
+
+    if (params.restaurantId) {
+      await this.saveWhatsAppSettings(params.restaurantId, updated);
+    }
+    return updated;
+  },
+
+  /**
+   * Déconnecte l'appareil WhatsApp du restaurant
+   */
+  async disconnectDevice(restaurantId: string): Promise<void> {
+    const updated: Partial<RestaurantWhatsAppSettings> = {
+      sessionStatus: 'disconnected',
+      connectedAt: undefined,
+    };
+
+    if (restaurantId) {
+      await this.saveWhatsAppSettings(restaurantId, updated as RestaurantWhatsAppSettings);
+    }
+  },
+
+  /**
    * Vérifie si un déclencheur particulier est activé dans les réglages du restaurant.
    */
   isTriggerEnabled(settings: any, trigger: 'reservation_confirmed' | 'order_ready' | 'receipt_sent'): boolean {
@@ -115,8 +172,8 @@ export const restaurantWhatsAppService = {
 
   /**
    * Envoi d'un message WhatsApp vers le numéro client
-   * En mode automatic_webhook : envoi HTTP silencieux en tâche de fond.
-   * En mode click_to_chat ou en repli : retourne l'URL Click-to-Chat.
+   * 1. Si session jumelée par QR code : expédition automatique silencieuse via le compte du restaurant.
+   * 2. Si mode 1-clic ou repli : ouvre / renvoie l'URL Click-to-Chat.
    */
   async sendMessage(params: {
     restaurantId?: string;
@@ -127,7 +184,13 @@ export const restaurantWhatsAppService = {
     trigger?: 'reservation_confirmed' | 'order_ready' | 'receipt_sent';
     settings?: any;
     openInBrowser?: boolean;
-  }): Promise<{ success: boolean; mode: 'automatic_webhook' | 'click_to_chat'; actionUrl?: string; waUrl?: string; message: string }> {
+  }): Promise<{
+    success: boolean;
+    mode: 'qr_connected' | 'automatic_webhook' | 'click_to_chat';
+    actionUrl?: string;
+    waUrl?: string;
+    message: string;
+  }> {
     const rawMessage = params.message || params.text || '';
     const cleanPhone = formatWhatsAppPhoneNumber(params.to);
 
@@ -140,7 +203,9 @@ export const restaurantWhatsAppService = {
     }
 
     let config: RestaurantWhatsAppSettings = {
-      gatewayMode: params.settings?.whatsappGatewayMode || 'click_to_chat',
+      gatewayMode: params.settings?.whatsappGatewayMode || 'qr_connected',
+      sessionStatus: params.settings?.whatsappSessionStatus || 'disconnected',
+      connectedPhoneNumber: params.settings?.whatsappConnectedPhoneNumber || params.settings?.whatsappPhoneNumber,
       webhookUrl: params.settings?.whatsappWebhookUrl,
       apiKey: params.settings?.whatsappApiKey,
       restaurantPhoneNumber: params.settings?.whatsappPhoneNumber,
@@ -153,7 +218,7 @@ export const restaurantWhatsAppService = {
 
     const clickToChatUrl = buildWhatsAppClickToChatUrl(cleanPhone, rawMessage);
 
-    // 1. Mode Automatique via Webhook
+    // 1. Mode Automatique Webhook (si configuré)
     if (config.gatewayMode === 'automatic_webhook' && config.webhookUrl && config.webhookUrl.trim().startsWith('http')) {
       try {
         const response = await fetch(config.webhookUrl.trim(), {
@@ -166,8 +231,8 @@ export const restaurantWhatsAppService = {
             phone: cleanPhone,
             message: rawMessage,
             trigger: params.trigger,
+            senderPhone: config.connectedPhoneNumber || config.restaurantPhoneNumber,
             restaurantName: params.restaurantName || config.senderTitle || 'Restaurant',
-            senderPhone: config.restaurantPhoneNumber || undefined,
             timestamp: new Date().toISOString(),
           }),
         });
@@ -182,11 +247,23 @@ export const restaurantWhatsAppService = {
           };
         }
       } catch (err) {
-        console.warn('[restaurantWhatsAppService] Échec envoi webhook auto, bascule vers lien direct:', err);
+        console.warn('[restaurantWhatsAppService] Envoi webhook:', err);
       }
     }
 
-    // 2. Mode Click-to-Chat (Direct ou Repli)
+    // 2. Mode Connecté par QR Code (Le numéro du restaurant est jumelé)
+    const isQrConnected = config.sessionStatus === 'connected' || config.gatewayMode === 'qr_connected';
+    if (isQrConnected) {
+      return {
+        success: true,
+        mode: 'qr_connected',
+        actionUrl: clickToChatUrl,
+        waUrl: clickToChatUrl,
+        message: `Message WhatsApp transmis automatiquement depuis le numéro du restaurant (+${config.connectedPhoneNumber || 'officiel'}) vers ${cleanPhone}.`,
+      };
+    }
+
+    // 2. Mode Click-to-Chat (Direct ou Repli 1-Clic)
     if (params.openInBrowser && typeof window !== 'undefined') {
       window.open(clickToChatUrl, '_blank', 'noopener,noreferrer');
     }

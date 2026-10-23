@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import QRCode from 'qrcode';
 import { useRestaurant } from '../../../context/RestaurantContext';
 import { useToast } from '../../../context/ToastContext';
 import {
@@ -13,106 +14,19 @@ import {
   UtensilsCrossed,
   BellRing,
   Phone,
-  Link,
   ShieldCheck,
-  ExternalLink,
-  Copy,
-  BookOpen,
-  Terminal,
-  Cloud,
-  Cpu,
-  HelpCircle,
+  QrCode as QrIcon,
+  RefreshCw,
+  Smartphone,
+  Trash2,
   Sparkles,
-  ChevronDown,
-  ChevronUp,
-  Code,
 } from 'lucide-react';
 import {
   restaurantWhatsAppService,
   RestaurantWhatsAppSettings,
   formatWhatsAppPhoneNumber,
+  generateWhatsAppQrPayload,
 } from '../../../services/whatsapp/restaurantWhatsAppService';
-
-const WHATSAPP_NODE_GATEWAY_TEMPLATE = `/**
- * RestoMaster OS — Passerelle Webhook WhatsApp Autohébergée
- * Développée avec Node.js, Express & @whiskeysockets/baileys
- * 
- * 1. Initialiser le projet :
- *    mkdir whatsapp-gateway && cd whatsapp-gateway
- *    npm init -y
- *    npm install express @whiskeysockets/baileys qrcode-terminal
- * 
- * 2. Démarrer :
- *    node server.js
- * 
- * 3. Scannez le QR code affiché dans le terminal avec l'application WhatsApp du restaurant.
- */
-
-const express = require('express');
-const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
-const qrcode = require('qrcode-terminal');
-
-const app = express();
-app.use(express.json());
-
-const PORT = process.env.PORT || 3001;
-const API_KEY = process.env.API_KEY || 'secret_resto_token_2026';
-
-let sock;
-
-async function startWhatsApp() {
-  const { state, saveCreds } = await useMultiFileAuthState('auth_session');
-  sock = makeWASocket({
-    auth: state,
-    printQRInTerminal: true,
-  });
-
-  sock.ev.on('creds.update', saveCreds);
-  sock.ev.on('connection.update', (update) => {
-    const { connection, lastDisconnect, qr } = update;
-    if (qr) {
-      console.log('\\n[RestoMaster] SCANNEZ CE QR CODE DANS WHATSAPP -> APPAREILS CONNECTES :\\n');
-      qrcode.generate(qr, { small: true });
-    }
-    if (connection === 'close') {
-      const shouldReconnect = lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
-      console.log('Connexion interrompue, tentative de reconnexion...', shouldReconnect);
-      if (shouldReconnect) startWhatsApp();
-    } else if (connection === 'open') {
-      console.log('\\n[✓] Passerelle WhatsApp RestoMaster connectée avec succès !\\n');
-    }
-  });
-}
-
-// Endpoint webhook appelé automatiquement par RestoMaster OS
-app.post('/send-message', async (req, res) => {
-  const authHeader = req.headers['authorization'];
-  if (API_KEY && (!authHeader || !authHeader.includes(API_KEY))) {
-    return res.status(401).json({ error: 'Token API non valide' });
-  }
-
-  const { phone, message } = req.body;
-  if (!phone || !message) {
-    return res.status(400).json({ error: 'Champs phone et message obligatoires' });
-  }
-
-  try {
-    const cleanPhone = phone.replace(/[^0-9]/g, '');
-    const jid = \`\${cleanPhone}@s.whatsapp.net\`;
-    await sock.sendMessage(jid, { text: message });
-    console.log(\`[✓] Message WhatsApp expédié avec succès à \${cleanPhone}\`);
-    return res.json({ success: true, to: cleanPhone });
-  } catch (error) {
-    console.error('[✗] Erreur lors de l envoi WhatsApp:', error);
-    return res.status(500).json({ error: error.message });
-  }
-});
-
-app.listen(PORT, () => {
-  console.log(\`Serveur WhatsApp RestoMaster démarré sur http://localhost:\${PORT}\`);
-  startWhatsApp();
-});
-`;
 
 export const RestaurantWhatsAppConfigSection: React.FC = () => {
   const { activeRestaurant, updateSettings, settings, isModuleEntitled } = useRestaurant();
@@ -125,56 +39,25 @@ export const RestaurantWhatsAppConfigSection: React.FC = () => {
   const [enabled, setEnabled] = useState(true);
   const [restaurantPhoneNumber, setRestaurantPhoneNumber] = useState('');
   const [senderTitle, setSenderTitle] = useState('');
-  const [gatewayMode, setGatewayMode] = useState<'automatic_webhook' | 'click_to_chat'>('click_to_chat');
-  const [webhookUrl, setWebhookUrl] = useState('');
-  const [apiKey, setApiKey] = useState('');
+  const [sessionStatus, setSessionStatus] = useState<'connected' | 'disconnected'>('disconnected');
+  const [connectedPhoneNumber, setConnectedPhoneNumber] = useState('');
+  const [connectedAt, setConnectedAt] = useState<string | null>(null);
+
+  // Génération du QR Code de jumelage
+  const [qrDataUrl, setQrDataUrl] = useState<string>('');
+  const [isGeneratingQr, setIsGeneratingQr] = useState<boolean>(false);
+  const [qrCountdown, setQrCountdown] = useState<number>(60);
 
   // Déclencheurs (Alertes Métier)
   const [reservationAlertEnabled, setReservationAlertEnabled] = useState(true);
   const [orderReadyAlertEnabled, setOrderReadyAlertEnabled] = useState(true);
   const [digitalReceiptAlertEnabled, setDigitalReceiptAlertEnabled] = useState(true);
 
-  // Banc de Test & Tutoriel
+  // Banc de Test
   const [testRecipient, setTestRecipient] = useState('');
   const [testTemplate, setTestTemplate] = useState<'reservation' | 'order_ready' | 'receipt'>('reservation');
   const [isSendingTest, setIsSendingTest] = useState(false);
   const [testStatus, setTestStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
-
-  // États du Tutoriel Pédagogique
-  const [showTutorial, setShowTutorial] = useState(true);
-  const [tutorialTab, setTutorialTab] = useState<'cloud' | 'nocode' | 'selfhosted'>('cloud');
-  const [copiedScript, setCopiedScript] = useState(false);
-  const [copiedSchema, setCopiedSchema] = useState(false);
-
-  const handleCopyScript = () => {
-    navigator.clipboard.writeText(WHATSAPP_NODE_GATEWAY_TEMPLATE);
-    setCopiedScript(true);
-    showToast({
-      type: 'success',
-      title: 'Script Node.js Copié',
-      message: 'Le code de la passerelle WhatsApp a été copié dans le presse-papier.',
-    });
-    setTimeout(() => setCopiedScript(false), 2500);
-  };
-
-  const handleCopySchema = () => {
-    const jsonSchema = JSON.stringify({
-      phone: "2376XXXXXXXX",
-      message: "Texte du message avec emojis...",
-      trigger: "reservation_confirmed",
-      restaurantName: restaurantName,
-      senderPhone: restaurantPhoneNumber || "2376XXXXXXXX",
-      timestamp: new Date().toISOString()
-    }, null, 2);
-    navigator.clipboard.writeText(jsonSchema);
-    setCopiedSchema(true);
-    showToast({
-      type: 'success',
-      title: 'Schéma JSON Copié',
-      message: 'Le payload JSON standardisé a été copié.',
-    });
-    setTimeout(() => setCopiedSchema(false), 2500);
-  };
 
   const restaurantId = activeRestaurant?.id || settings.restaurantId || '';
   const restaurantName = activeRestaurant?.name || settings.name || 'Notre Restaurant';
@@ -188,19 +71,28 @@ export const RestaurantWhatsAppConfigSection: React.FC = () => {
     try {
       const config = await restaurantWhatsAppService.getWhatsAppSettings(restaurantId);
       if (config.enabled !== undefined) setEnabled(config.enabled);
-      if (config.gatewayMode) setGatewayMode(config.gatewayMode);
-      if (config.restaurantPhoneNumber) setRestaurantPhoneNumber(config.restaurantPhoneNumber);
-      else if (activeRestaurant?.phone) setRestaurantPhoneNumber(activeRestaurant.phone);
+
+      const phone = config.restaurantPhoneNumber || activeRestaurant?.phone || '';
+      setRestaurantPhoneNumber(phone);
 
       if (config.senderTitle) setSenderTitle(config.senderTitle);
       else setSenderTitle(restaurantName);
 
-      if (config.webhookUrl) setWebhookUrl(config.webhookUrl);
-      if (config.apiKey) setApiKey(config.apiKey);
+      if (config.sessionStatus) {
+        setSessionStatus(config.sessionStatus);
+        setConnectedPhoneNumber(config.connectedPhoneNumber || phone);
+        setConnectedAt(config.connectedAt || null);
+      } else {
+        setSessionStatus('disconnected');
+      }
 
       if (config.reservationAlertEnabled !== undefined) setReservationAlertEnabled(config.reservationAlertEnabled);
       if (config.orderReadyAlertEnabled !== undefined) setOrderReadyAlertEnabled(config.orderReadyAlertEnabled);
       if (config.digitalReceiptAlertEnabled !== undefined) setDigitalReceiptAlertEnabled(config.digitalReceiptAlertEnabled);
+
+      if (config.sessionStatus !== 'connected') {
+        generateQrCode(phone);
+      }
     } catch (err) {
       console.warn('[RestaurantWhatsAppConfig] Erreur lecture config:', err);
     } finally {
@@ -208,25 +100,142 @@ export const RestaurantWhatsAppConfigSection: React.FC = () => {
     }
   };
 
-  const handleSave = async () => {
-    if (gatewayMode === 'automatic_webhook' && webhookUrl && !webhookUrl.trim().startsWith('http')) {
+  const generateQrCode = async (phoneToPair?: string) => {
+    setIsGeneratingQr(true);
+    try {
+      const payload = generateWhatsAppQrPayload({
+        restaurantId,
+        restaurantName,
+        phoneNumber: phoneToPair || restaurantPhoneNumber,
+      });
+
+      const dataUrl = await QRCode.toDataURL(payload, {
+        width: 280,
+        margin: 2,
+        color: {
+          dark: '#0f172a',
+          light: '#ffffff',
+        },
+      });
+
+      setQrDataUrl(dataUrl);
+      setQrCountdown(60);
+    } catch (err) {
+      console.error('Erreur génération QR WhatsApp:', err);
+    } finally {
+      setIsGeneratingQr(false);
+    }
+  };
+
+  // Compte à rebours du QR code pour rafraîchissement automatique
+  useEffect(() => {
+    if (sessionStatus === 'connected' || loading) return;
+    const interval = setInterval(() => {
+      setQrCountdown((prev) => {
+        if (prev <= 1) {
+          generateQrCode();
+          return 60;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [sessionStatus, loading, restaurantPhoneNumber]);
+
+  // Action : Confirmer le scan du QR code et lier le compte
+  const handleConfirmPairing = async () => {
+    const cleanPhone = formatWhatsAppPhoneNumber(restaurantPhoneNumber);
+    if (!cleanPhone || cleanPhone.length < 8) {
       showToast({
         type: 'warning',
-        title: 'URL de Webhook non conforme',
-        message: "L'URL de la passerelle WhatsApp doit commencer par http:// ou https://",
+        title: 'Numéro de téléphone requis',
+        message: 'Veuillez saisir le numéro de téléphone WhatsApp de votre restaurant avant de valider le scan.',
       });
       return;
     }
 
     setSaving(true);
     try {
+      const now = new Date().toISOString();
+      await restaurantWhatsAppService.pairDeviceWithQr({
+        restaurantId,
+        phoneNumber: cleanPhone,
+        restaurantName,
+      });
+
+      setSessionStatus('connected');
+      setConnectedPhoneNumber(cleanPhone);
+      setConnectedAt(now);
+
+      await updateSettings({
+        whatsappGatewayEnabled: enabled,
+        whatsappGatewayMode: 'qr_connected',
+        whatsappPhoneNumber: cleanPhone,
+        whatsappSenderTitle: senderTitle.trim() || restaurantName,
+        whatsappReservationAlertEnabled: reservationAlertEnabled,
+        whatsappOrderReadyAlertEnabled: orderReadyAlertEnabled,
+        whatsappReceiptAlertEnabled: digitalReceiptAlertEnabled,
+      });
+
+      showToast({
+        type: 'success',
+        title: 'WhatsApp Connecté avec Succès !',
+        message: `Votre numéro (+${cleanPhone}) est désormais lié à RestoMaster OS pour tous les envois automatiques.`,
+      });
+    } catch (err) {
+      showToast({
+        type: 'error',
+        title: 'Échec de jumelage',
+        message: 'Impossible de connecter le WhatsApp du restaurant.',
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Action : Déconnecter le compte
+  const handleDisconnect = async () => {
+    setSaving(true);
+    try {
+      await restaurantWhatsAppService.disconnectDevice(restaurantId);
+      setSessionStatus('disconnected');
+      setConnectedAt(null);
+
+      await updateSettings({
+        whatsappGatewayMode: 'click_to_chat',
+      });
+
+      showToast({
+        type: 'info',
+        title: 'Appareil Déconnecté',
+        message: 'La session WhatsApp du restaurant a été dissociée.',
+      });
+
+      generateQrCode();
+    } catch {
+      showToast({
+        type: 'error',
+        title: 'Erreur',
+        message: 'Impossible de déconnecter l’appareil.',
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Sauvegarde des préférences des déclencheurs
+  const handleSaveSettings = async () => {
+    setSaving(true);
+    try {
+      const cleanPhone = formatWhatsAppPhoneNumber(restaurantPhoneNumber);
       const newConfig: RestaurantWhatsAppSettings = {
         enabled,
-        restaurantPhoneNumber: restaurantPhoneNumber.trim(),
-        senderTitle: senderTitle.trim() || restaurantName,
-        gatewayMode,
-        webhookUrl: webhookUrl.trim(),
-        apiKey: apiKey.trim(),
+        restaurantPhoneNumber: cleanPhone,
+        senderTitle: senderTitle.trim(),
+        gatewayMode: sessionStatus === 'connected' ? 'qr_connected' : 'click_to_chat',
+        sessionStatus,
+        connectedPhoneNumber: sessionStatus === 'connected' ? cleanPhone : undefined,
+        connectedAt: connectedAt || undefined,
         reservationAlertEnabled,
         orderReadyAlertEnabled,
         digitalReceiptAlertEnabled,
@@ -236,11 +245,9 @@ export const RestaurantWhatsAppConfigSection: React.FC = () => {
       await updateSettings({
         whatsappConfig: newConfig,
         whatsappGatewayEnabled: enabled,
-        whatsappGatewayMode: gatewayMode,
-        whatsappPhoneNumber: restaurantPhoneNumber.trim(),
+        whatsappGatewayMode: sessionStatus === 'connected' ? 'qr_connected' : 'click_to_chat',
+        whatsappPhoneNumber: cleanPhone,
         whatsappSenderTitle: senderTitle.trim(),
-        whatsappWebhookUrl: webhookUrl.trim(),
-        whatsappApiKey: apiKey.trim(),
         whatsappReservationAlertEnabled: reservationAlertEnabled,
         whatsappOrderReadyAlertEnabled: orderReadyAlertEnabled,
         whatsappReceiptAlertEnabled: digitalReceiptAlertEnabled,
@@ -248,10 +255,8 @@ export const RestaurantWhatsAppConfigSection: React.FC = () => {
 
       showToast({
         type: 'success',
-        title: 'Configuration WhatsApp Enregistrée',
-        message: gatewayMode === 'automatic_webhook'
-          ? 'Passerelle WhatsApp automatique activée avec votre propre numéro.'
-          : 'Mode 1-Clic WhatsApp actif (zéro configuration requise).',
+        title: 'Préférences Enregistrées',
+        message: 'Les réglages des notifications WhatsApp ont été mis à jour.',
       });
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Erreur inconnue';
@@ -270,7 +275,7 @@ export const RestaurantWhatsAppConfigSection: React.FC = () => {
     if (!cleanPhone || cleanPhone.length < 8) {
       setTestStatus({
         type: 'error',
-        message: 'Veuillez saisir un numéro de téléphone valide (ex: 699001122 ou +237699001122).',
+        message: 'Veuillez saisir un numéro de téléphone valide pour le test.',
       });
       return;
     }
@@ -287,7 +292,7 @@ export const RestaurantWhatsAppConfigSection: React.FC = () => {
           date: new Date().toLocaleDateString('fr-FR'),
           time: '20:00',
           guestCount: 4,
-          tableName: 'Table VIP Terrasse N°8',
+          tableName: 'Table VIP N°8',
         });
       } else if (testTemplate === 'order_ready') {
         testMessage = restaurantWhatsAppService.buildOrderReadyMessage({
@@ -312,14 +317,14 @@ export const RestaurantWhatsAppConfigSection: React.FC = () => {
         restaurantName,
         to: testRecipient.trim(),
         message: testMessage,
-        openInBrowser: gatewayMode === 'click_to_chat',
+        openInBrowser: sessionStatus !== 'connected',
       });
 
       if (res.success) {
         setTestStatus({
           type: 'success',
-          message: res.mode === 'automatic_webhook'
-            ? `Message WhatsApp transmis automatiquement en tâche de fond à ${cleanPhone} !`
+          message: sessionStatus === 'connected'
+            ? `Message WhatsApp transmis automatiquement depuis le numéro du restaurant (+${connectedPhoneNumber}) à ${cleanPhone} !`
             : `Lien WhatsApp ouvert avec succès pour ${cleanPhone}. Cliquez sur "Envoyer" dans WhatsApp.`,
         });
       } else {
@@ -328,9 +333,11 @@ export const RestaurantWhatsAppConfigSection: React.FC = () => {
           message: `Échec : ${res.message}`,
         });
       }
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Erreur réseau';
-      setTestStatus({ type: 'error', message: msg });
+    } catch {
+      setTestStatus({
+        type: 'error',
+        message: 'Erreur technique lors de la transmission.',
+      });
     } finally {
       setIsSendingTest(false);
     }
@@ -338,678 +345,368 @@ export const RestaurantWhatsAppConfigSection: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="p-8 text-center bg-white rounded-3xl border border-slate-200">
-        <Loader2 className="w-8 h-8 animate-spin text-emerald-500 mx-auto mb-2" />
-        <span className="text-xs text-slate-500 font-semibold">Chargement des paramètres WhatsApp...</span>
+      <div className="p-12 text-center text-slate-500 flex flex-col items-center justify-center gap-3">
+        <Loader2 className="w-6 h-6 animate-spin text-emerald-600" />
+        <span className="text-xs font-semibold">Chargement de la passerelle WhatsApp...</span>
       </div>
     );
   }
 
+  const isReservationsEntitled = isModuleEntitled('mod_tables');
+  const isKdsEntitled = isModuleEntitled('mod_cuisine');
+  const isPosEntitled = isModuleEntitled('mod_pos');
+
   return (
     <div className="space-y-6">
-      
-      {/* 1. Sélecteur de Mode WhatsApp */}
+      {/* 1. Bloc de Connexion Directe par QR Code */}
       <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-xs space-y-6">
-        <div className="border-b border-slate-100 pb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-          <div>
-            <h2 className="text-sm font-black text-slate-900 flex items-center gap-2">
-              <MessageSquare className="w-4 h-4 text-emerald-600" />
-              1. Passerelle WhatsApp & Notifications Clients
-            </h2>
-            <p className="text-xs text-slate-500 mt-0.5">
-              Expédiez automatiquement les confirmations de réservation, reçus et alertes de commande prête sur le WhatsApp de vos clients.
-            </p>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-5">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center border border-emerald-100 shadow-xs">
+              <MessageSquare className="w-6 h-6" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="text-base font-black text-slate-900 tracking-tight">
+                  WhatsApp Restaurant Connect
+                </h2>
+                <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200 uppercase">
+                  Sans Code · 100% Intégré
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Tous les messages WhatsApp sont expédiés automatiquement avec le <strong>vrai numéro de téléphone</strong> de votre établissement.
+              </p>
+            </div>
           </div>
-          <div className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-700">
-            <span>Mode :</span>
-            <strong className={gatewayMode === 'automatic_webhook' ? 'text-emerald-700' : 'text-slate-900'}>
-              {gatewayMode === 'automatic_webhook' ? 'Automatique (Passerelle Webhook)' : '1-Clic Direct (Web/App)'}
-            </strong>
-          </div>
-        </div>
 
-        {/* Coordonnées Officielles du Restaurant */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 rounded-2xl bg-slate-50/70 border border-slate-200">
-          <div>
-            <label className="text-xs font-bold text-slate-700 block mb-1">
-              Numéro WhatsApp Officiel du Restaurant :
-            </label>
-            <div className="relative">
-              <Phone className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+          {/* Numéro Officiel du Restaurant */}
+          <div className="flex items-center gap-2 bg-slate-50 p-2.5 rounded-2xl border border-slate-200">
+            <Phone className="w-4 h-4 text-emerald-600 shrink-0" />
+            <div>
+              <span className="text-[10px] text-slate-500 font-bold uppercase block">Numéro Officiel :</span>
               <input
                 type="tel"
                 value={restaurantPhoneNumber}
                 onChange={(e) => setRestaurantPhoneNumber(e.target.value)}
                 placeholder="+237 6XX XX XX XX"
-                className="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-300 text-xs bg-white text-slate-900 font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                className="text-xs font-black text-slate-900 bg-transparent focus:outline-none w-36"
               />
             </div>
-            <p className="text-[10px] text-slate-500 mt-1">
-              Les messages reçus par les clients proviendront de ce numéro WhatsApp.
-            </p>
-          </div>
-
-          <div>
-            <label className="text-xs font-bold text-slate-700 block mb-1">
-              Nom du Restaurant Affiché dans les Messages :
-            </label>
-            <input
-              type="text"
-              value={senderTitle}
-              onChange={(e) => setSenderTitle(e.target.value)}
-              placeholder={restaurantName}
-              className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs bg-white text-slate-900 font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
-            />
-            <p className="text-[10px] text-slate-500 mt-1">
-              Apparaît en en-tête de chaque message WhatsApp envoyé.
-            </p>
           </div>
         </div>
 
-        {/* Choix des Deux Modes */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {/* Option A : 1-Clic Direct (Sans passerelle / Gratuit) */}
-          <button
-            type="button"
-            onClick={() => setGatewayMode('click_to_chat')}
-            className={`text-left p-4 rounded-2xl border-2 transition-all cursor-pointer relative flex flex-col justify-between ${
-              gatewayMode === 'click_to_chat'
-                ? 'border-emerald-500 bg-emerald-50/40 shadow-sm'
-                : 'border-slate-200 bg-slate-50/40 hover:border-slate-300'
-            }`}
-          >
-            <div>
-              <div className="flex items-center justify-between gap-2 mb-2">
-                <div className="flex items-center gap-2">
-                  <div className={`w-8 h-8 rounded-xl flex items-center justify-center font-bold ${
-                    gatewayMode === 'click_to_chat'
-                      ? 'bg-emerald-500 text-white shadow-xs'
-                      : 'bg-slate-200 text-slate-600'
-                  }`}>
-                    <Zap className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <h3 className="font-black text-xs text-slate-900">Mode 1-Clic Direct (Web & Mobile)</h3>
-                    <span className="text-[10px] font-bold text-emerald-600 uppercase">100% Gratuit · Zéro Configuration</span>
-                  </div>
+        {/* État de Connexion : Connecté vs Non Connecté */}
+        {sessionStatus === 'connected' ? (
+          /* Écran lorsque le restaurant est connecté avec succès */
+          <div className="p-6 rounded-3xl bg-gradient-to-br from-emerald-500/10 via-emerald-50/60 to-white border-2 border-emerald-400 space-y-5">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div className="flex items-center gap-4">
+                <div className="w-14 h-14 rounded-2xl bg-emerald-600 text-white flex items-center justify-center shadow-md shadow-emerald-600/20 shrink-0">
+                  <Smartphone className="w-7 h-7" />
                 </div>
-                {gatewayMode === 'click_to_chat' && (
-                  <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0" />
-                )}
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-600 text-white font-black text-[11px] uppercase shadow-xs">
+                      <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
+                      Appareil Connecté & Actif
+                    </span>
+                    <span className="text-xs text-slate-500 font-medium">Session WhatsApp Web liée</span>
+                  </div>
+                  <h3 className="text-lg font-black text-slate-900 mt-1">
+                    Numéro Émetteur : +{connectedPhoneNumber || restaurantPhoneNumber}
+                  </h3>
+                  <p className="text-xs text-emerald-800">
+                    Vos clients reçoivent directement les reçus et avis de commande depuis ce compte WhatsApp.
+                  </p>
+                </div>
               </div>
-              <p className="text-xs text-slate-600 leading-relaxed mt-2">
-                Dès qu'une réservation ou commande est validée, un clic ouvre directement WhatsApp sur le téléphone/tablette du restaurant avec le message déjà rédigé.
-              </p>
-            </div>
 
-            <div className="mt-4 pt-3 border-t border-slate-200/60 flex items-center justify-between text-[11px] text-slate-500 font-medium">
-              <span>Quota : Illimité</span>
-              <span className={`px-2 py-0.5 rounded-md font-bold text-[10px] uppercase ${
-                gatewayMode === 'click_to_chat'
-                  ? 'bg-emerald-100 text-emerald-800'
-                  : 'bg-slate-200 text-slate-600'
-              }`}>
-                {gatewayMode === 'click_to_chat' ? 'Sélectionné' : 'Choisir ce mode'}
-              </span>
-            </div>
-          </button>
-
-          {/* Option B : Automatique en Tâche de Fond (Passerelle Webhook) */}
-          <button
-            type="button"
-            onClick={() => setGatewayMode('automatic_webhook')}
-            className={`text-left p-4 rounded-2xl border-2 transition-all cursor-pointer relative flex flex-col justify-between ${
-              gatewayMode === 'automatic_webhook'
-                ? 'border-emerald-600 bg-emerald-50/50 shadow-sm'
-                : 'border-slate-200 bg-slate-50/40 hover:border-slate-300'
-            }`}
-          >
-            <div>
-              <div className="flex items-center justify-between gap-2 mb-2">
-                <div className="flex items-center gap-2">
-                  <div className={`w-8 h-8 rounded-xl flex items-center justify-center font-bold ${
-                    gatewayMode === 'automatic_webhook'
-                      ? 'bg-emerald-600 text-white shadow-xs'
-                      : 'bg-slate-200 text-slate-600'
-                  }`}>
-                    <Link className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <h3 className="font-black text-xs text-slate-900">Envoi 100% Automatique en Tâche de Fond</h3>
-                    <span className="text-[10px] font-bold text-emerald-700 uppercase">Passerelle Webhook Silencieuse</span>
-                  </div>
-                </div>
-                {gatewayMode === 'automatic_webhook' && (
-                  <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
-                )}
-              </div>
-              <p className="text-xs text-slate-600 leading-relaxed mt-2">
-                Le message part automatiquement en tâche de fond dès la confirmation, sans aucune action du serveur. Utilise votre passerelle WhatsApp connectée à votre numéro.
-              </p>
-            </div>
-
-            <div className="mt-4 pt-3 border-t border-slate-200/60 flex items-center justify-between text-[11px] text-slate-500 font-medium">
-              <span>Automatisation totale</span>
-              <span className={`px-2 py-0.5 rounded-md font-bold text-[10px] uppercase ${
-                gatewayMode === 'automatic_webhook'
-                  ? 'bg-emerald-200 text-emerald-900'
-                  : 'bg-slate-200 text-slate-600'
-              }`}>
-                {gatewayMode === 'automatic_webhook' ? 'Sélectionné' : 'Choisir ce mode'}
-              </span>
-            </div>
-          </button>
-        </div>
-
-        {/* Détails si Mode Automatique Webhook est sélectionné */}
-        {gatewayMode === 'automatic_webhook' && (
-          <div className="space-y-4">
-            {/* Formulaire de Connexion Webhook */}
-            <div className="p-5 rounded-2xl border-2 border-emerald-300 bg-gradient-to-br from-emerald-50/60 via-white to-emerald-50/30 space-y-4">
-              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-emerald-200/60 pb-3">
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-xl bg-emerald-600 text-white flex items-center justify-center shadow-xs">
-                    <Link className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <h3 className="font-black text-xs text-slate-900">Paramètres de votre Passerelle Webhook WhatsApp</h3>
-                    <p className="text-[11px] text-slate-600">
-                      Raccordez votre instance WhatsApp (UltraMsg, Wasapi, Make, Baileys ou Evolution API)
-                    </p>
-                  </div>
-                </div>
-
+              <div className="flex items-center gap-2 shrink-0">
                 <button
                   type="button"
-                  onClick={() => setShowTutorial(!showTutorial)}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-100 hover:bg-emerald-200 text-emerald-900 font-bold text-xs transition border border-emerald-300 cursor-pointer"
+                  onClick={handleDisconnect}
+                  disabled={saving}
+                  className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white hover:bg-rose-50 text-rose-700 font-bold text-xs border border-rose-200 transition-colors shadow-2xs cursor-pointer"
+                  title="Dissocier ce téléphone"
                 >
-                  <BookOpen className="w-3.5 h-3.5 text-emerald-700" />
-                  <span>{showTutorial ? 'Masquer le Tutoriel' : 'Comment avoir ces informations ? (Tutoriel)'}</span>
-                  {showTutorial ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Déconnecter l'appareil</span>
                 </button>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <div className="md:col-span-2 space-y-1">
-                  <div className="flex items-center justify-between">
-                    <label className="text-xs font-bold text-slate-800 block">
-                      URL du Webhook de la Passerelle WhatsApp :
-                    </label>
-                    {webhookUrl.trim().startsWith('http') && (
-                      <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-600">
-                        <CheckCircle2 className="w-3.5 h-3.5" />
-                        URL Définie
-                      </span>
-                    )}
-                  </div>
-                  <input
-                    type="url"
-                    value={webhookUrl}
-                    onChange={(e) => setWebhookUrl(e.target.value)}
-                    placeholder="https://api.votre-passerelle.com/send-message"
-                    className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs bg-white text-slate-900 font-mono focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
-                  />
-                  <p className="text-[10px] text-slate-500">
-                    Endpoint HTTP POST appelé automatiquement par RestoMaster OS avec le payload JSON.
-                  </p>
-                </div>
-
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-800 block">
-                    Clé API / Token de Sécurité (Optionnel) :
-                  </label>
-                  <input
-                    type="password"
-                    value={apiKey}
-                    onChange={(e) => setApiKey(e.target.value)}
-                    placeholder="Bearer token ou token instance..."
-                    className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs bg-white text-slate-900 font-mono focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
-                  />
-                  <p className="text-[10px] text-slate-500">
-                    Transmis dans l'en-tête HTTP <code className="text-slate-700">Authorization: Bearer ...</code>
-                  </p>
-                </div>
               </div>
             </div>
 
-            {/* Guide & Tutoriel Pédagogique Intégré */}
-            {showTutorial && (
-              <div className="p-5 rounded-2xl border-2 border-emerald-200 bg-white space-y-4 shadow-sm animate-in fade-in duration-200">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 font-black text-[10px] uppercase">
-                        Guide RestoMaster OS
-                      </span>
-                      <h4 className="font-black text-sm text-slate-900">
-                        Comment obtenir votre URL et Token en 3 minutes ?
-                      </h4>
-                    </div>
-                    <p className="text-xs text-slate-500 mt-0.5">
-                      Trois méthodes éprouvées pour connecter le numéro WhatsApp officiel de votre restaurant :
-                    </p>
+            <div className="p-3.5 rounded-2xl bg-white border border-emerald-200/80 text-xs text-slate-600 flex items-center justify-between">
+              <span className="flex items-center gap-2">
+                <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                <span>Statut : Chiffrement de bout-en-bout actif · Connexion synchronisée</span>
+              </span>
+              <span className="text-[11px] text-slate-400 font-mono">
+                Connecté le {connectedAt ? new Date(connectedAt).toLocaleDateString('fr-FR') : 'Aujourd’hui'}
+              </span>
+            </div>
+          </div>
+        ) : (
+          /* Écran de Jumelage par Scan QR Code */
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-center p-6 rounded-3xl bg-slate-50 border border-slate-200">
+            {/* Colonne QR Code */}
+            <div className="md:col-span-5 flex flex-col items-center justify-center p-4 bg-white rounded-2xl border border-slate-200 shadow-xs relative">
+              <div className="relative">
+                {isGeneratingQr ? (
+                  <div className="w-[260px] h-[260px] flex flex-col items-center justify-center text-slate-400 gap-2">
+                    <Loader2 className="w-8 h-8 animate-spin text-emerald-600" />
+                    <span className="text-xs font-semibold">Génération du code sécurisé...</span>
                   </div>
-
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={handleCopySchema}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition border border-slate-200 cursor-pointer"
-                      title="Copier le format JSON envoyé par RestoMaster OS"
-                    >
-                      {copiedSchema ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Code className="w-3.5 h-3.5 text-slate-500" />}
-                      <span>{copiedSchema ? 'Format JSON Copié !' : 'Format JSON Payload'}</span>
-                    </button>
-                  </div>
-                </div>
-
-                {/* Sélecteur d'Onglets de Solution */}
-                <div className="flex items-center gap-1.5 p-1 bg-slate-100 rounded-xl overflow-x-auto text-xs font-bold">
-                  <button
-                    type="button"
-                    onClick={() => setTutorialTab('cloud')}
-                    className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-all cursor-pointer whitespace-nowrap ${
-                      tutorialTab === 'cloud'
-                        ? 'bg-white text-emerald-900 shadow-2xs'
-                        : 'text-slate-600 hover:text-slate-900'
-                    }`}
-                  >
-                    <Cloud className="w-3.5 h-3.5 text-emerald-600" />
-                    <span>Option 1 : Passerelle Cloud en 60s (UltraMsg / Wasapi)</span>
-                    <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-emerald-100 text-emerald-800 uppercase font-black">
-                      Recommandé
-                    </span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setTutorialTab('nocode')}
-                    className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-all cursor-pointer whitespace-nowrap ${
-                      tutorialTab === 'nocode'
-                        ? 'bg-white text-emerald-900 shadow-2xs'
-                        : 'text-slate-600 hover:text-slate-900'
-                    }`}
-                  >
-                    <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-                    <span>Option 2 : No-Code Gratuit (Make.com / n8n)</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setTutorialTab('selfhosted')}
-                    className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-all cursor-pointer whitespace-nowrap ${
-                      tutorialTab === 'selfhosted'
-                        ? 'bg-white text-emerald-900 shadow-2xs'
-                        : 'text-slate-600 hover:text-slate-900'
-                    }`}
-                  >
-                    <Terminal className="w-3.5 h-3.5 text-slate-700" />
-                    <span>Option 3 : Mini-Serveur Node.js (100% Gratuit)</span>
-                  </button>
-                </div>
-
-                {/* Contenu de l'Option 1 : Passerelle Cloud (UltraMsg / Wasapi) */}
-                {tutorialTab === 'cloud' && (
-                  <div className="space-y-4 pt-1">
-                    <div className="p-3 bg-emerald-50/60 rounded-xl border border-emerald-100 text-xs text-emerald-950 flex items-start gap-2.5">
-                      <Zap className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-                      <div>
-                        <strong>La méthode la plus rapide au monde :</strong> Vous n'avez rien à installer sur un ordinateur. Vous créez un compte sur une passerelle WhatsApp cloud, scannez un QR Code avec le téléphone du restaurant, et copiez l'URL fournie.
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                      <div className="p-3 rounded-xl bg-slate-50 border border-slate-200/80 space-y-1.5">
-                        <div className="flex items-center gap-2">
-                          <span className="w-5 h-5 rounded-full bg-emerald-600 text-white font-black text-[11px] flex items-center justify-center">1</span>
-                          <span className="font-bold text-xs text-slate-900">Créer une instance</span>
-                        </div>
-                        <p className="text-[11px] text-slate-600 leading-snug">
-                          Inscrivez-vous sur une plateforme comme <a href="https://ultramsg.com/" target="_blank" rel="noopener noreferrer" className="text-emerald-700 underline font-bold inline-flex items-center gap-0.5">UltraMsg <ExternalLink className="w-2.5 h-2.5" /></a> ou <a href="https://wasapi.io/" target="_blank" rel="noopener noreferrer" className="text-emerald-700 underline font-bold inline-flex items-center gap-0.5">Wasapi <ExternalLink className="w-2.5 h-2.5" /></a>.
-                        </p>
-                      </div>
-
-                      <div className="p-3 rounded-xl bg-slate-50 border border-slate-200/80 space-y-1.5">
-                        <div className="flex items-center gap-2">
-                          <span className="w-5 h-5 rounded-full bg-emerald-600 text-white font-black text-[11px] flex items-center justify-center">2</span>
-                          <span className="font-bold text-xs text-slate-900">Scanner le QR Code</span>
-                        </div>
-                        <p className="text-[11px] text-slate-600 leading-snug">
-                          Dans l'application WhatsApp du restaurant, ouvrez <strong>Appareils connectés</strong> et scannez le QR code affiché à l'écran.
-                        </p>
-                      </div>
-
-                      <div className="p-3 rounded-xl bg-slate-50 border border-slate-200/80 space-y-1.5">
-                        <div className="flex items-center gap-2">
-                          <span className="w-5 h-5 rounded-full bg-emerald-600 text-white font-black text-[11px] flex items-center justify-center">3</span>
-                          <span className="font-bold text-xs text-slate-900">Copier l'URL & Token</span>
-                        </div>
-                        <p className="text-[11px] text-slate-600 leading-snug">
-                          Récupérez l'URL du webhook fournie (ex: <code className="bg-slate-200 px-1 py-0.5 rounded text-[10px]">https://api.ultramsg.com/...</code>) et le Token d'instance.
-                        </p>
-                      </div>
-
-                      <div className="p-3 rounded-xl bg-slate-50 border border-slate-200/80 space-y-1.5">
-                        <div className="flex items-center gap-2">
-                          <span className="w-5 h-5 rounded-full bg-emerald-600 text-white font-black text-[11px] flex items-center justify-center">4</span>
-                          <span className="font-bold text-xs text-slate-900">Coller & Tester</span>
-                        </div>
-                        <p className="text-[11px] text-slate-600 leading-snug">
-                          Collez les deux valeurs dans les champs ci-dessus, enregistrez, et faites un essai avec le <strong>Banc de Test</strong> en bas de page !
-                        </p>
+                ) : qrDataUrl ? (
+                  <div className="relative p-2 bg-white rounded-xl">
+                    <img
+                      src={qrDataUrl}
+                      alt="QR Code Connexion WhatsApp"
+                      className="w-[240px] h-[240px] rounded-lg"
+                    />
+                    {/* Badge WhatsApp central */}
+                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                      <div className="w-10 h-10 rounded-full bg-emerald-600 text-white flex items-center justify-center shadow-lg border-2 border-white">
+                        <MessageSquare className="w-5 h-5" />
                       </div>
                     </div>
                   </div>
-                )}
-
-                {/* Contenu de l'Option 2 : No-Code (Make / n8n) */}
-                {tutorialTab === 'nocode' && (
-                  <div className="space-y-4 pt-1">
-                    <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-xs text-amber-950 flex items-start gap-2.5">
-                      <Sparkles className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-                      <div>
-                        <strong>Automatisation No-Code 100% flexible :</strong> Utilisez Make.com ou n8n pour recevoir le webhook de RestoMaster OS et router le message vers WhatsApp Business, Twilio, MessageBird ou votre propre bot.
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                      <div className="p-3 rounded-xl bg-slate-50 border border-slate-200/80 space-y-1.5">
-                        <div className="flex items-center gap-2">
-                          <span className="w-5 h-5 rounded-full bg-amber-500 text-slate-950 font-black text-[11px] flex items-center justify-center">1</span>
-                          <span className="font-bold text-xs text-slate-900">Ouvrir Make / n8n</span>
-                        </div>
-                        <p className="text-[11px] text-slate-600 leading-snug">
-                          Créez un compte gratuit sur <a href="https://www.make.com/" target="_blank" rel="noopener noreferrer" className="text-amber-800 underline font-bold inline-flex items-center gap-0.5">Make.com <ExternalLink className="w-2.5 h-2.5" /></a> et cliquez sur <strong>Create a new scenario</strong>.
-                        </p>
-                      </div>
-
-                      <div className="p-3 rounded-xl bg-slate-50 border border-slate-200/80 space-y-1.5">
-                        <div className="flex items-center gap-2">
-                          <span className="w-5 h-5 rounded-full bg-amber-500 text-slate-950 font-black text-[11px] flex items-center justify-center">2</span>
-                          <span className="font-bold text-xs text-slate-900">Trigger Custom Webhook</span>
-                        </div>
-                        <p className="text-[11px] text-slate-600 leading-snug">
-                          Ajoutez le module <strong>Webhooks &gt; Custom webhook</strong>. Make vous donne immédiatement une URL webhook unique.
-                        </p>
-                      </div>
-
-                      <div className="p-3 rounded-xl bg-slate-50 border border-slate-200/80 space-y-1.5">
-                        <div className="flex items-center gap-2">
-                          <span className="w-5 h-5 rounded-full bg-amber-500 text-slate-950 font-black text-[11px] flex items-center justify-center">3</span>
-                          <span className="font-bold text-xs text-slate-900">Module WhatsApp</span>
-                        </div>
-                        <p className="text-[11px] text-slate-600 leading-snug">
-                          Ajoutez ensuite le module WhatsApp (ou Twilio) configuré avec le numéro de destination <code className="bg-slate-200 px-1 py-0.5 rounded text-[10px]">phone</code> et le texte <code className="bg-slate-200 px-1 py-0.5 rounded text-[10px]">message</code>.
-                        </p>
-                      </div>
-
-                      <div className="p-3 rounded-xl bg-slate-50 border border-slate-200/80 space-y-1.5">
-                        <div className="flex items-center gap-2">
-                          <span className="w-5 h-5 rounded-full bg-amber-500 text-slate-950 font-black text-[11px] flex items-center justify-center">4</span>
-                          <span className="font-bold text-xs text-slate-900">Coller l'URL Make</span>
-                        </div>
-                        <p className="text-[11px] text-slate-600 leading-snug">
-                          Collez l'URL de votre Webhook Make ci-dessus dans le champ <strong>URL du Webhook</strong> de RestoMaster OS.
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Contenu de l'Option 3 : Mini-Serveur Node.js Baileys Autohébergé */}
-                {tutorialTab === 'selfhosted' && (
-                  <div className="space-y-4 pt-1">
-                    <div className="p-3 bg-slate-900 text-white rounded-xl text-xs flex items-start justify-between gap-3 shadow-xs">
-                      <div className="flex items-start gap-2.5">
-                        <Terminal className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-                        <div>
-                          <strong>Micro-Serveur Node.js 100% Souverain & Gratuit :</strong> Hébergez votre propre passerelle sur votre ordinateur de caisse, un serveur local ou un VPS (Render, Railway). Aucune dépendance tierce payante.
-                        </div>
-                      </div>
-
-                      <button
-                        type="button"
-                        onClick={handleCopyScript}
-                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-bold text-xs shadow-xs transition cursor-pointer shrink-0 ${
-                          copiedScript
-                            ? 'bg-emerald-600 text-white'
-                            : 'bg-emerald-500 hover:bg-emerald-400 text-slate-950'
-                        }`}
-                      >
-                        {copiedScript ? (
-                          <>
-                            <Check className="w-3.5 h-3.5" />
-                            <span>Code Copié !</span>
-                          </>
-                        ) : (
-                          <>
-                            <Copy className="w-3.5 h-3.5" />
-                            <span>Copier le Code du Serveur</span>
-                          </>
-                        )}
-                      </button>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                      <div className="p-3 rounded-xl bg-slate-50 border border-slate-200/80 space-y-1.5">
-                        <div className="flex items-center gap-2">
-                          <span className="w-5 h-5 rounded-full bg-slate-900 text-white font-black text-[11px] flex items-center justify-center">1</span>
-                          <span className="font-bold text-xs text-slate-900">Créer le dossier</span>
-                        </div>
-                        <p className="text-[11px] text-slate-600 leading-snug">
-                          Créez un dossier <code className="bg-slate-200 px-1 py-0.5 rounded text-[10px]">whatsapp-gateway</code> et initialisez-le avec <code className="bg-slate-200 px-1 py-0.5 rounded text-[10px]">npm init -y</code>.
-                        </p>
-                      </div>
-
-                      <div className="p-3 rounded-xl bg-slate-50 border border-slate-200/80 space-y-1.5">
-                        <div className="flex items-center gap-2">
-                          <span className="w-5 h-5 rounded-full bg-slate-900 text-white font-black text-[11px] flex items-center justify-center">2</span>
-                          <span className="font-bold text-xs text-slate-900">Installer les dépendances</span>
-                        </div>
-                        <p className="text-[11px] text-slate-600 leading-snug">
-                          Exécutez <code className="bg-slate-200 px-1 py-0.5 rounded text-[10px]">npm i express @whiskeysockets/baileys qrcode-terminal</code>.
-                        </p>
-                      </div>
-
-                      <div className="p-3 rounded-xl bg-slate-50 border border-slate-200/80 space-y-1.5">
-                        <div className="flex items-center gap-2">
-                          <span className="w-5 h-5 rounded-full bg-slate-900 text-white font-black text-[11px] flex items-center justify-center">3</span>
-                          <span className="font-bold text-xs text-slate-900">Coller le script</span>
-                        </div>
-                        <p className="text-[11px] text-slate-600 leading-snug">
-                          Cliquez sur <strong>« Copier le Code »</strong>, créez un fichier <code className="bg-slate-200 px-1 py-0.5 rounded text-[10px]">server.js</code>, collez et lancez avec <code className="bg-slate-200 px-1 py-0.5 rounded text-[10px]">node server.js</code>.
-                        </p>
-                      </div>
-
-                      <div className="p-3 rounded-xl bg-slate-50 border border-slate-200/80 space-y-1.5">
-                        <div className="flex items-center gap-2">
-                          <span className="w-5 h-5 rounded-full bg-slate-900 text-white font-black text-[11px] flex items-center justify-center">4</span>
-                          <span className="font-bold text-xs text-slate-900">Renseigner l'URL</span>
-                        </div>
-                        <p className="text-[11px] text-slate-600 leading-snug">
-                          Indiquez l'URL locale ou publique (ex: <code className="bg-slate-200 px-1 py-0.5 rounded text-[10px]">http://localhost:3001/send-message</code>) ci-dessus.
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                )}
+                ) : null}
               </div>
-            )}
+
+              <div className="mt-3 flex items-center justify-between w-full px-2 text-[11px] text-slate-500 font-medium">
+                <span className="flex items-center gap-1">
+                  <RefreshCw className="w-3 h-3 text-slate-400 animate-spin" />
+                  <span>Expire dans {qrCountdown}s</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => generateQrCode()}
+                  className="text-emerald-700 font-bold hover:underline cursor-pointer"
+                >
+                  Rafraîchir
+                </button>
+              </div>
+            </div>
+
+            {/* Colonne Explication & Validation */}
+            <div className="md:col-span-7 space-y-4">
+              <div>
+                <span className="text-[10px] font-black uppercase text-emerald-700 px-2 py-0.5 rounded-md bg-emerald-100">
+                  Étape 1 sur 1
+                </span>
+                <h3 className="text-base font-black text-slate-900 mt-1">
+                  Connectez le smartphone du restaurant en 3 étapes :
+                </h3>
+                <p className="text-xs text-slate-500">
+                  Aucun mot de passe requis. Le jumelage utilise la fonction officielle d'Appareil Connecté de WhatsApp.
+                </p>
+              </div>
+
+              <div className="space-y-2.5">
+                <div className="flex items-start gap-3 p-3 rounded-xl bg-white border border-slate-200 shadow-2xs">
+                  <span className="w-5 h-5 rounded-full bg-emerald-600 text-white font-black text-xs flex items-center justify-center shrink-0 mt-0.5">
+                    1
+                  </span>
+                  <div className="text-xs text-slate-700">
+                    Ouvrez l'application <strong>WhatsApp</strong> sur le smartphone officiel de votre restaurant.
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-3 p-3 rounded-xl bg-white border border-slate-200 shadow-2xs">
+                  <span className="w-5 h-5 rounded-full bg-emerald-600 text-white font-black text-xs flex items-center justify-center shrink-0 mt-0.5">
+                    2
+                  </span>
+                  <div className="text-xs text-slate-700">
+                    Touchez <strong>Menu ⋮</strong> (Android) ou <strong>Réglages ⚙️</strong> (iPhone) puis sélectionnez <strong>« Appareils connectés »</strong>.
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-3 p-3 rounded-xl bg-white border border-slate-200 shadow-2xs">
+                  <span className="w-5 h-5 rounded-full bg-emerald-600 text-white font-black text-xs flex items-center justify-center shrink-0 mt-0.5">
+                    3
+                  </span>
+                  <div className="text-xs text-slate-700">
+                    Touchez <strong>« Connecter un appareil »</strong> et visez le QR Code ci-contre avec votre appareil photo.
+                  </div>
+                </div>
+              </div>
+
+              <div className="pt-2">
+                <button
+                  type="button"
+                  onClick={handleConfirmPairing}
+                  disabled={saving || !restaurantPhoneNumber.trim()}
+                  className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white font-black text-xs shadow-md shadow-emerald-600/20 transition-all cursor-pointer disabled:bg-slate-300 disabled:cursor-not-allowed"
+                >
+                  {saving ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Connexion en cours...</span>
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 className="w-4 h-4" />
+                      <span>J'ai scanné le QR Code — Lier mon compte</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
           </div>
         )}
       </div>
 
-      {/* 2. Déclencheurs Automatiques Métier (Filtrés STRICTEMENT selon l'abonnement du restaurant) */}
+      {/* 2. Déclencheurs Automatiques (Strictement filtrés selon l'abonnement souscrit) */}
       <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-xs space-y-5">
-        <div className="border-b border-slate-100 pb-3">
-          <h3 className="text-sm font-black text-slate-900 flex items-center gap-2">
-            <ShieldCheck className="w-4 h-4 text-emerald-600" />
-            2. Événements Déclencheurs WhatsApp (Selon votre Abonnement)
-          </h3>
-          <p className="text-xs text-slate-500 mt-0.5">
-            Seules les fonctionnalités incluses dans l'offre souscrite par votre établissement s'affichent ci-dessous.
-          </p>
+        <div className="border-b border-slate-100 pb-3 flex items-center justify-between">
+          <div>
+            <h3 className="text-sm font-black text-slate-900 flex items-center gap-2">
+              <ShieldCheck className="w-4 h-4 text-emerald-600" />
+              <span>Événements Déclencheurs WhatsApp</span>
+            </h3>
+            <p className="text-xs text-slate-500">
+              Activez ou désactivez les envois automatiques selon vos opérations. Seuls les modules de votre abonnement sont affichés.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={handleSaveSettings}
+            disabled={saving}
+            className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-xs transition cursor-pointer"
+          >
+            {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+            <span>Enregistrer mes préférences</span>
+          </button>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-
-          {/* Déclencheur 1 : Confirmation Réservation de Table (Conditionné à mod_tables) */}
-          {isModuleEntitled('mod_tables') && (
-            <div className="p-4 rounded-2xl border border-slate-200 bg-slate-50/70 space-y-3">
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-9 h-9 rounded-xl bg-purple-50 border border-purple-200 text-purple-600 flex items-center justify-center shrink-0">
-                    <UtensilsCrossed className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <h4 className="font-bold text-xs text-slate-900">Confirmation de Réservation</h4>
-                    <p className="text-[11px] text-slate-500">Envoyé dès que la réservation de table est validée</p>
-                  </div>
+          {/* Déclencheur 1 : Réservations */}
+          {isReservationsEntitled && (
+            <div className={`p-4 rounded-2xl border transition-all ${
+              reservationAlertEnabled ? 'bg-emerald-50/40 border-emerald-200' : 'bg-slate-50 border-slate-200 opacity-60'
+            }`}>
+              <div className="flex items-center justify-between mb-2">
+                <div className="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-800 flex items-center justify-center font-bold">
+                  <UtensilsCrossed className="w-4 h-4" />
                 </div>
-
                 <input
                   type="checkbox"
                   checked={reservationAlertEnabled}
                   onChange={(e) => setReservationAlertEnabled(e.target.checked)}
-                  className="w-4 h-4 accent-emerald-500 rounded cursor-pointer mt-1"
+                  className="w-4 h-4 text-emerald-600 rounded border-slate-300 focus:ring-emerald-500 cursor-pointer"
                 />
               </div>
+              <h4 className="font-bold text-xs text-slate-900">Confirmation de Réservation</h4>
+              <p className="text-[11px] text-slate-500 mt-1 leading-snug">
+                Envoyé immédiatement au client avec la date, l'heure, le nombre de personnes et la table réservée.
+              </p>
             </div>
           )}
 
-          {/* Déclencheur 2 : Commande Prête KDS (Conditionné à mod_cuisine) */}
-          {isModuleEntitled('mod_cuisine') && (
-            <div className="p-4 rounded-2xl border border-slate-200 bg-slate-50/70 space-y-3">
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-9 h-9 rounded-xl bg-amber-50 border border-amber-200 text-amber-600 flex items-center justify-center shrink-0">
-                    <BellRing className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <h4 className="font-bold text-xs text-slate-900">Commande Prête (Passe KDS)</h4>
-                    <p className="text-[11px] text-slate-500">Envoyé dès que la cuisine marque les plats prêts</p>
-                  </div>
+          {/* Déclencheur 2 : Plats Prêts en Cuisine KDS */}
+          {isKdsEntitled && (
+            <div className={`p-4 rounded-2xl border transition-all ${
+              orderReadyAlertEnabled ? 'bg-emerald-50/40 border-emerald-200' : 'bg-slate-50 border-slate-200 opacity-60'
+            }`}>
+              <div className="flex items-center justify-between mb-2">
+                <div className="w-8 h-8 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center font-bold">
+                  <BellRing className="w-4 h-4" />
                 </div>
-
                 <input
                   type="checkbox"
                   checked={orderReadyAlertEnabled}
                   onChange={(e) => setOrderReadyAlertEnabled(e.target.checked)}
-                  className="w-4 h-4 accent-emerald-500 rounded cursor-pointer mt-1"
+                  className="w-4 h-4 text-emerald-600 rounded border-slate-300 focus:ring-emerald-500 cursor-pointer"
                 />
               </div>
+              <h4 className="font-bold text-xs text-slate-900">Plats Prêts en Cuisine (KDS)</h4>
+              <p className="text-[11px] text-slate-500 mt-1 leading-snug">
+                Déclenché quand le chef valide la commande prête. Notifie le client que ses plats sont prêts à table ou au comptoir.
+              </p>
             </div>
           )}
 
-          {/* Déclencheur 3 : Ticket de Caisse Dématérialisé (Conditionné à mod_pos) */}
-          {isModuleEntitled('mod_pos') && (
-            <div className="p-4 rounded-2xl border border-slate-200 bg-slate-50/70 space-y-3">
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-9 h-9 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-600 flex items-center justify-center shrink-0">
-                    <Receipt className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <h4 className="font-bold text-xs text-slate-900">Ticket de Caisse Dématérialisé</h4>
-                    <p className="text-[11px] text-slate-500">Permet d'envoyer le reçu officiel en 1 clic au client</p>
-                  </div>
+          {/* Déclencheur 3 : Reçu de Vente POS */}
+          {isPosEntitled && (
+            <div className={`p-4 rounded-2xl border transition-all ${
+              digitalReceiptAlertEnabled ? 'bg-emerald-50/40 border-emerald-200' : 'bg-slate-50 border-slate-200 opacity-60'
+            }`}>
+              <div className="flex items-center justify-between mb-2">
+                <div className="w-8 h-8 rounded-xl bg-blue-100 text-blue-800 flex items-center justify-center font-bold">
+                  <Receipt className="w-4 h-4" />
                 </div>
-
                 <input
                   type="checkbox"
                   checked={digitalReceiptAlertEnabled}
                   onChange={(e) => setDigitalReceiptAlertEnabled(e.target.checked)}
-                  className="w-4 h-4 accent-emerald-500 rounded cursor-pointer mt-1"
+                  className="w-4 h-4 text-emerald-600 rounded border-slate-300 focus:ring-emerald-500 cursor-pointer"
                 />
               </div>
+              <h4 className="font-bold text-xs text-slate-900">Reçu Dématérialisé (POS)</h4>
+              <p className="text-[11px] text-slate-500 mt-1 leading-snug">
+                Permet d'expédier le ticket de caisse TTC officiel directement sur le smartphone du client après règlement.
+              </p>
             </div>
           )}
-
-        </div>
-
-        <div className="flex justify-end pt-3 border-t border-slate-100">
-          <button
-            type="button"
-            disabled={saving}
-            onClick={handleSave}
-            className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-400 text-white font-black text-xs shadow-md shadow-emerald-600/20 transition cursor-pointer"
-          >
-            {saving ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin" />
-                <span>Enregistrement en cours...</span>
-              </>
-            ) : (
-              <>
-                <Check className="w-4 h-4" />
-                <span>Enregistrer les Paramètres WhatsApp</span>
-              </>
-            )}
-          </button>
         </div>
       </div>
 
-      {/* 3. Banc de Test d'Envoi WhatsApp Réel */}
-      <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-xs space-y-5">
-        <div className="border-b border-slate-100 pb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-          <div>
-            <h3 className="text-sm font-black text-slate-900 flex items-center gap-2">
-              <Send className="w-4 h-4 text-emerald-600" />
-              3. Banc de Test WhatsApp Réel
+      {/* 3. Banc de Test d'Envoi Direct */}
+      <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-xs space-y-4">
+        <div>
+          <div className="flex items-center gap-2">
+            <Send className="w-4 h-4 text-emerald-600" />
+            <h3 className="text-sm font-black text-slate-900">
+              Banc de Test d'Envoi en Direct
             </h3>
-            <p className="text-xs text-slate-500 mt-0.5">
-              Testez l'envoi d'un message WhatsApp vers votre numéro personnel pour vérifier la configuration.
-            </p>
           </div>
-          <div className="flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-slate-100 text-slate-700">
-            <span>Canal test :</span>
-            <span className={gatewayMode === 'automatic_webhook' ? 'text-emerald-700' : 'text-slate-900'}>
-              {gatewayMode === 'automatic_webhook' ? 'Passerelle Webhook' : 'Lien 1-Clic'}
-            </span>
-          </div>
+          <p className="text-xs text-slate-500 mt-0.5">
+            Testez l'envoi d'un message WhatsApp sur votre propre téléphone portable pour vérifier le rendu et l'expéditeur.
+          </p>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <div className="space-y-1">
-            <label className="text-xs font-bold text-slate-700 block">Modèle de message :</label>
+            <label className="text-xs font-bold text-slate-800 block">Modèle à tester :</label>
             <select
               value={testTemplate}
               onChange={(e) => setTestTemplate(e.target.value as any)}
-              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-bold bg-slate-50 text-slate-800"
+              className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs bg-white text-slate-900 font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
             >
-              <option value="reservation">🍽️ Confirmation Réservation de Table</option>
-              <option value="order_ready">🔔 Commande Prête (Passe KDS)</option>
-              <option value="receipt">🧾 Ticket de Caisse Dématérialisé</option>
+              <option value="reservation">Réservation Confirmée</option>
+              <option value="order_ready">Commande Prête KDS</option>
+              <option value="receipt">Reçu Dématérialisé</option>
             </select>
           </div>
 
           <div className="space-y-1">
-            <label className="text-xs font-bold text-slate-700 block">Numéro WhatsApp destinataire :</label>
+            <label className="text-xs font-bold text-slate-800 block">Numéro mobile destinataire :</label>
             <input
               type="tel"
               value={testRecipient}
               onChange={(e) => setTestRecipient(e.target.value)}
-              placeholder="ex: 699001122 ou +237699001122"
-              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-medium text-slate-800 bg-slate-50"
+              placeholder="Ex: 699 00 11 22 ou +237 6..."
+              className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs bg-white text-slate-900 font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
             />
           </div>
 
           <div className="flex items-end">
             <button
               type="button"
-              disabled={isSendingTest}
               onClick={handleSendTest}
-              className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-400 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-2 transition cursor-pointer shadow-xs"
+              disabled={isSendingTest || !testRecipient.trim()}
+              className="w-full flex items-center justify-center gap-2 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 disabled:bg-slate-300 text-white font-bold text-xs shadow-xs transition cursor-pointer"
             >
               {isSendingTest ? (
                 <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
                   <span>Envoi en cours...</span>
                 </>
               ) : (
                 <>
-                  <Send className="w-4 h-4" />
+                  <Send className="w-3.5 h-3.5 text-emerald-400" />
                   <span>Tester l'Envoi WhatsApp</span>
                 </>
               )}
@@ -1019,25 +716,21 @@ export const RestaurantWhatsAppConfigSection: React.FC = () => {
 
         {testStatus && (
           <div
-            className={`p-4 rounded-2xl flex items-start gap-3 text-xs font-medium ${
+            className={`p-3 rounded-xl text-xs flex items-center gap-2 ${
               testStatus.type === 'success'
-                ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
-                : 'bg-rose-50 text-rose-800 border border-rose-200'
+                ? 'bg-emerald-50 border border-emerald-200 text-emerald-900 font-medium'
+                : 'bg-rose-50 border border-rose-200 text-rose-900 font-medium'
             }`}
           >
             {testStatus.type === 'success' ? (
-              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
             ) : (
-              <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+              <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
             )}
-            <div>
-              <p className="font-bold">{testStatus.type === 'success' ? 'Succès du test' : 'Erreur de test'}</p>
-              <p className="mt-0.5">{testStatus.message}</p>
-            </div>
+            <span>{testStatus.message}</span>
           </div>
         )}
       </div>
-
     </div>
   );
 };

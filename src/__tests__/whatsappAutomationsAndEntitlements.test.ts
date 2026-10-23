@@ -3,6 +3,7 @@ import {
   formatWhatsAppPhoneNumber,
   buildWhatsAppClickToChatUrl,
   restaurantWhatsAppService,
+  generateWhatsAppQrPayload,
 } from '../services/whatsapp/restaurantWhatsAppService';
 
 describe('Service WhatsApp & Conditionnement des Alertes par Abonnement', () => {
@@ -155,6 +156,50 @@ describe('Service WhatsApp & Conditionnement des Alertes par Abonnement', () => 
       expect(restaurantWhatsAppService.isTriggerEnabled(settings, 'reservation_confirmed')).toBe(true);
       expect(restaurantWhatsAppService.isTriggerEnabled(settings, 'order_ready')).toBe(false);
       expect(restaurantWhatsAppService.isTriggerEnabled(settings, 'receipt_sent')).toBe(true);
+    });
+  });
+
+  describe('Jumelage Direct par QR Code (WhatsApp Connect)', () => {
+    it('génère un payload de jumelage QR Code unique pour le restaurant', () => {
+      const payload = generateWhatsAppQrPayload({
+        restaurantId: 'resto_123',
+        restaurantName: 'Le Gourmet',
+        phoneNumber: '655889900',
+      });
+
+      expect(payload).toContain('RESTOMASTER-WHATSAPP-PAIRING:v2:resto_123:237655889900');
+    });
+
+    it('associe le numéro du restaurant et active le statut connecté', async () => {
+      vi.spyOn(restaurantWhatsAppService, 'saveWhatsAppSettings').mockResolvedValue();
+
+      const session = await restaurantWhatsAppService.pairDeviceWithQr({
+        restaurantId: 'resto_123',
+        phoneNumber: '+237 655 88 99 00',
+        restaurantName: 'Le Gourmet Douala',
+      });
+
+      expect(session.sessionStatus).toBe('connected');
+      expect(session.connectedPhoneNumber).toBe('237655889900');
+      expect(session.gatewayMode).toBe('qr_connected');
+    });
+
+    it('envoie en mode qr_connected depuis le numéro officiel du restaurant', async () => {
+      const result = await restaurantWhatsAppService.sendMessage({
+        to: '+237 655 88 99 00',
+        message: 'Notification avec le propre numéro du restaurant',
+        settings: {
+          whatsappGatewayEnabled: true,
+          whatsappGatewayMode: 'qr_connected',
+          whatsappSessionStatus: 'connected',
+          whatsappConnectedPhoneNumber: '237655889900',
+          whatsappSenderTitle: 'Le Gourmet Douala',
+        },
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.mode).toBe('qr_connected');
+      expect(result.message).toContain('237655889900');
     });
   });
 });

@@ -194,7 +194,10 @@ export interface RestaurantSettings {
     enabled?: boolean;
     restaurantPhoneNumber?: string;
     senderTitle?: string;
-    gatewayMode?: 'automatic_webhook' | 'click_to_chat';
+    gatewayMode?: 'qr_connected' | 'automatic_webhook' | 'click_to_chat';
+    sessionStatus?: 'connected' | 'disconnected';
+    connectedPhoneNumber?: string;
+    connectedAt?: string;
     webhookUrl?: string;
     apiKey?: string;
     reservationAlertEnabled?: boolean;
@@ -202,7 +205,9 @@ export interface RestaurantSettings {
     digitalReceiptAlertEnabled?: boolean;
   };
   whatsappGatewayEnabled?: boolean;
-  whatsappGatewayMode?: 'automatic_webhook' | 'click_to_chat';
+  whatsappGatewayMode?: 'qr_connected' | 'automatic_webhook' | 'click_to_chat';
+  whatsappSessionStatus?: 'connected' | 'disconnected';
+  whatsappConnectedPhoneNumber?: string;
   whatsappPhoneNumber?: string;
   whatsappSenderTitle?: string;
   whatsappWebhookUrl?: string;
