@@ -97,11 +97,11 @@ export const FeatureCatalogSection: React.FC = () => {
     isConfigKeyLocked,
     requestFeatureUnlock,
   } = useRestaurant();
-  const { currentUser } = useAuth();
+  const { currentUser, isSuperadmin } = useAuth();
   const { showToast } = useToast();
   const confirm = useConfirm();
 
-  const isSuperAdmin = currentUser?.role === 'direction';
+  const isSuperAdmin = isSuperadmin || currentUser?.role === 'direction';
 
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'ACTIVÉ' | 'SUSPENDU' | 'DÉSACTIVÉ' | 'recommended' | 'advanced' | 'experimental'>('all');

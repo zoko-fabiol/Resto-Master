@@ -123,12 +123,12 @@ export const AdminCenterView: React.FC = () => {
     isModuleEntitled,
   } = useRestaurant();
 
-  const { currentUser } = useAuth();
+  const { currentUser, isSuperadmin } = useAuth();
   const { showToast } = useToast();
   const confirm = useConfirm();
 
-  const isSuperAdmin = currentUser?.role === 'superadmin' || currentUser?.role === 'direction';
-  const isTrueSuperAdmin = currentUser?.role === 'superadmin';
+  const isSuperAdmin = isSuperadmin || currentUser?.role === 'direction';
+  const isTrueSuperAdmin = isSuperadmin;
 
   const [isOnboardingOpen, setIsOnboardingOpen] = useState(false);
 

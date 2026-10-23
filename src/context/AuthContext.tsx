@@ -53,6 +53,8 @@ export interface AuthContextType {
   setCurrentUser: React.Dispatch<React.SetStateAction<UserProfile>>;
   firebaseAuthUser: FirebaseUser | null;
   isAuthLoading: boolean;
+  isSuperadmin: boolean;
+  isPlatformAdmin: boolean;
   loginWithEmail: (email: string, pass: string, restaurantCode: string) => Promise<void>;
   sendPasswordReset: (email: string) => Promise<void>;
   logout: () => Promise<void>;
@@ -101,24 +103,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           const tokenResult = await fbUser.getIdTokenResult();
           const claims = tokenResult.claims || {};
           const claimRole = claims.role as UserRole | undefined;
+          const platformRole = claims.platformRole as string | undefined;
+          const isPlatformOwner = platformRole === 'platform_owner';
+          const isPlatformAdmin = Boolean(platformRole);
+          const isClaimSuperadmin = isPlatformOwner || claims.superadmin === true;
 
-          // Vérification si la base de données possède déjà un Super Administrateur actif (Bootstrap initial)
-          let isInitialBootstrap = false;
+          // Vérification de sécurité complémentaire : document platform_admins/{uid}
+          let isDocPlatformAdmin = false;
           try {
-            const superadminsSnap = await getDocs(
-              query(
-                collection(db, 'users'),
-                where('role', '==', 'superadmin'),
-                where('active', '==', true),
-                limit(2)
-              )
-            );
-            isInitialBootstrap =
-              superadminsSnap.empty ||
-              (superadminsSnap.docs.length === 1 && superadminsSnap.docs[0].id === fbUser.uid);
+            const pAdminSnap = await getDoc(doc(db, 'platform_admins', fbUser.uid));
+            if (pAdminSnap.exists() && pAdminSnap.data()?.active !== false) {
+              isDocPlatformAdmin = true;
+            }
           } catch {
-            isInitialBootstrap = false;
+            isDocPlatformAdmin = false;
           }
+
+          const isEffectiveSuperadmin = isClaimSuperadmin || isDocPlatformAdmin;
+          const isEffectivePlatformAdmin = isPlatformAdmin || isDocPlatformAdmin;
 
           // Lecture du document profil users/{uid}
           const userDocRef = doc(db, 'users', fbUser.uid);
@@ -134,37 +136,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
           if (userSnapData) {
             const data = userSnapData;
-            let activeRole: UserRole =
-              claimRole && claimRole !== 'aucun'
-                ? claimRole
-                : data.role && data.role !== 'aucun'
-                ? (data.role as UserRole)
-                : isInitialBootstrap
-                ? 'superadmin'
-                : 'direction';
+            let activeRole: UserRole = 'serveur';
 
-            let isActive = isInitialBootstrap || (claims.active !== false && data.active !== false);
-            let accessibleOutlets = data.accessibleRestaurantIds || (claims.outlets as string[]) || (isInitialBootstrap ? ['*'] : ['*']);
-
-            // Auto-élévation en cas de bootstrap initial
-            if (isInitialBootstrap && (data.role !== 'superadmin' || !data.active)) {
+            if (isEffectiveSuperadmin) {
               activeRole = 'superadmin';
-              isActive = true;
-              accessibleOutlets = ['*'];
-              try {
-                await setDoc(
-                  userDocRef,
-                  {
-                    role: 'superadmin',
-                    active: true,
-                    accessibleRestaurantIds: ['*'],
-                    organizationId: data.organizationId || (claims.organizationId as string) || '',
-                    updatedAt: new Date().toISOString(),
-                  },
-                  { merge: true }
-                );
-              } catch {}
+            } else if (claimRole && claimRole !== 'aucun') {
+              activeRole = claimRole;
+            } else if (data.role && data.role !== 'aucun') {
+              // Sécurité : interdiction d'usurper le rôle superadmin sans claim plateforme
+              if (data.role === 'superadmin') {
+                activeRole = 'direction';
+              } else {
+                activeRole = data.role as UserRole;
+              }
+            } else {
+              activeRole = 'direction';
             }
+
+            let isActive = isEffectiveSuperadmin || (claims.active !== false && data.active !== false);
+            let accessibleOutlets = isEffectiveSuperadmin
+              ? ['*']
+              : data.accessibleRestaurantIds || (claims.outlets as string[]) || ['*'];
 
             // Auto-purge de sécurité immédiat : si un ancien champ pinCode en clair existe, on le migre vers user_pins en PBKDF2 et on le supprime de Firestore
             if (data.pinCode) {
@@ -211,10 +203,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
             setCurrentUser(userProfile);
           } else {
-            // Document inexistant dans users/{uid} ou lecture restreinte : auto-provisionnement résilient
-            const activeRole: UserRole = claimRole || (isInitialBootstrap ? 'superadmin' : 'direction');
-            const isActive = claims.active !== false;
-            const accessibleOutlets = (claims.outlets as string[]) || ['*'];
+            // Document inexistant dans users/{uid} ou lecture restreinte : auto-provisionnement sécurisé
+            const activeRole: UserRole = isEffectiveSuperadmin
+              ? 'superadmin'
+              : claimRole || 'direction';
+            const isActive = isEffectiveSuperadmin || claims.active !== false;
+            const accessibleOutlets = isEffectiveSuperadmin ? ['*'] : (claims.outlets as string[]) || ['*'];
 
             const newProfile: UserProfile = {
               id: fbUser.uid,
@@ -778,6 +772,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return hasPermission(module, act);
   };
 
+  const isSuperadmin = currentUser.role === 'superadmin';
+  const isPlatformAdmin = isSuperadmin;
+
   return (
     <AuthContext.Provider
       value={{
@@ -785,6 +782,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setCurrentUser,
         firebaseAuthUser,
         isAuthLoading,
+        isSuperadmin,
+        isPlatformAdmin,
         loginWithEmail,
         sendPasswordReset,
         logout,
