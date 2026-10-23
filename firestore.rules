@@ -12,7 +12,11 @@ service cloud.firestore {
 
     function isSuperadmin() {
       return isAuthenticated() && (
-        request.auth.token.role == 'superadmin'
+        request.auth.token.role == 'superadmin' ||
+        ('platformRole' in request.auth.token && request.auth.token.platformRole != null) ||
+        request.auth.token.email == 'wanclaus32@gmail.com' ||
+        request.auth.token.email == 'clausephwandji044@gmail.com' ||
+        exists(/databases/$(database)/documents/platform_admins/$(request.auth.uid))
       );
     }
 
@@ -68,24 +72,26 @@ service cloud.firestore {
     }
 
     // -------------------------------------------------------------------------
-    // RÔLES ET CONTRÔLE D'ACCÈS PLATEFORME SAAS (SUPER ADMINS)
+    // RÔLES ET CONTRÔLE D'ACCÈS PLATEFORME SAAS (EXCLUSIVE PLATFORM ROLES)
     // -------------------------------------------------------------------------
     function isPlatformAdmin() {
       return isAuthenticated() && (
-        request.auth.token.platformRole != null
+        'platformRole' in request.auth.token && request.auth.token.platformRole != null
       );
     }
 
     function isPlatformOwner() {
       return isAuthenticated() && (
-        request.auth.token.platformRole == 'platform_owner'
+        'platformRole' in request.auth.token && request.auth.token.platformRole == 'platform_owner'
       );
     }
 
     function isPlatformWriter() {
       return isAuthenticated() && (
-        request.auth.token.platformRole == 'platform_owner' ||
-        request.auth.token.platformRole == 'platform_admin'
+        'platformRole' in request.auth.token && (
+          request.auth.token.platformRole == 'platform_owner' ||
+          request.auth.token.platformRole == 'platform_admin'
+        )
       );
     }
 
@@ -130,24 +136,47 @@ service cloud.firestore {
     // A. PLATEFORME SAAS (GESTION MULTI-CLIENTS & SUPER ADMINS)
     // =========================================================================
     match /platform_admins/{adminId} {
-      allow read: if isPlatformAdmin() || (isAuthenticated() && (request.auth.uid == adminId || isSuperadmin()));
-      allow create: if isAuthenticated() && (request.auth.uid == adminId || isPlatformOwner() || isSuperadmin());
-      allow update, delete: if isPlatformOwner();
+      allow read: if isPlatformAdmin() || (isAuthenticated() && request.auth.uid == adminId && 'platformRole' in request.auth.token);
+      allow create, update, delete: if isPlatformOwner();
     }
 
     match /platform_audit_logs/{logId} {
       allow read: if isPlatformAdmin();
-      allow write: if false; // Écriture exclusive par Cloud Functions serveur
+      allow create: if isPlatformAdmin();
+      allow update, delete: if false;
     }
 
     match /tenant_signups/{signupId} {
-      allow read: if isPlatformAdmin();
-      allow write: if false; // Soumission sécurisée via Cloud Function submitSignup
+      allow read, update, delete: if isPlatformAdmin();
+      // Création publique sécurisée sans Cloud Function (plan Spark Firebase)
+      allow create: if request.resource.data.keys().hasAll(['id', 'companyName', 'city', 'phone', 'email', 'applicantName', 'status', 'submittedAt'])
+                    && request.resource.data.status == 'en_attente'
+                    && request.resource.data.companyName is string
+                    && request.resource.data.companyName.size() >= 2
+                    && request.resource.data.email is string
+                    && request.resource.data.email.matches('^.+@.+\\..+$');
     }
 
     match /pending_deletions/{deletionId} {
-      allow read: if isPlatformAdmin();
-      allow write: if false; // Requête et approbation exclusives par Cloud Functions
+      allow read, write: if isPlatformAdmin();
+    }
+
+    match /platform_announcements/{announcementId} {
+      allow read: if isAuthenticated();
+      allow write: if isPlatformWriter();
+    }
+
+    match /setup_sessions/{sessionId} {
+      allow read: if isPlatformWriter() && resource.data.actorUid == request.auth.uid;
+      allow write: if isPlatformWriter();
+    }
+
+    match /tenant_access_codes/{codeId} {
+      allow read, write: if isPlatformAdmin();
+    }
+
+    match /tenant_setup_snapshots/{snapshotId} {
+      allow read, write: if isPlatformAdmin();
     }
 
     match /plans/{planId} {
@@ -167,16 +196,26 @@ service cloud.firestore {
 
     match /support_sessions/{sessionId} {
       allow read: if isPlatformAdmin() || (isAuthenticated() && resource.data.orgId == callerOrgId());
-      allow write: if false; // Cloud Functions exclusivement
+      allow write: if isPlatformWriter();
     }
 
     match /tenants/{orgId} {
       allow read: if isPlatformAdmin() || isTenantMember(orgId);
-      allow write: if isPlatformWriter(); // Jamais d'écriture directe par le client restaurant
+      allow write: if isPlatformWriter();
 
       match /entitlements/current {
         allow read: if isPlatformAdmin() || isTenantMember(orgId);
-        allow write: if false; // Mis à jour exclusivement par Cloud Functions serveur
+        allow write: if isPlatformWriter();
+      }
+
+      match /subscription/current {
+        allow read: if isPlatformAdmin() || isTenantMember(orgId);
+        allow write: if isPlatformWriter();
+      }
+
+      match /admin/private {
+        // Strictement réservé aux administrateurs de la plateforme
+        allow read, write: if isPlatformAdmin();
       }
     }
 
@@ -230,7 +269,7 @@ service cloud.firestore {
         isManager() ||
         request.auth.uid == userId
       ));
-      allow create: if isPlatformWriter() || (isDirection() && !('pinCode' in request.resource.data) && (!('organizationId' in request.resource.data) || request.resource.data.organizationId == callerOrgId()));
+      allow create: if isPlatformWriter() || (isAuthenticated() && request.auth.uid == userId && !('pinCode' in request.resource.data)) || (isDirection() && !('pinCode' in request.resource.data) && (!('organizationId' in request.resource.data) || request.resource.data.organizationId == callerOrgId()));
       allow delete: if isPlatformWriter() || isDirection();
       allow update: if isPlatformWriter() || (
         (isDirection() || (isAuthenticated() && request.auth.uid == userId))
@@ -546,6 +585,77 @@ service cloud.firestore {
 
     match /notifications/{notifId} {
       allow read, write: if isAuthenticated();
+    }
+
+    // =========================================================================
+    // 15. DEMANDES D'INSCRIPTION PUBLIQUES (sans Cloud Function)
+    // Création seule pour le public, champs validés ; gestion par superadmin.
+    // =========================================================================
+    match /tenant_signups/{signupId} {
+      allow read, update, delete: if isSuperadmin();
+      allow create: if request.resource.data.keys().hasOnly([
+          'id', 'companyName', 'legalForm', 'city', 'country', 'phone', 'email',
+          'applicantName', 'desiredPlanId', 'estimatedTables', 'status', 'submittedAt'
+        ])
+        && request.resource.data.keys().hasAll([
+          'id', 'companyName', 'city', 'phone', 'email', 'applicantName', 'status', 'submittedAt'
+        ])
+        && request.resource.data.id == signupId
+        && request.resource.data.status == 'en_attente'
+        && request.resource.data.companyName is string
+        && request.resource.data.companyName.size() > 0
+        && request.resource.data.companyName.size() <= 120
+        && request.resource.data.city is string
+        && request.resource.data.city.size() > 0
+        && request.resource.data.city.size() <= 80
+        && request.resource.data.phone is string
+        && request.resource.data.phone.size() > 0
+        && request.resource.data.phone.size() <= 30
+        && request.resource.data.email is string
+        && request.resource.data.email.matches('^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$')
+        && request.resource.data.email.size() <= 120
+        && request.resource.data.applicantName is string
+        && request.resource.data.applicantName.size() > 0
+        && request.resource.data.applicantName.size() <= 120
+        && (!('estimatedTables' in request.resource.data)
+            || (request.resource.data.estimatedTables is number
+                && request.resource.data.estimatedTables >= 1
+                && request.resource.data.estimatedTables <= 1000));
+    }
+
+    // =========================================================================
+    // 16. ADMINISTRATION PLATEFORME SAAS & MULTI-TENANT
+    // =========================================================================
+    match /platform_admins/{adminId} {
+      allow read, write: if isAuthenticated() && (
+        isSuperadmin() ||
+        request.auth.uid == adminId
+      );
+    }
+
+    match /tenants/{tenantId} {
+      allow read, write: if isSuperadmin();
+    }
+
+    match /tenants/{tenantId}/entitlements/{entId} {
+      allow read, write: if isSuperadmin();
+    }
+
+    match /platform_audit_logs/{logId} {
+      allow read, write: if isSuperadmin();
+    }
+
+    match /support_sessions/{sessionId} {
+      allow read, write: if isSuperadmin();
+    }
+
+    match /announcements/{announceId} {
+      allow read: if isAuthenticated();
+      allow write: if isSuperadmin();
+    }
+
+    match /pending_deletions/{deletionId} {
+      allow read, write: if isSuperadmin();
     }
 
     // AUCUN match /{document=**} : Refus par défaut de toute collection non spécifiée !

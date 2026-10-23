@@ -1,13 +1,15 @@
 import { CallableRequest, HttpsError } from 'firebase-functions/v2/https';
 import crypto from 'node:crypto';
 import { db, auth, FieldValue } from '../firebase.js';
-import { getCallerPlatformContext, assertPlatformRole } from '../auth.js';
+import { assertRoles, getCallerContext, getCallerPlatformContext, assertPlatformRole } from '../auth.js';
 import {
   PlatformRole,
   SubmitSignupRequest,
   ApproveSignupRequest,
   RejectSignupRequest,
   CreateTenantRequest,
+  InitialSetupRequest,
+  CompleteRestaurantSetupRequest,
   SetTenantStatusRequest,
 } from '../types.js';
 
@@ -81,6 +83,14 @@ export async function appendPlatformAuditLog(params: {
 // -----------------------------------------------------------------------------
 
 export async function handleSubmitSignup(request: CallableRequest<SubmitSignupRequest>) {
+  // Exigence App Check anti-abus en production
+  if (process.env.NODE_ENV === 'production' && !request.app) {
+    throw new HttpsError(
+      'failed-precondition',
+      'Requête non certifiée : App Check est requis pour cette opération.'
+    );
+  }
+
   const {
     companyName,
     legalForm,
@@ -106,7 +116,7 @@ export async function handleSubmitSignup(request: CallableRequest<SubmitSignupRe
     throw new HttpsError('invalid-argument', 'Adresse e-mail invalide.');
   }
 
-  // Rate Limiting : une seule demande par e-mail toutes les 10 minutes
+  // Rate Limiting par e-mail : une seule demande toutes les 10 minutes
   const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
   const recentSnap = await db
     .collection('tenant_signups')
@@ -120,6 +130,23 @@ export async function handleSubmitSignup(request: CallableRequest<SubmitSignupRe
       'resource-exhausted',
       'Une demande récente a déjà été enregistrée pour cette adresse. Veuillez patienter avant de renouveler votre soumission.'
     );
+  }
+
+  // Rate Limiting par adresse IP : max 3 soumissions par heure
+  const clientIp = request.rawRequest?.ip || 'unknown';
+  if (clientIp !== 'unknown') {
+    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+    const ipSnap = await db
+      .collection('tenant_signups')
+      .where('clientIp', '==', clientIp)
+      .where('submittedAt', '>=', oneHourAgo)
+      .get();
+    if (ipSnap.size >= 3) {
+      throw new HttpsError(
+        'resource-exhausted',
+        'Nombre maximal de soumissions atteint pour votre adresse IP. Veuillez patienter.'
+      );
+    }
   }
 
   const signupId = `req_${crypto.randomBytes(8).toString('hex')}`;
@@ -136,6 +163,7 @@ export async function handleSubmitSignup(request: CallableRequest<SubmitSignupRe
     applicantName: applicantName.trim(),
     desiredPlanId: desiredPlanId || 'plan_pro',
     estimatedTables: estimatedTables ? Number(estimatedTables) : 10,
+    clientIp,
     status: 'en_attente',
     submittedAt: now,
   };
@@ -150,63 +178,303 @@ export async function handleSubmitSignup(request: CallableRequest<SubmitSignupRe
 }
 
 // -----------------------------------------------------------------------------
-// 2. Création Directe de Tenant par la Plateforme
-// -----------------------------------------------------------------------------
+import {
+  resolveEntitlements,
+  PackId,
+  RestaurantTypeId,
+  CATALOG_PACKS,
+} from '../shared/catalog/index.js';
 
-function getPlanLimits(planId: string) {
-  switch (planId) {
-    case 'plan_starter':
-      return { maxOutlets: 1, maxUsers: 3, maxTerminals: 1, maxOrdersPerMonth: 1500 };
-    case 'plan_enterprise':
-      return { maxOutlets: 10, maxUsers: 100, maxTerminals: 50, maxOrdersPerMonth: 100000 };
-    case 'plan_pro':
-    default:
-      return { maxOutlets: 1, maxUsers: 10, maxTerminals: 4, maxOrdersPerMonth: 10000 };
-  }
+export function mapPlanToPackId(planId?: string): PackId {
+  if (planId === 'plan_starter' || planId === 'starter' || planId === 'minimum') return 'minimum';
+  if (planId === 'plan_enterprise' || planId === 'enterprise' || planId === 'premium') return 'premium';
+  return 'medium';
 }
 
-function getPlanModules(planId: string): Record<string, boolean> {
-  const baseModules = {
-    mod_dashboard: true,
-    mod_pos: true,
-    mod_menu: true,
-    mod_caisse: true,
-    mod_documents: true,
-    mod_reports: true,
-  };
+export function mapProfileToRestaurantType(profileId?: string): RestaurantTypeId {
+  const validTypes: RestaurantTypeId[] = [
+    'snack_takeaway',
+    'fast_food',
+    'restaurant_classique',
+    'maquis_bar_restaurant',
+    'bar_lounge',
+    'boulangerie_cafe',
+    'traiteur_banquets',
+    'hotel_restaurant',
+  ];
+  if (profileId && validTypes.includes(profileId as RestaurantTypeId)) {
+    return profileId as RestaurantTypeId;
+  }
+  if (profileId === 'evenementiel_traiteur') return 'traiteur_banquets';
+  if (profileId === 'hotel_complexe') return 'hotel_restaurant';
+  if (profileId === 'depart_essentiel') return 'snack_takeaway';
+  return 'restaurant_classique';
+}
 
-  if (planId === 'plan_starter') {
-    return baseModules;
+const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+
+function generateRestaurantCode(): string {
+  const bytes = crypto.randomBytes(8);
+  const value = Array.from(bytes, (byte) => CODE_ALPHABET[byte % CODE_ALPHABET.length]).join('');
+  return `RMS-${value.slice(0, 4)}-${value.slice(4)}`;
+}
+
+function hashRestaurantCode(code: string): string {
+  return crypto.createHash('sha256').update(code).digest('hex');
+}
+
+export async function handleValidateRestaurantAccessCode(request: CallableRequest<{ restaurantCode: string }>) {
+  const caller = getCallerContext(request);
+  const normalizedCode = request.data?.restaurantCode?.trim().toUpperCase();
+  if (!normalizedCode || !/^RMS-[A-Z2-9]{4}-[A-Z2-9]{4}$/.test(normalizedCode)) {
+    throw new HttpsError('invalid-argument', 'Code restaurant invalide.');
   }
 
-  const proModules = {
-    ...baseModules,
-    mod_bar_pos: true,
-    mod_tables: true,
-    mod_cuisine: true,
-    mod_bar: true,
-    mod_recipes_yield: true,
-    mod_stock: true,
-    mod_purchases: true,
-    mod_clients: true,
-    mod_staff: true,
-    mod_audit: true,
-    mod_settings: true,
-  };
-
-  if (planId === 'plan_pro') {
-    return proModules;
+  const codeSnap = await db.collection('tenant_access_codes').doc(hashRestaurantCode(normalizedCode)).get();
+  const codeData = codeSnap.data();
+  if (!codeSnap.exists || !codeData || codeData.status !== 'active' || codeData.orgId !== caller.organizationId) {
+    throw new HttpsError('permission-denied', 'Le code restaurant ne correspond pas à votre espace.');
   }
 
-  // Enterprise : tous les modules actifs
+  return { success: true, orgId: caller.organizationId };
+}
+
+export async function handleCompleteRestaurantSetup(
+  request: CallableRequest<CompleteRestaurantSetupRequest>
+) {
+  const caller = getCallerContext(request);
+  const isAuthorized =
+    caller.role === 'superadmin' ||
+    caller.role === 'direction';
+
+  if (!isAuthorized) {
+    throw new HttpsError('permission-denied', 'Seul le propriétaire de l’établissement (direction) peut terminer la configuration initiale.');
+  }
+  if (!caller.organizationId) {
+    throw new HttpsError('failed-precondition', 'Aucune organisation restaurant n’est associée à ce compte.');
+  }
+  const reason = request.data?.reason?.trim();
+  if (!reason || reason.length < 5) {
+    throw new HttpsError('invalid-argument', 'Un motif de certification d’au moins 5 caractères est obligatoire.');
+  }
+  const setupSessionId = request.data?.setupSessionId?.trim();
+  if (!setupSessionId) {
+    throw new HttpsError('invalid-argument', 'La session de configuration est obligatoire.');
+  }
+
+  const sessionRef = db.collection('setup_sessions').doc(setupSessionId);
+  const sessionSnap = await sessionRef.get();
+  if (sessionSnap.exists) {
+    const sessionData = sessionSnap.data();
+    if (sessionData?.actorUid !== caller.uid) {
+      throw new HttpsError('permission-denied', 'Cette session de configuration appartient à un autre utilisateur.');
+    }
+    if (sessionData?.status === 'completed') {
+      return { success: true, codeAlreadyDelivered: true };
+    }
+  } else {
+    await sessionRef.create({
+      id: setupSessionId,
+      status: 'in_progress',
+      currentStep: 9,
+      actorUid: caller.uid,
+      actorEmail: caller.email,
+      orgId: caller.organizationId,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
+  }
+
+  const existingCode = await db
+    .collection('tenant_access_codes')
+    .where('orgId', '==', caller.organizationId)
+    .where('status', '==', 'active')
+    .limit(1)
+    .get();
+  if (!existingCode.empty) {
+    await sessionRef.set({
+      status: 'completed',
+      currentStep: 12,
+      codeDeliveredAt: existingCode.docs[0].data().createdAt || new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    }, { merge: true });
+    return { success: true, codeAlreadyDelivered: true };
+  }
+
+  const restaurantCode = generateRestaurantCode();
+  const codeHash = hashRestaurantCode(restaurantCode);
+  const now = new Date().toISOString();
+  const batch = db.batch();
+  batch.create(db.collection('tenant_access_codes').doc(codeHash), {
+    orgId: caller.organizationId,
+    codeHash,
+    codeSuffix: restaurantCode.slice(-4),
+    status: 'active',
+    version: 1,
+    createdAt: now,
+    createdBy: caller.uid,
+  });
+  batch.set(db.collection('tenant_setup_snapshots').doc(`${caller.organizationId}_initial`), {
+    id: `${caller.organizationId}_initial`,
+    orgId: caller.organizationId,
+    type: 'initial_setup',
+    createdAt: now,
+    createdBy: caller.uid,
+  });
+  batch.set(db.collection('organizations').doc(caller.organizationId), {
+    setupStatus: 'completed',
+    setupCompletedAt: now,
+    setupCompletedBy: caller.uid,
+    restaurantCodeVersion: 1,
+    updatedAt: now,
+  }, { merge: true });
+  batch.set(sessionRef, {
+    status: 'completed',
+    currentStep: 12,
+    codeDeliveredAt: now,
+    updatedAt: now,
+  }, { merge: true });
+  await batch.commit();
+
+  await db.collection('audit_logs').add({
+    action: 'COMPLETE_INITIAL_RESTAURANT_SETUP',
+    actorUid: caller.uid,
+    actorName: caller.name,
+    actorRole: caller.role,
+    organizationId: caller.organizationId,
+    reason,
+    createdAt: FieldValue.serverTimestamp(),
+  });
+
+  return { success: true, restaurantCode, codeAlreadyDelivered: false };
+}
+
+export async function handleProvisionRestaurantInitialSetup(
+  request: CallableRequest<InitialSetupRequest>
+) {
+  const caller = getCallerPlatformContext(request);
+  assertPlatformRole(caller, ['platform_owner', 'platform_admin']);
+
+  const data = request.data || ({} as InitialSetupRequest);
+  const setupSessionId = data.setupSessionId?.trim();
+  if (!setupSessionId || !data.companyName?.trim() || !data.city?.trim() || !data.address?.trim()) {
+    throw new HttpsError('invalid-argument', 'La session et les informations de l’établissement sont obligatoires.');
+  }
+  if (!data.ownerName?.trim() || !data.ownerEmail?.trim() || !data.reason?.trim() || data.reason.trim().length < 5) {
+    throw new HttpsError('invalid-argument', 'Le propriétaire et un motif d’au moins 5 caractères sont obligatoires.');
+  }
+
+  const sessionRef = db.collection('setup_sessions').doc(setupSessionId);
+  const existingSession = await sessionRef.get();
+  if (existingSession.exists && existingSession.data()?.actorUid !== caller.uid) {
+    throw new HttpsError('permission-denied', 'Cette session de configuration appartient à un autre administrateur.');
+  }
+
+  if (!existingSession.exists) {
+    const now = new Date().toISOString();
+    await sessionRef.create({
+      id: setupSessionId,
+      status: 'in_progress',
+      currentStep: 1,
+      actorUid: caller.uid,
+      actorEmail: caller.email,
+      createdAt: now,
+      updatedAt: now,
+    });
+  }
+
+  const session = await sessionRef.get();
+  const sessionData = session.data() || {};
+  let orgId = sessionData.orgId as string | undefined;
+  let restaurantId = sessionData.restaurantId as string | undefined;
+  let ownerUid = sessionData.ownerUid as string | undefined;
+  let passwordResetLink = (sessionData.passwordResetLink as string | undefined) || '';
+
+  if (!orgId || !restaurantId || !ownerUid) {
+    const created = await handleCreateTenant({ ...request, data: { ...data, reason: data.reason } } as CallableRequest<CreateTenantRequest>);
+    orgId = created.orgId;
+    restaurantId = created.restaurantId;
+    ownerUid = created.ownerUid;
+    passwordResetLink = created.passwordResetLink || '';
+    await sessionRef.update({
+      orgId,
+      restaurantId,
+      ownerUid,
+      passwordResetLink,
+      currentStep: 10,
+      updatedAt: new Date().toISOString(),
+    });
+  }
+
+  const codeDeliveredAt = sessionData.codeDeliveredAt as string | undefined;
+  if (codeDeliveredAt) {
+    return {
+      success: true,
+      orgId,
+      restaurantId,
+      ownerUid,
+      passwordResetLink,
+      codeAlreadyDelivered: true,
+    };
+  }
+
+  const restaurantCode = generateRestaurantCode();
+  const codeHash = hashRestaurantCode(restaurantCode);
+  const now = new Date().toISOString();
+  const batch = db.batch();
+
+  batch.create(db.collection('tenant_access_codes').doc(codeHash), {
+    orgId,
+    codeHash,
+    codeSuffix: restaurantCode.slice(-4),
+    status: 'active',
+    version: 1,
+    createdAt: now,
+    createdBy: caller.uid,
+  });
+  batch.set(db.collection('tenant_setup_snapshots').doc(`${orgId}_initial`), {
+    id: `${orgId}_initial`,
+    orgId,
+    type: 'initial_setup',
+    source: data,
+    createdAt: now,
+    createdBy: caller.uid,
+  });
+  batch.update(db.collection('tenants').doc(orgId), {
+    setupStatus: 'ready_for_handover',
+    setupCompletedAt: now,
+    setupCompletedBy: caller.uid,
+    restaurantCodeVersion: 1,
+    updatedAt: now,
+  });
+  batch.update(sessionRef, {
+    status: 'completed',
+    currentStep: 12,
+    codeDeliveredAt: now,
+    updatedAt: now,
+  });
+  await batch.commit();
+
+  await appendPlatformAuditLog({
+    actorUid: caller.uid,
+    actorEmail: caller.email,
+    actorRole: caller.platformRole,
+    action: 'COMPLETE_INITIAL_RESTAURANT_SETUP',
+    detail: `Configuration initiale terminée pour ${orgId}. Code restaurant remis au responsable.`,
+    reason: data.reason.trim(),
+    targetOrgId: orgId,
+    after: { orgId, restaurantId, setupSessionId, codeVersion: 1 },
+    ticketNumber: data.ticketNumber,
+  });
+
   return {
-    ...proModules,
-    mod_hygiene: true,
-    mod_main_courante: true,
-    mod_fiscal: true,
-    mod_finance: true,
-    mod_delivery: true,
-    mod_events: true,
+    success: true,
+    orgId,
+    restaurantId,
+    ownerUid,
+    passwordResetLink,
+    restaurantCode,
+    codeAlreadyDelivered: false,
   };
 }
 
@@ -230,6 +498,7 @@ export async function handleCreateTenant(request: CallableRequest<CreateTenantRe
     ownerEmail,
     ownerPhone,
     planId,
+    profileType,
     channel,
     currency,
     reason,
@@ -254,8 +523,18 @@ export async function handleCreateTenant(request: CallableRequest<CreateTenantRe
   const cleanOrgId = `org_${crypto.randomBytes(6).toString('hex')}`;
   const cleanRestoId = `rst_${crypto.randomBytes(6).toString('hex')}`;
   const now = new Date().toISOString();
-  const limits = getPlanLimits(planId);
-  const modules = getPlanModules(planId);
+
+  // Résolution unique et standardisée des droits et quotas via shared/catalog
+  const mappedPack = mapPlanToPackId(planId);
+  const mappedType = mapProfileToRestaurantType(profileType);
+  const entitlements = resolveEntitlements({
+    orgId: cleanOrgId,
+    restaurantType: mappedType,
+    packId: mappedPack,
+    updatedBy: caller.email,
+  });
+  const limits = entitlements.effectiveLimits;
+  const modules = entitlements.modules;
 
   // 1. Création ou liaison du compte Propriétaire dans Firebase Auth
   let ownerUid = '';
@@ -266,7 +545,7 @@ export async function handleCreateTenant(request: CallableRequest<CreateTenantRe
     isExistingAuthUser = true;
   } catch (err: any) {
     if (err.code === 'auth/user-not-found') {
-      const tempPassword = crypto.randomBytes(16).toString('base64');
+      const tempPassword = request.data?.initialPassword?.trim() || crypto.randomBytes(16).toString('base64');
       const newUser = await auth.createUser({
         email: cleanOwnerEmail,
         displayName: ownerName.trim(),
@@ -279,9 +558,10 @@ export async function handleCreateTenant(request: CallableRequest<CreateTenantRe
     }
   }
 
-  // 2. Attribution des Custom Claims immuables au Propriétaire
+  // 2. Attribution des Custom Claims immuables au Propriétaire (direction + setupOwner)
   await auth.setCustomUserClaims(ownerUid, {
-    role: 'superadmin', // Rôle propriétaire d'établissement
+    role: 'direction',
+    setupOwner: true,
     organizationId: cleanOrgId,
     outlets: [cleanRestoId],
     active: true,
@@ -345,7 +625,8 @@ export async function handleCreateTenant(request: CallableRequest<CreateTenantRe
       id: ownerUid,
       name: ownerName.trim(),
       email: cleanOwnerEmail,
-      role: 'superadmin',
+      role: 'direction',
+      setupOwner: true,
       organizationId: cleanOrgId,
       accessibleRestaurantIds: [cleanRestoId],
       defaultRestaurantId: cleanRestoId,
@@ -358,19 +639,16 @@ export async function handleCreateTenant(request: CallableRequest<CreateTenantRe
     { merge: true }
   );
 
-  // Fiche Canonique Tenant dans tenants/{cleanOrgId}
+  // Fiche Canonique Tenant dans tenants/{cleanOrgId} : état installation sans vente
   const tenantRef = db.collection('tenants').doc(cleanOrgId);
-  const trialEndsAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString();
 
   batch.set(tenantRef, {
     id: cleanOrgId,
-    status: 'actif',
-    planId: planId || 'plan_pro',
-    trialEndsAt,
+    status: 'installation', // Pas d'exploitation de vente avant certification et validation abonnement
+    planId: mappedPack,
+    restaurantType: mappedType,
     creationSource: 'cree_par_admin',
     channel: channel || 'stable',
-    labels: ['nouveau_client'],
-    healthScore: 100,
     company: {
       name: companyName.trim(),
       legalName: (legalName || companyName).trim(),
@@ -396,31 +674,20 @@ export async function handleCreateTenant(request: CallableRequest<CreateTenantRe
     updatedAt: now,
   });
 
-  // Droits effectifs dans tenants/{cleanOrgId}/entitlements/current
-  const entitlementsRef = db.collection(`tenants/${cleanOrgId}/entitlements`).doc('current');
-  batch.set(entitlementsRef, {
-    orgId: cleanOrgId,
-    modules,
-    operationRules: {},
-    lockedConfigKeys: [],
-    effectiveLimits: limits,
-    features: {
-      pos_vente_directe: {
-        status: 'ACTIVÉ',
-        source: 'plan',
-        activatedBy: caller.email,
-        activatedAt: now,
-      },
-      pos_plan_tables: {
-        status: 'ACTIVÉ',
-        source: 'plan',
-        activatedBy: caller.email,
-        activatedAt: now,
-      },
-    },
+  // Données internes confidentielles déplacées dans tenants/{cleanOrgId}/admin/private
+  const adminPrivateRef = db.collection('tenants').doc(cleanOrgId).collection('admin').doc('private');
+  batch.set(adminPrivateRef, {
+    labels: ['nouveau_client'],
+    healthScore: 100,
+    internalNotes: '',
+    createdAt: now,
     updatedAt: now,
     updatedBy: caller.email,
   });
+
+  // Droits effectifs dans tenants/{cleanOrgId}/entitlements/current
+  const entitlementsRef = db.collection(`tenants/${cleanOrgId}/entitlements`).doc('current');
+  batch.set(entitlementsRef, entitlements);
 
   await batch.commit();
 
@@ -503,6 +770,7 @@ export async function handleApproveSignup(request: CallableRequest<ApproveSignup
       planId: (planId || signup.desiredPlanId || 'plan_pro') as any,
       profileType,
       currency: 'FCFA',
+      initialPassword: signup.initialPassword,
       reason: `Approbation de la demande d'inscription ${signupId} : ${reason}`,
     },
   } as any);

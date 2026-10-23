@@ -6,6 +6,7 @@ import {
   signOut,
   onAuthStateChanged,
   User as FirebaseUser,
+  multiFactor,
 } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { PlatformAdmin, PlatformRole } from '@shared';
@@ -32,92 +33,68 @@ export const AdminAuthProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const [mfaPending, setMfaPending] = useState<boolean>(false);
   const [pendingCredentials, setPendingCredentials] = useState<{ email: string; uid: string } | null>(null);
 
-  const resolveAdminProfile = useCallback(async (user: FirebaseUser) => {
+  const resolveAdminProfile = useCallback(async (user: FirebaseUser): Promise<PlatformAdmin | null> => {
     try {
       const tokenResult = await user.getIdTokenResult(true);
       const platformRole = tokenResult.claims.platformRole as PlatformRole | undefined;
 
-      // 1. Priorité aux Custom Claims Firebase Auth (platformRole)
-      if (platformRole) {
-        return {
-          uid: user.uid,
-          email: user.email || '',
-          name: (tokenResult.claims.name as string) || user.email?.split('@')[0] || 'Admin',
-          role: platformRole,
-          active: tokenResult.claims.active !== false,
-          mfaEnabled: true,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        } as PlatformAdmin;
+      // 1. Accès conditionné STRICTEMENT par le custom claim platformRole
+      const validPlatformRoles: PlatformRole[] = ['platform_owner', 'platform_admin', 'support', 'billing'];
+      if (!platformRole || !validPlatformRoles.includes(platformRole)) {
+        console.warn(`[AdminAuthContext] Accès refusé pour ${user.email}: aucun platformRole valide.`);
+        return null;
       }
 
-      // 2. Si le compte possède le rôle superadmin dans les Claims
-      if (tokenResult.claims.role === 'superadmin') {
-        const ownerAdmin: PlatformAdmin = {
-          uid: user.uid,
-          email: user.email || '',
-          name: (tokenResult.claims.name as string) || user.email?.split('@')[0] || 'Superadmin Fondateur',
-          role: 'platform_owner',
-          active: true,
-          mfaEnabled: true,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        };
-        try {
-          await setDoc(doc(db, 'platform_admins', user.uid), ownerAdmin, { merge: true });
-        } catch {}
-        return ownerAdmin;
+      // 2. Détermination réelle de l'état MFA (multi-facteurs enrolés ou claim explicite)
+      let hasEnrolledMfa = false;
+      try {
+        hasEnrolledMfa = multiFactor(user).enrolledFactors.length > 0;
+      } catch {
+        hasEnrolledMfa = false;
+      }
+      if (tokenResult.claims.mfaEnabled === true) {
+        hasEnrolledMfa = true;
       }
 
-      // 3. Repli sur le document Firestore platform_admins
+      // 3. Lecture facultative des métadonnées du document platform_admins
+      let adminName = (tokenResult.claims.name as string) || user.displayName || user.email?.split('@')[0] || 'Admin';
+      let isActive = tokenResult.claims.active !== false;
+      let effectiveMfa = hasEnrolledMfa;
+
       try {
         const adminDoc = await getDoc(doc(db, 'platform_admins', user.uid));
         if (adminDoc.exists()) {
           const data = adminDoc.data();
-          if (data.active !== false) {
-            return {
-              uid: user.uid,
-              email: user.email || data.email,
-              name: data.name || user.email?.split('@')[0] || 'Admin Plateforme',
-              role: data.role || 'platform_admin',
-              active: true,
-              mfaEnabled: Boolean(data.mfaEnabled),
-              createdAt: data.createdAt || new Date().toISOString(),
-              updatedAt: data.updatedAt || new Date().toISOString(),
-            } as PlatformAdmin;
+          if (data.active === false) {
+            isActive = false;
+          }
+          if (data.name) {
+            adminName = data.name;
+          }
+          if (data.mfaEnabled !== undefined) {
+            effectiveMfa = Boolean(data.mfaEnabled);
           }
         }
       } catch (err) {
-        console.warn('[AdminAuthContext] Lecture platform_admins non autorisée ou échouée:', err);
+        // En cas d'erreur de lecture Firestore, les claims de sécurité Auth font foi
+        console.warn('[AdminAuthContext] Lecture doc platform_admins ignorée:', err);
       }
 
-      // 4. Repli sur le document users/{uid} : si role == 'superadmin' ou 'direction'
-      try {
-        const userDoc = await getDoc(doc(db, 'users', user.uid));
-        if (userDoc.exists()) {
-          const udata = userDoc.data();
-          if (udata.role === 'superadmin' || udata.role === 'direction') {
-            const ownerAdmin: PlatformAdmin = {
-              uid: user.uid,
-              email: user.email || udata.email,
-              name: udata.name || user.email?.split('@')[0] || 'Superadmin Fondateur',
-              role: 'platform_owner',
-              active: true,
-              mfaEnabled: true,
-              createdAt: new Date().toISOString(),
-              updatedAt: new Date().toISOString(),
-            };
-            try {
-              await setDoc(doc(db, 'platform_admins', user.uid), ownerAdmin, { merge: true });
-            } catch {}
-            return ownerAdmin;
-          }
-        }
-      } catch (err) {
-        console.warn('[AdminAuthContext] Lecture users non autorisée ou échouée:', err);
+      if (!isActive) {
+        console.warn(`[AdminAuthContext] Compte platformAdmin inactif pour ${user.email}.`);
+        return null;
       }
 
-      return null;
+      return {
+        uid: user.uid,
+        email: user.email || '',
+        name: adminName,
+        role: platformRole,
+        active: true,
+        mfaEnabled: effectiveMfa,
+        createdAt: user.metadata.creationTime || new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
     } catch (err) {
       console.error('[AdminAuthContext] Échec de résolution du rôle plateforme:', err);
       return null;
@@ -153,8 +130,8 @@ export const AdminAuthProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         throw new Error('Accès refusé. Ce compte ne possède pas de rôle d’administration plateforme.');
       }
 
-      // Simulation TOTP MFA obligatoire pour Super Admin Console
-      if (admin.mfaEnabled || admin.role === 'platform_owner') {
+      // TOTP MFA seulement si activé sur le compte
+      if (admin.mfaEnabled) {
         setMfaPending(true);
         setPendingCredentials({ email: admin.email, uid: admin.uid });
         setIsLoading(false);

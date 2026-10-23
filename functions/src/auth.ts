@@ -225,36 +225,164 @@ export async function consumeSupervisorToken(
 // Contrôle de Statut et d'Entitlements Multi-Tenant
 // -----------------------------------------------------------------------------
 
+// -----------------------------------------------------------------------------
+// Table d'États et Permissions Multi-Tenant (Matrice de Sécurité Éprouvée)
+// -----------------------------------------------------------------------------
+
+export type TenantOperation = 'vente' | 'config' | 'lecture';
+
+export interface TenantStateRule {
+  allowVente: boolean;
+  allowConfig: boolean;
+  allowReadOnly: boolean;
+  statusMessage: string;
+}
+
+export const TENANT_STATE_ACCESS_RULES: Record<string, TenantStateRule> = {
+  demande: {
+    allowVente: false,
+    allowConfig: false,
+    allowReadOnly: false,
+    statusMessage: 'Votre demande d’adhésion est en cours d’examen par l’équipe RestoMaster.',
+  },
+  inscription_en_attente: {
+    allowVente: false,
+    allowConfig: false,
+    allowReadOnly: false,
+    statusMessage: 'Votre demande d’adhésion est en cours d’examen par l’équipe RestoMaster.',
+  },
+  installation: {
+    allowVente: false,
+    allowConfig: true,
+    allowReadOnly: true,
+    statusMessage: 'Établissement en cours d’installation. La vente en caisse exige l’activation d’un abonnement.',
+  },
+  paiement_en_attente: {
+    allowVente: false,
+    allowConfig: true,
+    allowReadOnly: true,
+    statusMessage: 'Commande d’abonnement en attente de paiement. La vente est verrouillée.',
+  },
+  paiement_a_verifier: {
+    allowVente: false,
+    allowConfig: true,
+    allowReadOnly: true,
+    statusMessage: 'Paiement en cours de vérification par l’administration. Vente verrouillée temporairement.',
+  },
+  actif: {
+    allowVente: true,
+    allowConfig: true,
+    allowReadOnly: true,
+    statusMessage: 'Établissement actif et pleinement opérationnel.',
+  },
+  impaye: {
+    allowVente: false,
+    allowConfig: false,
+    allowReadOnly: true,
+    statusMessage: 'Abonnement impayé. Accès restreint en lecture seule.',
+  },
+  suspendu: {
+    allowVente: false,
+    allowConfig: false,
+    allowReadOnly: true, // Applicable si suspensionMode == 'read_only'
+    statusMessage: 'Établissement suspendu par la plateforme.',
+  },
+  resilie: {
+    allowVente: false,
+    allowConfig: false,
+    allowReadOnly: false,
+    statusMessage: 'Compte résilié. Toute opération est définitivement désactivée.',
+  },
+  archive: {
+    allowVente: false,
+    allowConfig: false,
+    allowReadOnly: false,
+    statusMessage: 'Compte archivé.',
+  },
+};
+
 /**
- * Vérifie que le tenant est actif et non suspendu (sauf en lecture seule si expressément autorisé)
+ * Évalue logiquement l'accès selon l'état et l'opération demandée.
+ */
+export function evaluateTenantAccess(
+  status: string,
+  operation: TenantOperation,
+  suspensionMode?: string,
+  allowReadOnlyOption?: boolean
+): { allowed: boolean; reason: string } {
+  const rule = TENANT_STATE_ACCESS_RULES[status] || {
+    allowVente: false,
+    allowConfig: false,
+    allowReadOnly: false,
+    statusMessage: `Statut d’établissement inconnu : ${status}`,
+  };
+
+  if (operation === 'vente') {
+    if (!rule.allowVente) {
+      return { allowed: false, reason: rule.statusMessage };
+    }
+    return { allowed: true, reason: '' };
+  }
+
+  if (operation === 'config') {
+    if (!rule.allowConfig) {
+      return { allowed: false, reason: rule.statusMessage };
+    }
+    return { allowed: true, reason: '' };
+  }
+
+  if (operation === 'lecture') {
+    if (status === 'suspendu') {
+      if (suspensionMode === 'full_block' || !allowReadOnlyOption) {
+        return { allowed: false, reason: rule.statusMessage };
+      }
+      return { allowed: true, reason: '' };
+    }
+    if (!rule.allowReadOnly) {
+      return { allowed: false, reason: rule.statusMessage };
+    }
+    return { allowed: true, reason: '' };
+  }
+
+  return { allowed: false, reason: 'Opération non reconnue.' };
+}
+
+/**
+ * Vérifie que le tenant est actif et autorise l'opération spécifiée (Zéro Fail-Open).
  */
 export async function assertTenantActive(
   orgId: string,
+  operation: TenantOperation = 'vente',
   options?: { allowReadOnly?: boolean }
 ): Promise<void> {
-  if (!orgId) return;
+  if (!orgId) {
+    throw new HttpsError('invalid-argument', 'Identifiant d’organisation manquant.');
+  }
 
   const tenantDoc = await db.collection('tenants').doc(orgId).get();
-  if (!tenantDoc.exists) return; // Si organisation historique non migrée, ne bloque pas
-
-  const tenantData = tenantDoc.data();
-  const status = tenantData?.status;
-  const suspensionMode = tenantData?.suspensionMode;
-
-  if (status === 'resilie' || status === 'archive') {
+  if (!tenantDoc.exists) {
     throw new HttpsError(
       'permission-denied',
-      'Ce compte restaurant est résilié ou archivé. Les opérations sont désactivées.'
+      `Organisation "${orgId}" introuvable ou compte non provisionné.`
     );
   }
 
-  if (status === 'suspendu') {
-    if (suspensionMode === 'full_block' || !options?.allowReadOnly) {
-      throw new HttpsError(
-        'permission-denied',
-        `Ce restaurant est temporairement suspendu : ${tenantData?.suspensionReason || 'Accès restreint par l’administrateur'}`
-      );
-    }
+  const tenantData = tenantDoc.data();
+  const status = tenantData?.status || 'demande';
+  const suspensionMode = tenantData?.suspensionMode;
+
+  const access = evaluateTenantAccess(
+    status,
+    operation,
+    suspensionMode,
+    options?.allowReadOnly
+  );
+
+  if (!access.allowed) {
+    throw new HttpsError(
+      'permission-denied',
+      `${access.reason} (Opération "${operation}" refusée pour le statut "${status}").`
+    );
   }
 }
 

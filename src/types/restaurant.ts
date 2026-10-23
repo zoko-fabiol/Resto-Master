@@ -35,6 +35,8 @@ export interface UserAccount {
   avatar?: string;
   phone?: string;
   matricule?: string;
+  isFirstLogin?: boolean;
+  setupOwner?: boolean; // Vrai pour le propriétaire de l'établissement pendant et après installation
   // Spécifique aux comptes de tablettes tactiles (Mode Kiosk)
   assignedTableId?: string;
   assignedTableName?: string;
@@ -55,6 +57,8 @@ export interface UserProfile {
   phone?: string;
   active: boolean;
   mustChangePassword?: boolean;
+  isFirstLogin?: boolean;
+  setupOwner?: boolean;
   hasPin?: boolean;
   pinCode?: string;
   badgeNumber?: string;
@@ -168,6 +172,22 @@ export interface RestaurantSettings {
   certifiedAt?: string;
   certifiedBy?: string;
   handoverSlipPrinted?: boolean;
+
+  // Passerelle E-mails Google Apps Script (Restaurant)
+  emailConfig?: {
+    gasWebhookUrl?: string;
+    senderName?: string;
+    stockAlertEnabled?: boolean;
+    stockAlertRecipient?: string;
+    reservationConfirmationEnabled?: boolean;
+    digitalReceiptEnabled?: boolean;
+    zReportEmailEnabled?: boolean;
+    zReportRecipient?: string;
+    orderReadyEnabled?: boolean;
+    directorReportEnabled?: boolean;
+    directorReportFrequency?: 'jour' | 'semaine' | 'mois' | 'tous';
+    directorEmailRecipient?: string;
+  };
 }
 
 export interface Organization {

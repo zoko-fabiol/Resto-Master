@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, Suspense, lazy } from 'react';
+import React, { useState, useEffect, Suspense, lazy } from 'react';
 import { BrowserRouter, useLocation, useNavigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { RestaurantProvider, useRestaurant } from './context/RestaurantContext';
@@ -96,7 +96,6 @@ const AppContent: React.FC = () => {
     logout,
   } = useAuth();
   const { showToast } = useToast();
-  const { showToast } = useToast();
   const {
     seatReservation,
     isFeatureEnabled,
@@ -110,21 +109,6 @@ const AppContent: React.FC = () => {
 
   const currentTerminal = terminals.find((t) => t.id === currentDeviceProfile?.terminalId);
   const isTerminalLocked = isSessionLocked || Boolean(currentTerminal?.isLocked);
-
-  useEffect(() => {
-    const handlePlatformError = (event: Event) => {
-      const detail = (event as CustomEvent<{ operation?: string; message?: string }>).detail;
-      showToast({
-        title: `Échec de l'${detail?.operation || 'opération'}`,
-        message: detail?.message || 'La plateforme n’a pas confirmé cette opération.',
-        type: 'error',
-        duration: 10000,
-      });
-    };
-
-    window.addEventListener('restomaster:platform-error', handlePlatformError);
-    return () => window.removeEventListener('restomaster:platform-error', handlePlatformError);
-  }, [showToast]);
 
   useEffect(() => {
     const handleOfflinePending = (event: Event) => {
@@ -143,6 +127,21 @@ const AppContent: React.FC = () => {
     return () => window.removeEventListener('restomaster:offline-pending', handleOfflinePending);
   }, [showToast]);
 
+  useEffect(() => {
+    const handlePlatformError = (event: Event) => {
+      const detail = (event as CustomEvent<{ operation?: string; message?: string }>).detail;
+      showToast({
+        title: `Échec de l'${detail?.operation || 'opération'}`,
+        message: detail?.message || 'La plateforme n’a pas confirmé cette opération.',
+        type: 'error',
+        duration: 10000,
+      });
+    };
+
+    window.addEventListener('restomaster:platform-error', handlePlatformError);
+    return () => window.removeEventListener('restomaster:platform-error', handlePlatformError);
+  }, [showToast]);
+
   // Route URL synchronisée (ex: /pos -> pos, / -> '')
   const rawPath = location.pathname.replace(/^\/+/, '').split('/')[0] || '';
   const currentTab = rawPath || 'dashboard';
@@ -155,17 +154,22 @@ const AppContent: React.FC = () => {
   const [isDisplayTvOpen, setIsDisplayTvOpen] = useState(false);
   const [isUserGuideOpen, setIsUserGuideOpen] = useState(false);
   const [isOnboardingOpen, setIsOnboardingOpen] = useState(false);
+  const [hasJustChangedPassword, setHasJustChangedPassword] = useState(false);
 
-  // Auto-launch OnboardingWizard for Superadmin on fresh install if not yet certified and no outlets configured
+  // Auto-launch OnboardingWizard for setupOwner (direction) or superadmin on fresh install
   useEffect(() => {
+    const isOwnerOrSuper =
+      currentUser.role === 'superadmin' ||
+      (currentUser.role === 'direction' && currentUser.setupOwner === true);
+
     if (
-      currentUser.role === 'superadmin' &&
+      isOwnerOrSuper &&
       !settings?.certifiedReadyForHandover &&
-      (!outlets || outlets.length === 0)
+      (!outlets || outlets.length === 0 || hasJustChangedPassword || currentUser.isFirstLogin)
     ) {
       setIsOnboardingOpen(true);
     }
-  }, [currentUser.role, settings?.certifiedReadyForHandover, outlets?.length]);
+  }, [currentUser.role, currentUser.setupOwner, currentUser.isFirstLogin, settings?.certifiedReadyForHandover, outlets?.length, hasJustChangedPassword]);
 
   // Redirection selon le rôle à la connexion ou changement de rôle
   const prevRoleRef = React.useRef<UserRole | null>(null);
@@ -305,7 +309,10 @@ const AppContent: React.FC = () => {
     return (
       <ChangePasswordModal
         isOpen={true}
-        onSuccess={() => {}}
+        onSuccess={() => {
+          setHasJustChangedPassword(true);
+          setIsOnboardingOpen(true);
+        }}
       />
     );
   }

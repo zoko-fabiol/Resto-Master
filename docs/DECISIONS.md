@@ -1,4 +1,4 @@
-﻿# RestoMaster OS — Registre des Décisions d'Architecture (ADR)
+# RestoMaster OS — Registre des Décisions d'Architecture (ADR)
 Branche : `release/livraison` — Tag de sauvegarde initial : `v1.0.0-pre-livraison-backup`
 
 Ce document consigne les décisions d'architecture prises pour la livraison d'une version de production épurée, sécurisée et mono-établissement par défaut de RestoMaster OS.
@@ -240,17 +240,6 @@ Ce document consigne les décisions d'architecture prises pour la livraison d'un
 
 ---
 
-### ADR-015 : Remplacement planifié du formulaire public d'inscription
-- **Date** : 2026-10-21
-- **Statut** : Temporaire, remplacement requis avant production
-- **Contexte** : `RestaurantSignupModal` appelle actuellement la Cloud Function publique `submitSignup` pour recueillir une demande d'ouverture d'établissement. Cette fonction n'exige pas encore App Check et sa limitation de débit ne constitue pas une limitation robuste par adresse IP ; une adresse e-mail différente permet donc de contourner une partie du contrôle.
-- **Décision** :
-  - Le composant `RestaurantSignupModal` et la méthode `cloudFunctionsService.submitSignup` sont marqués **TEMPORAIRES**.
-  - Le flux cible sera une création de compte authentifiée, suivie d'une vérification d'e-mail et protégée par App Check.
-  - Le client et la fonction utilisent actuellement la région `europe-west1` ; le forfait Blaze est requis pour les Cloud Functions de deuxième génération.
-  - Aucun déploiement de `submitSignup` n'est effectué dans le cadre de cette décision.
-- **Conséquences** : Le flux actuel reste disponible pour la transition, mais ne doit pas être considéré comme une protection anti-abus suffisante ni comme le flux d'inscription final.
-
 ### ADR-014 : Outil Sécurisé de Purge des Données d'Essai Firebase et Garde-Fous de Pré-Livraison (Phase J)
 - **Date** : 2026-10-20
 - **Statut** : Accepté & Implémenté
@@ -271,6 +260,31 @@ Ce document consigne les décisions d'architecture prises pour la livraison d'un
   - **J6 (Documentation d'Exploitation)** :
     - Procédure officielle de purge et d'audit consignée dans `docs/LIVRAISON.md`.
 - **Conséquences** : Nettoyage pré-livraison zéro risque, base client livrée vierge de toute pollution d'essai, et traçabilité technique absolue par rapport JSON.
+
+### ADR-015 : Remplacement planifié du formulaire public d'inscription
+- **Date** : 2026-10-21
+- **Statut** : Temporaire, remplacement requis avant production
+- **Contexte** : `RestaurantSignupModal` appelle actuellement la Cloud Function publique `submitSignup` pour recueillir une demande d'ouverture d'établissement. Cette fonction n'exige pas encore App Check et sa limitation de débit ne constitue pas une limitation robuste par adresse IP ; une adresse e-mail différente permet donc de contourner une partie du contrôle.
+- **Décision** :
+  - Le composant `RestaurantSignupModal` et la méthode `cloudFunctionsService.submitSignup` sont marqués **TEMPORAIRES**.
+  - Le flux cible sera une création de compte authentifiée, suivie d'une vérification d'e-mail et protégée par App Check.
+  - Le client et la fonction utilisent actuellement la région `europe-west1` ; le forfait Blaze est requis pour les Cloud Functions de deuxième génération.
+  - Aucun déploiement de `submitSignup` n'est effectué dans le cadre de cette décision.
+- **Conséquences** : Le flux actuel reste disponible pour la transition, mais ne doit pas être considéré comme une protection anti-abus suffisante ni comme le flux d'inscription final.
+
+---
+
+### ADR-016 : Hiérarchie stricte des Rôles : Superadmin Interne vs Propriétaire (Direction + setupOwner)
+- **Date** : 2026-10-23
+- **Statut** : Accepté & Implémenté (Chantier Installation & Abonnements)
+- **Contexte** : Précédemment, le créateur ou propriétaire d'un restaurant recevait le rôle `superadmin`. Cette ambiguïté permettait à un exploitant de restaurant de posséder des privilèges comparables à l'intégrateur technique de la plateforme SaaS, et rendait floue la frontière d'accès entre le panneau d'administration central (`admin-panel`) et l'instance locale du restaurant.
+- **Décision** :
+  1. **Rôle `superadmin`** : Réservé exclusivement à l'équipe technique interne et aux intégrateurs de la plateforme RestoMaster OS.
+  2. **Rôle Propriétaire d'Établissement** : Le créateur d'un restaurant reçoit désormais le rôle métier `direction` accompagné du drapeau immuable `setupOwner: true` (tant dans ses Custom Claims Auth que dans son document `users/{uid}`). Il n'a JAMAIS le rôle `superadmin` ni aucun `platformRole`.
+  3. **Accès au Panneau Admin Plateforme (`admin-panel`)** : Strictement conditionné par le custom claim `platformRole` (`platform_owner`, `platform_admin`, `support`, `billing`). Tout utilisateur sans ce claim se voit refuser l'accès sans exception.
+  4. **Périmètre `setupOwner`** : Le propriétaire `direction + setupOwner: true` est autorisé à exécuter l'assistant d'installation initial, à certifier la mise en route et à gérer son abonnement, sans avoir accès aux fonctions SaaS multi-tenants.
+  5. **Données Internes Plateforme** : Les annotations internes (`internalNotes`, `labels`, `healthScore`) sont isolées dans le sous-document `tenants/{orgId}/admin/private`, invisible pour le propriétaire et ses employés.
+- **Conséquences** : Cloisonnement étanche entre les privilèges SaaS plateforme et la gestion quotidienne d'un restaurant, prévention absolue de l'escalade de privilèges, et conformité de sécurité multi-locataires.
 
 
 
