@@ -41,6 +41,57 @@ export interface PlatformAnnouncement {
   active: boolean;
 }
 
+function normalizeTenant(id: string, data: any): Tenant {
+  const companyName = data?.company?.name || data?.companyName || data?.name || id;
+  const legalName = data?.company?.legalName || data?.legalName || companyName;
+  const city = data?.company?.city || data?.city || 'Douala';
+  const country = data?.company?.country || data?.country || 'Cameroun';
+  const phone = data?.company?.phone || data?.phone || data?.ownerPhone || '';
+  const email = data?.company?.email || data?.email || data?.ownerEmail || '';
+
+  const ownerName = data?.owner?.name || data?.ownerName || data?.applicantName || 'Responsable Restaurant';
+  const ownerEmail = data?.owner?.email || data?.ownerEmail || data?.email || '';
+  const ownerPhone = data?.owner?.phone || data?.ownerPhone || data?.phone || '';
+  const ownerUid = data?.owner?.uid || data?.ownerUid || '';
+
+  return {
+    ...data,
+    id,
+    companyName,
+    company: {
+      name: companyName,
+      legalName,
+      legalForm: data?.company?.legalForm || data?.legalForm || 'SARL',
+      taxId: data?.company?.taxId || data?.taxId || '',
+      rccm: data?.company?.rccm || data?.rccm || '',
+      taxCenter: data?.company?.taxCenter || data?.taxCenter || '',
+      headquartersAddress: data?.company?.headquartersAddress || data?.address || city,
+      city,
+      country,
+      phone,
+      email,
+    },
+    owner: {
+      uid: ownerUid,
+      name: ownerName,
+      email: ownerEmail,
+      phone: ownerPhone,
+    },
+    restaurantCode: data?.restaurantCode || '',
+    status: data?.status || 'actif',
+    planId: data?.planId || 'plan_pro',
+    currency: data?.currency || 'FCFA',
+    limits: data?.limits || {
+      maxOutlets: 1,
+      maxUsers: 5,
+      maxTerminals: 3,
+      maxOrdersPerMonth: 1000,
+    },
+    createdAt: data?.createdAt || new Date().toISOString(),
+    updatedAt: data?.updatedAt || new Date().toISOString(),
+  } as Tenant;
+}
+
 export const adminPlatformService = {
   // ---------------------------------------------------------------------------
   // Écouteurs Firestore Temps Réel
@@ -52,10 +103,7 @@ export const adminPlatformService = {
     return onSnapshot(
       q,
       (snapshot) => {
-        const tenants = snapshot.docs.map((docSnap) => ({
-          id: docSnap.id,
-          ...docSnap.data(),
-        })) as Tenant[];
+        const tenants = snapshot.docs.map((docSnap) => normalizeTenant(docSnap.id, docSnap.data()));
         callback(tenants);
       },
       (err) => {
@@ -77,7 +125,7 @@ export const adminPlatformService = {
           callback(null);
           return;
         }
-        callback({ id: snap.id, ...snap.data() } as Tenant);
+        callback(normalizeTenant(snap.id, snap.data()));
       },
       (err) => {
         console.error(`[adminPlatformService] Erreur écoute tenant ${orgId}:`, err);

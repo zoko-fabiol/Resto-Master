@@ -17,6 +17,8 @@ import {
   ExternalLink,
 } from 'lucide-react';
 import { Tenant, DEFAULT_PLANS, Plan } from '@shared';
+import { db } from '../../../../src/lib/firebase';
+import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { adminPlatformService } from '../../services/adminPlatformService';
 import { gasEmailService } from '../../services/gasEmailService';
 
@@ -40,6 +42,7 @@ export const SendTenantCredentialsModal: React.FC<SendTenantCredentialsModalProp
   const [temporaryPassword, setTemporaryPassword] = useState('');
   const [planName, setPlanName] = useState('');
   const [city, setCity] = useState('Douala');
+  const [isFromSignup, setIsFromSignup] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showEmailPreview, setShowEmailPreview] = useState(false);
   const [isSending, setIsSending] = useState(false);
@@ -68,15 +71,28 @@ export const SendTenantCredentialsModal: React.FC<SendTenantCredentialsModalProp
 
   useEffect(() => {
     if (tenant && isOpen) {
-      const email = tenant.owner?.email || tenant.company?.email || '';
-      const name = tenant.owner?.name || tenant.company?.name || 'Responsable Restaurant';
-      const rName = tenant.company?.name || tenant.id;
-      const cCity = tenant.company?.city || 'Douala';
-      const existingCode = (tenant as any).restaurantCode || generateBoutiqueCode(cCity);
+      const raw = tenant as any;
+      let initialEmail =
+        tenant.owner?.email ||
+        raw.ownerEmail ||
+        tenant.company?.email ||
+        raw.email ||
+        raw.applicantEmail ||
+        '';
+      let initialName =
+        tenant.owner?.name ||
+        raw.ownerName ||
+        raw.applicantName ||
+        tenant.company?.name ||
+        raw.companyName ||
+        'Responsable Restaurant';
+      const rName = tenant.company?.name || raw.companyName || tenant.id;
+      const cCity = tenant.company?.city || raw.city || 'Douala';
+      const existingCode = raw.restaurantCode || generateBoutiqueCode(cCity);
       const matchedPlan = DEFAULT_PLANS.find((p: Plan) => p.id === tenant.planId);
 
-      setRecipientEmail(email);
-      setRecipientName(name);
+      setRecipientEmail(initialEmail);
+      setRecipientName(initialName);
       setRestaurantName(rName);
       setRestaurantCode(existingCode);
       setCity(cCity);
@@ -84,6 +100,44 @@ export const SendTenantCredentialsModal: React.FC<SendTenantCredentialsModalProp
       setTemporaryPassword(generateRandomPassword());
       setStatusFeedback(null);
       setShowEmailPreview(false);
+      setIsFromSignup(false);
+
+      // Récupération systématique du mail de la demande d'adhésion d'origine (tenant_signups)
+      const lookupSignup = async () => {
+        try {
+          const directReqId = `req_${tenant.id.replace('org_', '')}`;
+          const directSnap = await getDoc(doc(db, 'tenant_signups', directReqId));
+          if (directSnap.exists()) {
+            const sData = directSnap.data();
+            if (sData.email) {
+              setRecipientEmail(sData.email);
+              setIsFromSignup(true);
+            }
+            if (sData.applicantName) {
+              setRecipientName(sData.applicantName);
+            }
+            return;
+          }
+
+          // Recherche par orgId dans la collection tenant_signups
+          const q = query(collection(db, 'tenant_signups'), where('orgId', '==', tenant.id));
+          const qSnap = await getDocs(q);
+          if (!qSnap.empty) {
+            const sData = qSnap.docs[0].data();
+            if (sData.email) {
+              setRecipientEmail(sData.email);
+              setIsFromSignup(true);
+            }
+            if (sData.applicantName) {
+              setRecipientName(sData.applicantName);
+            }
+          }
+        } catch (e) {
+          console.warn('[SendTenantCredentialsModal] Recherche demande signup ignorée:', e);
+        }
+      };
+
+      lookupSignup();
     }
   }, [tenant, isOpen]);
 
@@ -240,7 +294,15 @@ export const SendTenantCredentialsModal: React.FC<SendTenantCredentialsModalProp
               </div>
 
               <div>
-                <label className="block text-slate-400 mb-1 font-medium">Adresse E-mail de Réception *</label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-slate-400 font-medium">Adresse E-mail de Réception *</label>
+                  {isFromSignup && (
+                    <span className="text-[10px] text-emerald-400 font-bold bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full flex items-center gap-1">
+                      <Check className="w-3 h-3" />
+                      Demande d'adhésion
+                    </span>
+                  )}
+                </div>
                 <input
                   type="email"
                   value={recipientEmail}
