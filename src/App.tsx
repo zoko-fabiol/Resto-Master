@@ -46,6 +46,7 @@ import { ChangePasswordModal } from './components/auth/ChangePasswordModal';
 import { UserGuideModal } from './components/common/UserGuideModal';
 import { PaymentModal } from './components/pos/PaymentModal';
 import { OnboardingWizard } from './components/admin/OnboardingWizard';
+import { SetupWizardModal } from './components/setup/SetupWizardModal';
 import { TenantStatusBanner } from './components/common/TenantStatusBanner';
 import { UserRole, UserProfile } from './types/restaurant';
 import { ShieldAlert, ShieldCheck, Utensils } from 'lucide-react';
@@ -105,6 +106,7 @@ const AppContent: React.FC = () => {
     terminals,
     settings,
     outlets,
+    tenant,
   } = useRestaurant();
 
   const currentTerminal = terminals.find((t) => t.id === currentDeviceProfile?.terminalId);
@@ -154,9 +156,10 @@ const AppContent: React.FC = () => {
   const [isDisplayTvOpen, setIsDisplayTvOpen] = useState(false);
   const [isUserGuideOpen, setIsUserGuideOpen] = useState(false);
   const [isOnboardingOpen, setIsOnboardingOpen] = useState(false);
+  const [isSetupWizardOpen, setIsSetupWizardOpen] = useState(false);
   const [hasJustChangedPassword, setHasJustChangedPassword] = useState(false);
 
-  // Auto-launch OnboardingWizard for setupOwner (direction) or superadmin on fresh install
+  // Auto-launch SetupWizardModal for setupOwner (direction) or superadmin on fresh install
   useEffect(() => {
     const isOwnerOrSuper =
       currentUser.role === 'superadmin' ||
@@ -164,12 +167,13 @@ const AppContent: React.FC = () => {
 
     if (
       isOwnerOrSuper &&
-      !settings?.certifiedReadyForHandover &&
-      (!outlets || outlets.length === 0 || hasJustChangedPassword || currentUser.isFirstLogin)
+      (tenant?.status === 'installation' ||
+        (!settings?.certifiedReadyForHandover &&
+          (!outlets || outlets.length === 0 || hasJustChangedPassword || currentUser.isFirstLogin)))
     ) {
-      setIsOnboardingOpen(true);
+      setIsSetupWizardOpen(true);
     }
-  }, [currentUser.role, currentUser.setupOwner, currentUser.isFirstLogin, settings?.certifiedReadyForHandover, outlets?.length, hasJustChangedPassword]);
+  }, [currentUser.role, currentUser.setupOwner, currentUser.isFirstLogin, tenant?.status, settings?.certifiedReadyForHandover, outlets?.length, hasJustChangedPassword]);
 
   // Redirection selon le rôle à la connexion ou changement de rôle
   const prevRoleRef = React.useRef<UserRole | null>(null);
@@ -408,7 +412,7 @@ const AppContent: React.FC = () => {
         }`}
       >
         {/* Bannière de Statut Tenant (Essai, Impayé, Suspendu, Lecture Seule) */}
-        <TenantStatusBanner />
+        <TenantStatusBanner onOpenSetupWizard={() => setIsSetupWizardOpen(true)} />
 
         {/* Header Bar */}
         <Header
@@ -522,6 +526,13 @@ const AppContent: React.FC = () => {
       <OnboardingWizard
         isOpen={isOnboardingOpen}
         onClose={() => setIsOnboardingOpen(false)}
+      />
+
+      {/* Assistant d'Installation Pas à Pas Style Première Mise en Route OS */}
+      <SetupWizardModal
+        isOpen={isSetupWizardOpen}
+        onClose={() => setIsSetupWizardOpen(false)}
+        onCompleted={() => setIsSetupWizardOpen(false)}
       />
 
       {/* Tactile PIN Lock Screen Overlay */}

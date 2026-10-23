@@ -322,6 +322,27 @@ Ce document consigne les décisions d'architecture prises pour la livraison d'un
   4. **Bandeau d'État Client `TenantStatusBanner`** : Affichage discret et contextualisé de l'état de l'abonnement et actions immédiates (coordonnées de paiement, renouvellement).
 - **Conséquences** : Sécurité financière totale, zéro risque de double activation ou de fraude de devis, expérience fluide pour le client avec instructions de paiement locales claires.
 
+---
+
+### ADR-019 : Refonte Totale de l'Assistant d'Installation Pas-à-Pas (Style Première Mise en Route OS)
+- **Date** : 2026-10-23
+- **Statut** : Accepté & Implémenté (Phase 4 du Chantier Installation & Abonnements)
+- **Contexte** : L'expérience initiale du propriétaire d'établissement était fragmentée entre un formulaire d'inscription sommaire et un tableau de bord partiellement initialisé. La mise en service professionnelle d'un restaurant exige une mise en route guidée, pas à pas, semblable à l'installation d'un système d'exploitation moderne (style OOBE Windows / macOS), alliant sélection du métier, choix transparent de la formule, dimensionnement matériel et validation comptable.
+- **Décision** :
+  1. **Architecture Modulaire en 5 Chapitres (`src/components/setup/`)** :
+     - **Chapitre 1 — Identité de l'Établissement** : Raison sociale, forme juridique (SARL, ETS, SAS, etc.), nom commercial, adresse, ville, quartier, NIU (13 car.), RCCM et devise officielle.
+     - **Chapitre 2 — Profil Métier & Choix de la Formule** : Sélection guidée parmi les 8 types officiels (Restaurant classique, Fast-Food, Maquis, Bar-Lounge, Boulangerie, Hôtel, etc.) et des 3 formules (Minimum 25 000, Médium 35 000, Premium 50 000 FCFA) avec choix du cycle (Mensuel, Annuel avec 2 mois offerts, Licence à vie x25).
+     - **Chapitre 3 — Options à la Carte & Dimensionnement** : Boutique d'addons organisée par catégorie (production, service, gestion, hygiène HACCP) et extension de capacités (postes supplémentaires 3 000 FCFA, utilisateurs 1 000 FCFA, blocs de 5 000 commandes). Calcul certifié en direct par la Cloud Function `computeQuote` avec suggestion intelligente d'upsell.
+     - **Chapitre 4 — Matériel & Collaborateurs Initiaux** : Sélection du format de ticket (80mm standard ou 58mm mobile), mode d'affichage cuisine (Écran KDS ou Imprimante de bons), et création des comptes collaborateurs clés avec code PIN tactile 4 chiffres.
+     - **Chapitre 5 — Facturation & Déclaration de Règlement** : Récapitulatif infalsifiable, référence d'ordre `RM-AAAA-NNNNNN`, coordonnées bancaires et Mobile Money (Orange Money, MTN MoMo, virement BICEC/Afriland, chèque), saisie de la référence de transaction et certification finale.
+  2. **Design & Ergonomie OOBE** :
+     - Typographie rigoureuse $\ge 14\text{ px}$, palette sémantique conforme (Amber marque, Success vert pour statuts payés/actifs, Info bleu pour l'installation), cibles tactiles $\ge 44\text{ px}$.
+     - `SetupStepper` visuel avec progression d'état et navigation conditionnelle protégée.
+  3. **Déclenchement Automatique Contextuel** :
+     - Déclenchement automatique pour le `setupOwner` (ou `direction`) tant que le tenant est en statut `installation` ou non certifié pour livraison.
+     - Accès de rappel permanent via le bouton « Poursuivre l'installation » du bandeau `TenantStatusBanner`.
+- **Conséquences** : Parcours d'accueil de niveau industriel, configuration personnalisée selon la spécialité culinaire du client, zéro friction lors du premier paiement et intégration transparente avec le moteur tarifaire serveur.
+
 
 
 
