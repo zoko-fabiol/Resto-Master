@@ -361,6 +361,26 @@ Ce document consigne les décisions d'architecture prises pour la livraison d'un
      - Application automatique du statut `isReadOnlyMode` pour les tenants impayés ou suspendus (`read_only`).
 - **Conséquences** : Étanchéité commerciale absolue, respect des formules tarifaires sans faille, protection contre les abus de ressources et incitation claire à l'upsell légitime.
 
+---
+
+### ADR-021 : Espace « Mon Abonnement & Boutique d'Options » pour les Exploitants
+- **Date** : 2026-10-23
+- **Statut** : Accepté & Implémenté (Phase 6 du Chantier Installation & Abonnements)
+- **Contexte** : Les restaurateurs devaient pouvoir consulter en toute autonomie et transparence les détails de leur souscription active, suivre leur consommation de quotas en temps réel, faire évoluer leur formule ou ajouter des modules métier à la carte sans dépendre d'une intervention manuelle de l'équipe support.
+- **Décision** :
+  1. **Section Dédiée `RestaurantSubscriptionSection`** :
+     - Intégrée en position numéro 0 (`orderNumber: 0`) dans la bibliothèque d'applications des paramètres (`AdminCenterView.tsx`).
+     - Affichage en direct du pack actif (Minimum, Médium, Premium), du cycle (Mensuel, Annuel avec 2 mois offerts, Licence à vie x25), de la date d'échéance et du compte à rebours en jours restants.
+  2. **Jauges Visuelles des Quotas en Direct** :
+     - Suivi instantané des 3 ressources clés : Caisses actives / `maxTerminals`, Collaborateurs / `maxUsers`, Commandes mensuelles / `maxOrdersPerMonth`.
+  3. **Boutique d'Options à la Carte & Calcul Intelligent de Devis** :
+     - Catalogue des addons filtrables par catégorie (Production, Service, Gestion, Hygiène, Finance).
+     - Détection des modules déjà inclus dans le profil métier (évite toute double facturation).
+     - Calcul certifié par `computeQuote` avec économies annuelles affichées et soumission directe de commande d'évolution (`submitSubscriptionOrder`).
+  4. **Coordonnées Bancaires & Mobile Money Locales** :
+     - Rappel clair des numéros marchands Orange Money, MTN MoMo, BICEC, Afriland First Bank pour tout règlement complémentaire.
+- **Conséquences** : Autonomie accrue des exploitants, self-service transparent, accélération des renouvellements et valorisation des options spécialisées.
+
 
 
 

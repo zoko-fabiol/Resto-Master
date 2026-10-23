@@ -125,6 +125,8 @@ export interface Tenant {
   planId: string;
   packId?: string;
   restaurantType?: string;
+  billingCycle?: string;
+  subscribedAddons?: string[];
   trialEndsAt?: string;
   subscriptionEndsAt?: string;
   company: TenantCompanyInfo;

@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useRestaurant } from '../../context/RestaurantContext';
 import {
   Building,
@@ -17,6 +17,7 @@ import {
   Receipt,
   CreditCard,
   Bell,
+  Mail,
   Printer,
   Lock,
   ShieldCheck,
@@ -44,10 +45,12 @@ import { StockAndPurchasesSection } from './sections/StockAndPurchasesSection';
 import { FiscalBillingPaymentsSection } from './sections/FiscalBillingPaymentsSection';
 import { HardwareAndSecuritySection } from './sections/HardwareAndSecuritySection';
 import { OrganizationSection } from './sections/OrganizationSection';
+import { RestaurantSubscriptionSection } from './sections/RestaurantSubscriptionSection';
 import { OnboardingWizard } from '../admin/OnboardingWizard';
 
 export type SubMenuKey =
   | 'library'
+  | 'subscription'
   // Parcours 1 : Identité & Fiscalité
   | 'general'
   | 'fiscalite'
@@ -96,6 +99,8 @@ export interface AppMetadata {
   gradient: string;
   badge?: string;
   tags: string[];
+  featureKey?: string;
+  moduleKey?: string;
 }
 
 export const AdminCenterView: React.FC = () => {
@@ -114,6 +119,8 @@ export const AdminCenterView: React.FC = () => {
     updateSettings,
     activeRestaurant,
     applyConfigProfile,
+    isFeatureEntitled,
+    isModuleEntitled,
   } = useRestaurant();
 
   const { currentUser } = useAuth();
@@ -187,6 +194,21 @@ export const AdminCenterView: React.FC = () => {
   const appLibrary: AppMetadata[] = useMemo(() => {
     const list: AppMetadata[] = [
       // =========================================================================
+      // 0. ABONNEMENT & LICENCE
+      // =========================================================================
+      {
+        key: 'subscription',
+        orderNumber: 0,
+        title: 'Mon Abonnement & Boutique',
+        category: 'identity_fiscal',
+        categoryLabel: 'Abonnement & Licence',
+        description: 'Formule active, options à la carte, quotas en direct, renouvellement et devis certifié serveur.',
+        icon: Sparkles,
+        gradient: 'from-amber-500 to-amber-600',
+        badge: 'Formule Active',
+        tags: ['abonnement', 'licence', 'pack', 'options', 'boutique', 'paiement', 'renouvellement', 'tarifs'],
+      },
+      // =========================================================================
       // 1. IDENTITÉ ET FISCALITÉ
       // =========================================================================
       {
@@ -212,6 +234,8 @@ export const AdminCenterView: React.FC = () => {
         gradient: 'from-red-600 to-rose-700',
         badge: 'CGI 2026 Conforme',
         tags: ['fiscalite', 'tva', 'cac', 'air', 'dgi', 'cameroun', 'impots', 'timbre', 'reel'],
+        featureKey: 'cameroon_fiscal_framework',
+        moduleKey: 'mod_fiscal',
       },
       {
         key: 'facturation',
@@ -224,6 +248,7 @@ export const AdminCenterView: React.FC = () => {
         gradient: 'from-emerald-600 to-green-700',
         badge: 'A5 & SYSCOHADA',
         tags: ['facture', 'facturation', 'a5', 'toutes lettres', 'avoir', 'proforma', 'syscohada', 'ohada', 'comptabilite'],
+        moduleKey: 'mod_fiscal',
       },
 
       // =========================================================================
@@ -240,6 +265,7 @@ export const AdminCenterView: React.FC = () => {
         gradient: 'from-amber-500 to-amber-600',
         badge: 'Règles POS',
         tags: ['pos', 'commande', 'ticket', 'addition', 'remise', 'annulation', 'vente'],
+        moduleKey: 'mod_pos',
       },
       {
         key: 'tables',
@@ -252,6 +278,8 @@ export const AdminCenterView: React.FC = () => {
         gradient: 'from-blue-500 to-indigo-600',
         badge: 'Plan 2D & Zones',
         tags: ['table', 'salle', 'terrasse', 'vip', 'plan', 'couverts', 'fusion', 'split'],
+        featureKey: 'tables_management',
+        moduleKey: 'mod_tables',
       },
       {
         key: 'caisse',
@@ -264,6 +292,8 @@ export const AdminCenterView: React.FC = () => {
         gradient: 'from-emerald-500 to-teal-600',
         badge: 'Sécurité Z',
         tags: ['caisse', 'fond', 'cloture', 'rapport z', 'especes', 'ecart', 'blind count'],
+        featureKey: 'cash_register_z',
+        moduleKey: 'mod_caisse',
       },
       {
         key: 'paiements',
@@ -304,6 +334,8 @@ export const AdminCenterView: React.FC = () => {
         gradient: 'from-rose-500 to-red-600',
         badge: 'KDS Chaud/Froid',
         tags: ['cuisine', 'kds', 'production', 'chaud', 'froid', 'ticket', 'preparation', 'retard'],
+        featureKey: 'kds_kitchen',
+        moduleKey: 'mod_cuisine',
       },
       {
         key: 'bar',
@@ -316,6 +348,8 @@ export const AdminCenterView: React.FC = () => {
         gradient: 'from-purple-500 to-pink-600',
         badge: 'Doses & Coulage',
         tags: ['bar', 'cocktail', 'boisson', 'vin', 'biere', 'casse', 'coulage', 'doses'],
+        featureKey: 'kds_bar',
+        moduleKey: 'mod_bar',
       },
 
       // =========================================================================
@@ -332,6 +366,8 @@ export const AdminCenterView: React.FC = () => {
         gradient: 'from-amber-600 to-orange-600',
         badge: 'FEFO Strict',
         tags: ['stock', 'fefo', 'lots', 'dlc', 'expiration', 'inventaire', 'magasin', 'negatif'],
+        featureKey: 'stock_lots_fefo',
+        moduleKey: 'mod_stock',
       },
       {
         key: 'achats',
@@ -344,6 +380,8 @@ export const AdminCenterView: React.FC = () => {
         gradient: 'from-teal-600 to-emerald-700',
         badge: 'Cycle Achat',
         tags: ['achat', 'fournisseur', 'bon de commande', 'reception', 'facture', 'approbation'],
+        featureKey: 'purchases_suppliers',
+        moduleKey: 'mod_purchases',
       },
 
       // =========================================================================
@@ -364,14 +402,14 @@ export const AdminCenterView: React.FC = () => {
       {
         key: 'notifications',
         orderNumber: 14,
-        title: 'Notifications & Alertes Système',
+        title: 'E-mails, Alertes & Passerelle GAS',
         category: 'team_access',
         categoryLabel: 'Équipe & Accès',
-        description: 'Alertes stock critique sous seuil minimum, péremption de lot (J-7), écarts caisse et bips sonores KDS.',
-        icon: Bell,
+        description: 'Passerelle e-mails Google Apps Script (100/j gratuits), alertes rupture de stock, réservations, reçus numériques et rapports Z.',
+        icon: Mail,
         gradient: 'from-amber-600 to-orange-700',
-        badge: 'Alertes Temps Réel',
-        tags: ['notification', 'alerte', 'sms', 'sonore', 'stock', 'caisse', 'peremption'],
+        badge: 'Google Apps Script',
+        tags: ['email', 'mail', 'gas', 'webhook', 'notification', 'alerte', 'sms', 'sonore', 'stock', 'caisse', 'reservation', 'ticket', 'z_report'],
       },
       {
         key: 'audit',
@@ -384,6 +422,8 @@ export const AdminCenterView: React.FC = () => {
         gradient: 'from-slate-800 to-slate-950',
         badge: 'Traçabilité Totale',
         tags: ['audit', 'journal', 'log', 'tracabilite', 'historique'],
+        featureKey: 'audit_trail_immutable',
+        moduleKey: 'mod_audit',
       },
 
       // =========================================================================
@@ -443,8 +483,30 @@ export const AdminCenterView: React.FC = () => {
       });
     }
 
-    return list;
-  }, [outlets.length]);
+    // Filtrage strict : seules les applications autorisées par l'administrateur de plateforme s'affichent
+    const isAppEntitled = (app: AppMetadata): boolean => {
+      if (app.moduleKey && !isModuleEntitled(app.moduleKey)) return false;
+      if (app.featureKey && !isFeatureEntitled(app.featureKey)) return false;
+      return true;
+    };
+
+    return list.filter(isAppEntitled);
+  }, [outlets.length, isFeatureEntitled, isModuleEntitled]);
+
+  // Repli automatique si l'application active n'est plus autorisée par l'abonnement
+  useEffect(() => {
+    if (activeSubMenu !== 'library') {
+      const isStillAvailable = appLibrary.some((a) => a.key === activeSubMenu);
+      if (!isStillAvailable) {
+        setActiveSubMenu('library');
+        showToast({
+          title: 'Rubrique Non Autorisée',
+          message: 'Cette rubrique de configuration n’est pas activée pour cet établissement.',
+          type: 'info',
+        });
+      }
+    }
+  }, [activeSubMenu, appLibrary, showToast]);
 
   // Alertes de cohérence opérationnelle
   const computedAlerts = useMemo(() => {
@@ -468,7 +530,7 @@ export const AdminCenterView: React.FC = () => {
     }
 
     const hasTables = tables.length > 0;
-    if (!hasTables) {
+    if (isModuleEntitled('mod_tables') && !hasTables) {
       list.push({
         id: 'no-tables',
         severity: 'warning',
@@ -536,6 +598,8 @@ export const AdminCenterView: React.FC = () => {
   // Rendu de la section active
   const renderActiveSection = () => {
     switch (activeSubMenu) {
+      case 'subscription':
+        return <RestaurantSubscriptionSection />;
       case 'organisation':
         return <OrganizationSection />;
       case 'general':
@@ -758,8 +822,9 @@ export const AdminCenterView: React.FC = () => {
 
           <button
             type="button"
-            onClick={() => setIsOnboardingOpen(true)}
-            className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-bold bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 transition-all cursor-pointer shadow-xs"
+            disabled={!isTrueSuperAdmin}
+            onClick={() => isTrueSuperAdmin && setIsOnboardingOpen(true)}
+            className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-bold border transition-all shadow-xs ${isTrueSuperAdmin ? 'bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border-amber-500/30 cursor-pointer' : 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed'}`}
             title="Ouvrir l'assistant de premier lancement ou revoir l'audit de livraison"
           >
             <ShieldCheck className="w-3.5 h-3.5 text-amber-400 shrink-0" />
@@ -833,7 +898,8 @@ export const AdminCenterView: React.FC = () => {
           <div className="flex items-center gap-2 shrink-0">
             <button
               type="button"
-              onClick={() => setIsOnboardingOpen(true)}
+              disabled={!isTrueSuperAdmin}
+              onClick={() => isTrueSuperAdmin && setIsOnboardingOpen(true)}
               className="px-3.5 py-2 rounded-xl bg-white border border-emerald-300 text-emerald-900 hover:bg-emerald-100 font-bold text-xs transition cursor-pointer shadow-2xs"
             >
               Revoir l'Audit & Fiche de Mise en Service
@@ -874,8 +940,9 @@ export const AdminCenterView: React.FC = () => {
 
           <button
             type="button"
-            onClick={() => setIsOnboardingOpen(true)}
-            className="px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-black text-xs transition cursor-pointer flex items-center gap-2 shrink-0 shadow-md active:scale-98"
+            disabled={!isTrueSuperAdmin}
+            onClick={() => isTrueSuperAdmin && setIsOnboardingOpen(true)}
+            className={`px-4 py-2.5 rounded-xl text-white font-black text-xs transition flex items-center gap-2 shrink-0 shadow-md active:scale-98 ${isTrueSuperAdmin ? 'bg-slate-900 hover:bg-slate-800 cursor-pointer' : 'bg-slate-400 cursor-not-allowed'}`}
           >
             <Rocket className="w-4 h-4 text-amber-400" />
             <span>Lancer l'Assistant (9 étapes)</span>
