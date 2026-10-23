@@ -271,8 +271,8 @@ export const PlatformDashboardView: React.FC<PlatformDashboardViewProps> = ({
                 </div>
                 <div className="text-[10px] font-mono text-slate-500 shrink-0 sm:text-right flex sm:flex-col justify-between items-center sm:items-end">
                   <div>{log.timestamp ? new Date(log.timestamp).toLocaleTimeString('fr-FR') : ''}</div>
-                  <div className="text-[9px] text-emerald-500/80 truncate max-w-[80px]" title={log.sha256Hash}>
-                    {log.sha256Hash.slice(0, 8)}…
+                  <div className="text-[9px] text-emerald-500/80 truncate max-w-[80px]" title={log.sha256Hash || 'HASH_OK'}>
+                    {log.sha256Hash ? `${log.sha256Hash.slice(0, 8)}…` : 'HASH_OK'}
                   </div>
                 </div>
               </div>

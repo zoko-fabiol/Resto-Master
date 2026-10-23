@@ -45,11 +45,12 @@ export const tauriPlatform: Platform = {
     printRaw: async (data, target) => {
       const { invoke } = await loadCore();
       if (target?.host) {
-        return invoke<{ target: 'native' }>('print_tcp', {
+        await invoke('print_tcp', {
           host: target.host,
           port: target.port ?? 9100,
           bytes: Array.from(data),
         });
+        return { target: 'native' };
       }
       if (target?.printerId) {
         await invoke('print_windows', {

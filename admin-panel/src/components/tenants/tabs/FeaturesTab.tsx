@@ -104,14 +104,36 @@ export const FeaturesTab: React.FC<FeaturesTabProps> = ({
 
     try {
       setIsSaving(true);
+
+      // Calcul dynamique et synchronisation des modules selon les fonctionnalités autorisées
+      const computedModules: Record<string, boolean> = { ...(entitlements?.modules || {}) };
+      for (const feat of FEATURE_CATALOG) {
+        const isActive = localFeatures[feat.id]?.status === 'ACTIVÉ';
+        if (feat.moduleKey) {
+          if (isActive) {
+            computedModules[feat.moduleKey] = true;
+          } else {
+            const hasOtherActive = FEATURE_CATALOG.some(
+              (other) => other.id !== feat.id && other.moduleKey === feat.moduleKey && localFeatures[other.id]?.status === 'ACTIVÉ'
+            );
+            computedModules[feat.moduleKey] = hasOtherActive;
+          }
+        }
+      }
+      // Raccordement spécifique pour les réservations (res_management)
+      if (localFeatures['table_reservations']) {
+        computedModules['res_management'] = localFeatures['table_reservations'].status === 'ACTIVÉ';
+      }
+
       await adminPlatformService.updateTenantEntitlements({
         orgId: tenant.id,
         features: localFeatures,
+        modules: computedModules,
         lockedConfigKeys: lockedKeys,
         reason: reason.trim(),
       });
       setHasChanges(false);
-      alert('Fonctionnalités mises à jour avec succès dans le cloud.');
+      alert('Fonctionnalités et modules mis à jour avec succès dans le cloud.');
     } catch (err: any) {
       alert(`Erreur de sauvegarde : ${err?.message || 'Échec de communication'}`);
     } finally {

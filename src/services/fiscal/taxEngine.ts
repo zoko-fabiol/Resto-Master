@@ -81,6 +81,17 @@ export class TaxEngine {
   }
 
   /**
+   * Calcule le droit de timbre de quittance (CGI Cameroun 2026)
+   * Applicable sur les règlements en espèces dès 5 000 FCFA :
+   * 100 FCFA par tranche entamée de 20 000 FCFA.
+   */
+  public static calculateStampDuty(amountCash: number): number {
+    if (amountCash < 5000) return 0;
+    const tranches = Math.ceil(amountCash / 20000);
+    return Math.min(tranches * 100, 2000);
+  }
+
+  /**
    * Génère le numéro de facture chronologique immuable
    * Format: {EXERCICE}-{PREFIX}-{SEQUENCE_6_CHIFFRES} (ex: 2026-RESTO-001-000042)
    */

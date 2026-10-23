@@ -12,6 +12,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import os from 'node:os';
 import { execSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
@@ -55,6 +56,12 @@ function main() {
   // 1. Audit préalable
   console.log('[1/4] Validation de l hygiène du code (check:demo)...');
   try {
+    execSync('npm run check:dist -- --mode web', { cwd: ROOT_DIR, stdio: 'inherit' });
+  } catch {
+    console.error('[✗] Échec du contrôle dist. Création du zip annulée.');
+    process.exit(1);
+  }
+  try {
     execSync('npm run check:demo', { cwd: ROOT_DIR, stdio: 'inherit' });
   } catch {
     console.error('[✗] Échec de l audit check:demo. Création du zip annulée.');
@@ -80,19 +87,43 @@ function main() {
   try {
     // bsdtar supporte le format zip avec l'option -a
     const quotedEntries = existingEntries.map((e) => `"${e}"`).join(' ');
-    const cmd = `tar -a -cf "${ZIP_OUTPUT}" --exclude="node_modules" --exclude="dist" --exclude=".env" --exclude=".git" ${quotedEntries}`;
+    const cmd = `tar -a -cf "${ZIP_OUTPUT}" --exclude="node_modules" --exclude="dist" --exclude="functions/lib" --exclude="functions/node_modules" --exclude="release" --exclude="src-tauri/target" --exclude=".env" --exclude=".git" ${quotedEntries}`;
     execSync(cmd, { cwd: ROOT_DIR, stdio: 'pipe' });
     success = fs.existsSync(ZIP_OUTPUT) && fs.statSync(ZIP_OUTPUT).size > 0;
   } catch (tarErr) {
     console.warn('Fallback vers PowerShell Compress-Archive...');
+    const stagingDir = fs.mkdtempSync(path.join(os.tmpdir(), 'restomaster-release-'));
     try {
-      const psEntries = existingEntries.map((e) => `'${path.join(ROOT_DIR, e)}'`).join(',');
-      const psCmd = `powershell -NoProfile -Command "Compress-Archive -Path ${psEntries} -DestinationPath '${ZIP_OUTPUT}' -Force"`;
+      for (const entry of existingEntries) {
+        const source = path.join(ROOT_DIR, entry);
+        const destination = path.join(stagingDir, entry);
+        fs.cpSync(source, destination, {
+          recursive: true,
+          filter: (sourcePath) => {
+            const relativePath = path.relative(ROOT_DIR, sourcePath).replaceAll('\\', '/');
+            return ![
+              'node_modules',
+              'dist',
+              'functions/lib',
+              'functions/node_modules',
+              'release',
+              'src-tauri/target',
+              '.env',
+              '.git',
+            ].some((excludedPath) =>
+              relativePath === excludedPath || relativePath.startsWith(`${excludedPath}${path.sep}`)
+            );
+          },
+        });
+      }
+      const psCmd = `powershell -NoProfile -Command "Compress-Archive -Path '${stagingDir}\\*' -DestinationPath '${ZIP_OUTPUT}' -Force"`;
       execSync(psCmd, { cwd: ROOT_DIR, stdio: 'pipe' });
       success = fs.existsSync(ZIP_OUTPUT) && fs.statSync(ZIP_OUTPUT).size > 0;
     } catch (psErr) {
       console.error('[✗] Erreur lors de la compression:', psErr);
       process.exit(1);
+    } finally {
+      fs.rmSync(stagingDir, { recursive: true, force: true });
     }
   }
 

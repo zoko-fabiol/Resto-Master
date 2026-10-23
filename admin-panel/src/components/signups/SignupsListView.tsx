@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { UserPlus, CheckCircle2, XCircle, Clock, MapPin, Mail, Phone, ExternalLink } from 'lucide-react';
+import { UserPlus, CheckCircle2, XCircle, Clock, MapPin, Mail, Phone, ExternalLink, Settings, Lock } from 'lucide-react';
 import { TenantSignupRequest, DEFAULT_PLANS, Plan } from '@shared';
 import { adminPlatformService } from '../../services/adminPlatformService';
+import { GasWebhookConfigModal } from './GasWebhookConfigModal';
 
 interface SignupsListViewProps {
   signups: TenantSignupRequest[];
@@ -11,6 +12,7 @@ interface SignupsListViewProps {
 export const SignupsListView: React.FC<SignupsListViewProps> = ({ signups, onRefresh }) => {
   const [filter, setFilter] = useState<'all' | 'en_attente' | 'approuvee' | 'rejetee'>('en_attente');
   const [processingId, setProcessingId] = useState<string | null>(null);
+  const [isEmailConfigOpen, setIsEmailConfigOpen] = useState(false);
 
   const filteredSignups = signups.filter((s) => {
     if (filter === 'all') return true;
@@ -30,7 +32,12 @@ export const SignupsListView: React.FC<SignupsListViewProps> = ({ signups, onRef
       });
 
       alert(
-        `Inscription approuvée avec succès !\n\nRestaurant ID : ${res.orgId}\nLien de mot de passe : ${res.passwordResetLink}`
+        `Inscription approuvée avec succès ! 🎉\n\n` +
+        `🏢 Établissement : ${signup.companyName}\n` +
+        `🔑 Code Restaurant : ${res.restaurantCode}\n` +
+        `✉️ Identifiant E-mail : ${res.email}\n` +
+        `🔒 Mot de passe : ${res.password}\n\n` +
+        `📧 E-mail d'activation : ${res.emailSent ? 'Transmis avec succès via Google Apps Script' : res.emailMessage}`
       );
       if (onRefresh) onRefresh();
     } catch (err: any) {
@@ -75,26 +82,36 @@ export const SignupsListView: React.FC<SignupsListViewProps> = ({ signups, onRef
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-1 bg-slate-900 p-1 rounded-xl border border-slate-800 w-full sm:w-auto">
-          {(['en_attente', 'approuvee', 'rejetee', 'all'] as const).map((st) => (
-            <button
-              key={st}
-              onClick={() => setFilter(st)}
-              className={`flex-1 sm:flex-none text-center px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                filter === st
-                  ? 'bg-amber-500 text-slate-950 shadow-xs'
-                  : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              {st === 'en_attente'
-                ? 'En attente'
-                : st === 'approuvee'
-                ? 'Approuvées'
-                : st === 'rejetee'
-                ? 'Rejetées'
-                : 'Toutes'}
-            </button>
-          ))}
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={() => setIsEmailConfigOpen(true)}
+            className="px-3.5 py-2 rounded-xl bg-amber-500/10 border border-amber-500/30 hover:bg-amber-500/20 text-amber-400 font-bold transition flex items-center gap-2 cursor-pointer shadow-xs"
+          >
+            <Mail className="w-4 h-4" />
+            <span>Passerelle E-mail (Google Apps Script)</span>
+          </button>
+
+          <div className="flex flex-wrap items-center gap-1 bg-slate-900 p-1 rounded-xl border border-slate-800 w-full sm:w-auto">
+            {(['en_attente', 'approuvee', 'rejetee', 'all'] as const).map((st) => (
+              <button
+                key={st}
+                onClick={() => setFilter(st)}
+                className={`flex-1 sm:flex-none text-center px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  filter === st
+                    ? 'bg-amber-500 text-slate-950 shadow-xs'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                {st === 'en_attente'
+                  ? 'En attente'
+                  : st === 'approuvee'
+                  ? 'Approuvées'
+                  : st === 'rejetee'
+                  ? 'Rejetées'
+                  : 'Toutes'}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -155,6 +172,23 @@ export const SignupsListView: React.FC<SignupsListViewProps> = ({ signups, onRef
                       <span className="font-mono tabular-nums text-white">{signup.estimatedTables}</span>
                     </div>
                   )}
+                  {signup.restaurantCode && (
+                    <div className="flex justify-between items-center pt-1 border-t border-slate-800/80">
+                      <span className="text-amber-400 font-semibold">Code Restaurant :</span>
+                      <span className="font-mono font-bold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-lg border border-amber-500/20">
+                        {signup.restaurantCode}
+                      </span>
+                    </div>
+                  )}
+                  {signup.initialPassword ? (
+                    <div className="flex justify-between items-center text-[11px]">
+                      <span className="text-slate-400 flex items-center gap-1">
+                        <Lock className="w-3 h-3 text-emerald-400" />
+                        <span>Mot de passe :</span>
+                      </span>
+                      <span className="font-mono text-emerald-400 font-bold">Défini à l'inscription</span>
+                    </div>
+                  ) : null}
                 </div>
               </div>
 
@@ -195,6 +229,11 @@ export const SignupsListView: React.FC<SignupsListViewProps> = ({ signups, onRef
           </div>
         )}
       </div>
+
+      <GasWebhookConfigModal
+        isOpen={isEmailConfigOpen}
+        onClose={() => setIsEmailConfigOpen(false)}
+      />
     </div>
   );
 };

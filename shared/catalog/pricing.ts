@@ -13,7 +13,8 @@ import {
   DEFAULT_CATALOG_SETTINGS,
   CatalogSettings,
   RESTAURANT_TYPES,
-} from './packs';
+  AddonDefinition,
+} from './packs.js';
 
 export interface ExtraCapacities {
   extraUsers?: number;
@@ -143,7 +144,7 @@ export function computeQuote(input: ComputeQuoteInput): QuoteResult {
   const selectedAddons = input.selectedAddonIds || [];
 
   for (const addonId of selectedAddons) {
-    const addon = CATALOG_ADDONS.find((a) => a.id === addonId || a.key === addonId);
+    const addon = CATALOG_ADDONS.find((a: AddonDefinition) => a.id === addonId || a.key === addonId);
     if (!addon) continue;
 
     // Si le module lié à cette option est déjà inclus d'office dans ce pack, l'option est offerte / inutile de facturer

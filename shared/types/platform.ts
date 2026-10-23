@@ -62,6 +62,8 @@ export interface TenantSignupRequest {
   applicantName: string;
   desiredPlanId: string;
   estimatedTables?: number;
+  initialPassword?: string;
+  restaurantCode?: string;
   status: 'en_attente' | 'approuvee' | 'rejetee';
   rejectionReason?: string;
   submittedAt: string;

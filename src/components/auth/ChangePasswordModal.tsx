@@ -50,6 +50,7 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({ isOpen
       const userRef = doc(db, 'users', currentFbUser.uid);
       await updateDoc(userRef, {
         mustChangePassword: false,
+        isFirstLogin: false,
         updatedAt: new Date().toISOString(),
       });
 
@@ -57,6 +58,7 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({ isOpen
       setCurrentUser((prev) => ({
         ...prev,
         mustChangePassword: false,
+        isFirstLogin: false,
       }));
 
       onSuccess();

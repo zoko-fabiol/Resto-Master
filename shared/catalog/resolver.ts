@@ -10,7 +10,7 @@ import {
   TenantFeatureEntitlement,
   TenantStatus,
   TenantSuspensionMode,
-} from '../types/tenant';
+} from '../types/tenant.js';
 import {
   PackId,
   RestaurantTypeId,
@@ -19,9 +19,10 @@ import {
   RESTAURANT_TYPES,
   CORE_MODULES,
   CAPACITY_PRICING,
-} from './packs';
-import { ExtraCapacities } from './pricing';
-import { FEATURE_CATALOG } from '../types/features';
+  AddonDefinition,
+} from './packs.js';
+import { ExtraCapacities } from './pricing.js';
+import { FEATURE_CATALOG, FeatureDefinition } from '../types/features.js';
 
 export interface ResolveEntitlementsInput {
   orgId: string;
@@ -136,7 +137,7 @@ export function resolveEntitlements(input: ResolveEntitlementsInput): TenantEnti
 
   // C. Activer les modules liés aux options souscrites à la carte
   for (const addonId of subscribedAddons) {
-    const addon = CATALOG_ADDONS.find((a) => a.id === addonId || a.key === addonId);
+    const addon = CATALOG_ADDONS.find((a: AddonDefinition) => a.id === addonId || a.key === addonId);
     if (addon?.moduleKey) {
       modules[addon.moduleKey] = true;
     }
@@ -165,7 +166,7 @@ export function resolveEntitlements(input: ResolveEntitlementsInput): TenantEnti
 
     // Si une option spécifique active directement cette feature
     const matchingAddon = CATALOG_ADDONS.find(
-      (a) => a.featureKey === feat.key && subscribedAddons.includes(a.id)
+      (a: AddonDefinition) => a.featureKey === feat.key && subscribedAddons.includes(a.id)
     );
     if (matchingAddon && isModuleActive) {
       isFeatActive = true;
@@ -175,7 +176,7 @@ export function resolveEntitlements(input: ResolveEntitlementsInput): TenantEnti
     if (feat.dependencies && feat.dependencies.length > 0) {
       for (const depKey of feat.dependencies) {
         // Si une dépendance n'est pas remplie, la feature ne peut être active
-        const depFeat = FEATURE_CATALOG.find((f) => f.key === depKey);
+        const depFeat = FEATURE_CATALOG.find((f: FeatureDefinition) => f.key === depKey);
         if (depFeat && !modules[depFeat.moduleKey]) {
           isFeatActive = false;
         }

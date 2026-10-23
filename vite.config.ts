@@ -8,12 +8,17 @@ import { defineConfig } from 'vite';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-export default defineConfig(() => {
+export default defineConfig(({ mode }) => {
+  const isDesktopBuild = mode === 'tauri' || mode === 'electron';
   return {
+    base: isDesktopBuild ? './' : '/',
+    define: {
+      __BUILD_ID__: JSON.stringify(new Date().toISOString()),
+    },
     plugins: [
       react(),
       tailwindcss(),
-      VitePWA({
+      ...(!isDesktopBuild ? [VitePWA({
         registerType: 'autoUpdate',
         includeAssets: [
           'favicon.svg',
@@ -56,7 +61,7 @@ export default defineConfig(() => {
             },
           ],
         },
-      }),
+      })] : []),
     ],
     resolve: {
       alias: {
@@ -65,6 +70,7 @@ export default defineConfig(() => {
       },
     },
     build: {
+      emptyOutDir: true,
       chunkSizeWarningLimit: 1000,
       rollupOptions: {
         output: {

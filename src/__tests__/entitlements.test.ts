@@ -149,4 +149,87 @@ describe('Phase 3 — Logique de Résolution des Droits (Entitlements)', () => {
     expect(isModuleEntitled('mod_stock', ent)).toBe(true);
     expect(isModuleEntitled('mod_pos', ent)).toBe(true); // non renseigné => default true
   });
+
+  it('scénario utilisateur : activation de Plan de table et Réservations par l’admin débloque leur affichage dans la configuration restaurant', () => {
+    // 1. Initialement : l'admin n'a pas activé Plan de table ni Réservations pour ce restaurant
+    const entitlementsSansTables: TenantEntitlements = {
+      orgId: 'tenant_fastfood',
+      features: {
+        tables_management: { status: 'DÉSACTIVÉ', source: 'plan', activatedBy: 'admin', activatedAt: '2026-10-22T00:00:00Z' },
+        table_reservations: { status: 'DÉSACTIVÉ', source: 'plan', activatedBy: 'admin', activatedAt: '2026-10-22T00:00:00Z' },
+      },
+      modules: {
+        mod_tables: false,
+        res_management: false,
+        mod_pos: true,
+      },
+      operationRules: {},
+      lockedConfigKeys: [],
+      effectiveLimits: { maxOutlets: 1, maxUsers: 5, maxTerminals: 2, maxOrdersPerMonth: 5000 },
+      updatedAt: '2026-10-22T00:00:00Z',
+      updatedBy: 'admin',
+    };
+
+    const isAppEntitled = (
+      app: { featureKey?: string; moduleKey?: string },
+      ent: TenantEntitlements
+    ): boolean => {
+      if (app.moduleKey && ent.modules && ent.modules[app.moduleKey] !== undefined) {
+        if (!ent.modules[app.moduleKey]) return false;
+      }
+      if (app.featureKey && ent.features && ent.features[app.featureKey]) {
+        if (ent.features[app.featureKey].status !== 'ACTIVÉ') return false;
+      }
+      return true;
+    };
+
+    const tableApp = {
+      key: 'tables',
+      featureKey: 'tables_management',
+      moduleKey: 'mod_tables',
+    };
+
+    // Dans le centre de configuration du restaurant, l'app Tables est masquée
+    expect(isAppEntitled(tableApp, entitlementsSansTables)).toBe(false);
+
+    // 2. L'admin active Plan de table et Réservations dans admin-panel
+    const entitlementsAvecTables: TenantEntitlements = {
+      ...entitlementsSansTables,
+      features: {
+        tables_management: { status: 'ACTIVÉ', source: 'override', activatedBy: 'admin', activatedAt: '2026-10-22T00:00:00Z' },
+        table_reservations: { status: 'ACTIVÉ', source: 'override', activatedBy: 'admin', activatedAt: '2026-10-22T00:00:00Z' },
+      },
+      modules: {
+        mod_tables: true,
+        res_management: true,
+        mod_pos: true,
+      },
+    };
+
+    // Dès synchronisation Firestore, l'app Tables apparaît dans la bibliothèque de configuration
+    expect(isAppEntitled(tableApp, entitlementsAvecTables)).toBe(true);
+
+    // 3. Dans la liste des modules (FeaturesAndModulesSection), le gestionnaire de restaurant peut désormais choisir
+    // d'activer ou non le module dans son exploitation quotidienne
+    const sidebarModules = [
+      { key: 'mod_pos', label: 'Prise de commande' },
+      { key: 'mod_tables', label: 'Plan des tables & Salles' },
+      { key: 'res_management', label: 'Cahier de Réservations' },
+      { key: 'mod_cuisine', label: 'Cuisine KDS' },
+    ];
+
+    const getEntitledModules = (ent: TenantEntitlements) =>
+      sidebarModules.filter((m) => ent.modules[m.key] !== false);
+
+    // Avant activation admin : Tables et Réservations absents
+    const modulesAvant = getEntitledModules(entitlementsSansTables);
+    expect(modulesAvant.some((m) => m.key === 'mod_tables')).toBe(false);
+    expect(modulesAvant.some((m) => m.key === 'res_management')).toBe(false);
+
+    // Après activation admin : Tables et Réservations sont disponibles et le restaurant manager peut les activer
+    const modulesApres = getEntitledModules(entitlementsAvecTables);
+    expect(modulesApres.some((m) => m.key === 'mod_tables')).toBe(true);
+    expect(modulesApres.some((m) => m.key === 'res_management')).toBe(true);
+  });
 });
+

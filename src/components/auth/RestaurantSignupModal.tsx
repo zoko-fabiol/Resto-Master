@@ -1,4 +1,4 @@
-﻿import React, { useState } from 'react';
+import React, { useState } from 'react';
 import {
   Utensils,
   X,
@@ -11,8 +11,12 @@ import {
   Mail,
   MapPin,
   Sparkles,
+  Lock,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 import { cloudFunctionsService } from '../../services/functions/cloudFunctionsService';
+import { firebaseConfig } from '../../lib/firebase';
 import { DEFAULT_PLANS } from '../../../shared/types/plans';
 
 // TEMPORAIRE : ce formulaire public sera remplacé par une création de compte
@@ -34,19 +38,36 @@ export const RestaurantSignupModal: React.FC<RestaurantSignupModalProps> = ({
   const [email, setEmail] = useState('');
   const [desiredPlanId, setDesiredPlanId] = useState('plan_pro');
   const [estimatedTables, setEstimatedTables] = useState<number>(15);
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
 
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [submittedSignupId, setSubmittedSignupId] = useState<string | null>(null);
+  const [diagnostic, setDiagnostic] = useState<{ message: string; code: string } | null>(null);
+  const [isTestingConnection, setIsTestingConnection] = useState(false);
+  const [connectionTestMessage, setConnectionTestMessage] = useState('');
 
   if (!isOpen) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage('');
+    setDiagnostic(null);
 
-    if (!companyName.trim() || !applicantName.trim() || !phone.trim() || !email.trim()) {
-      setErrorMessage('Veuillez renseigner tous les champs obligatoires.');
+    if (!companyName.trim() || !applicantName.trim() || !phone.trim() || !email.trim() || !password) {
+      setErrorMessage('Veuillez renseigner tous les champs obligatoires dont votre mot de passe.');
+      return;
+    }
+
+    if (password.length < 6) {
+      setErrorMessage('Le mot de passe doit comporter au moins 6 caractères.');
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      setErrorMessage('Les deux mots de passe saisis ne correspondent pas.');
       return;
     }
 
@@ -63,21 +84,48 @@ export const RestaurantSignupModal: React.FC<RestaurantSignupModalProps> = ({
         applicantName: applicantName.trim(),
         desiredPlanId,
         estimatedTables,
+        initialPassword: password,
       });
 
       setSubmittedSignupId(res.signupId);
-    } catch (err: any) {
-      setErrorMessage(
-        err?.message || 'Erreur lors de la soumission de votre demande. Veuillez réessayer.'
-      );
+    } catch (err: unknown) {
+      const code = (err as { code?: string }).code ?? 'unknown';
+      const message =
+        err instanceof Error && err.message
+          ? err.message
+          : 'Une erreur inattendue est survenue. Contactez le support.';
+      setDiagnostic({ code, message });
+      setErrorMessage(message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleConnectionTest = async () => {
+    setIsTestingConnection(true);
+    setConnectionTestMessage('');
+    try {
+      await cloudFunctionsService.submitSignup({});
+      setConnectionTestMessage('Le service est joignable.');
+    } catch (error: unknown) {
+      const code = (error as { code?: string }).code ?? 'unknown';
+      const message = error instanceof Error ? error.message : 'Erreur inconnue.';
+      setDiagnostic({ code, message });
+      setConnectionTestMessage(
+        code === 'functions/invalid-argument'
+          ? 'Le service est joignable. La validation répond correctement.'
+          : message
+      );
+    } finally {
+      setIsTestingConnection(false);
     }
   };
 
   const handleResetAndClose = () => {
     setSubmittedSignupId(null);
     setErrorMessage('');
+    setDiagnostic(null);
+    setConnectionTestMessage('');
     onClose();
   };
 
@@ -105,6 +153,7 @@ export const RestaurantSignupModal: React.FC<RestaurantSignupModalProps> = ({
 
         {/* Content */}
         <div className="p-6 overflow-y-auto">
+
           {submittedSignupId ? (
             /* Écran de Confirmation & Attente d'examen */
             <div className="text-center py-6 space-y-4 animate-in zoom-in-95 duration-200">
@@ -124,7 +173,7 @@ export const RestaurantSignupModal: React.FC<RestaurantSignupModalProps> = ({
                   <span>Prochaines étapes :</span>
                 </div>
                 <p>1. Notre équipe commerciale examine votre configuration et valide votre plan.</p>
-                <p>2. Vous recevrez un e-mail à <span className="text-white font-medium">{email}</span> contenant le lien d'initialisation de votre compte Propriétaire.</p>
+                <p>2. Notre équipe vous contactera par téléphone ou WhatsApp, ou par e-mail à <span className="text-white font-medium">{email}</span>, pour initialiser votre compte Propriétaire.</p>
                 <p>3. Votre essai gratuit de 14 jours débutera dès votre première connexion.</p>
               </div>
               <div className="pt-2">
@@ -145,6 +194,26 @@ export const RestaurantSignupModal: React.FC<RestaurantSignupModalProps> = ({
                   <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-rose-400" />
                   <span>{errorMessage}</span>
                 </div>
+              )}
+              {(diagnostic || connectionTestMessage) && (
+                <details className="rounded-xl border border-slate-700 bg-slate-950/60 p-3 text-xs text-slate-400">
+                  <summary className="cursor-pointer font-semibold text-slate-300">Détails techniques</summary>
+                  <div className="mt-3 space-y-1 font-mono">
+                    {connectionTestMessage && <p>{connectionTestMessage}</p>}
+                    {diagnostic && <p>Code : {diagnostic.code}</p>}
+                    <p>Build : {__BUILD_ID__}</p>
+                    <p>Mode : {import.meta.env.MODE}</p>
+                    <p>Projet Firebase : {firebaseConfig.projectId || 'non configuré'}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleConnectionTest}
+                    disabled={isTestingConnection}
+                    className="mt-3 rounded-lg border border-slate-600 px-3 py-2 text-xs font-semibold text-slate-200 hover:bg-slate-800 disabled:opacity-60"
+                  >
+                    {isTestingConnection ? 'Test en cours…' : 'Tester la connexion'}
+                  </button>
+                </details>
               )}
 
               {/* Établissement */}
@@ -265,6 +334,51 @@ export const RestaurantSignupModal: React.FC<RestaurantSignupModalProps> = ({
                   placeholder="contact@votre-restaurant.cm"
                   className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500"
                 />
+              </div>
+
+              {/* Mot de passe du compte Superadmin Propriétaire */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+                      <Lock className="w-3.5 h-3.5 text-amber-400" />
+                      <span>Mot de passe *</span>
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="text-[11px] text-slate-400 hover:text-amber-400 flex items-center gap-1 transition"
+                    >
+                      {showPassword ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+                      <span>{showPassword ? 'Masquer' : 'Afficher'}</span>
+                    </button>
+                  </div>
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    required
+                    minLength={6}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="Min. 6 caractères"
+                    className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+                    <Lock className="w-3.5 h-3.5 text-amber-400" />
+                    <span>Confirmer le mot de passe *</span>
+                  </label>
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    required
+                    minLength={6}
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    placeholder="Répétez le mot de passe"
+                    className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  />
+                </div>
               </div>
 
               {/* Choix du plan */}

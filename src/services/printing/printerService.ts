@@ -1,4 +1,4 @@
-﻿import { Order, OrderItem, RestaurantSettings } from '../../types/restaurant';
+import { Order, OrderItem, RestaurantSettings } from '../../types/restaurant';
 import { Peripheral } from '../../types/configuration';
 import {
   buildClientReceiptEscPos,
@@ -7,7 +7,7 @@ import {
   buildTestTicketEscPos,
   EscPosBuilder,
 } from './escposGenerator';
-import { isTauri, platform } from '../../platform';
+import { isDesktop, platform } from '../../platform';
 
 export interface PrinterDiscoveryResult {
   name: string;
@@ -175,7 +175,7 @@ export class PrinterService {
 
     // 2. Network IP (Ethernet / Wi-Fi) TCP Port 9100 / Local Print Bridge
     if (peripheral.connectionType === 'reseau_ip') {
-      if (isTauri()) {
+      if (isDesktop()) {
         try {
           await platform.printing.printRaw(data, {
             host: peripheral.address,

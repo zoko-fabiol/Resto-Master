@@ -186,8 +186,38 @@ export interface CreateTenantRequest {
   profileType?: string;
   channel?: 'stable' | 'beta';
   currency?: 'FCFA' | 'EUR' | 'USD' | 'CAD' | 'GBP';
+  initialPassword?: string;
   reason: string;
   ticketNumber?: string;
+}
+
+export interface InitialSetupRequest {
+  setupSessionId: string;
+  companyName: string;
+  legalName?: string;
+  legalForm?: 'SARL' | 'SA' | 'SAS' | 'ETS' | 'GIC' | 'AUTRE';
+  taxId?: string;
+  rccm?: string;
+  taxCenter?: string;
+  city: string;
+  country?: string;
+  address: string;
+  phone: string;
+  email: string;
+  ownerName: string;
+  ownerEmail: string;
+  ownerPhone?: string;
+  planId?: string;
+  profileType?: string;
+  channel?: 'stable' | 'beta';
+  currency?: 'FCFA' | 'EUR' | 'USD' | 'CAD' | 'GBP';
+  reason: string;
+  ticketNumber?: string;
+}
+
+export interface CompleteRestaurantSetupRequest {
+  setupSessionId?: string;
+  reason: string;
 }
 
 export interface SetTenantStatusRequest {
@@ -312,4 +342,3 @@ export interface ExportTenantDataRequest {
   orgId: string;
   reason: string;
 }
-

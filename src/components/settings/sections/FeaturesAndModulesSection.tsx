@@ -121,6 +121,8 @@ export const FeaturesAndModulesSection: React.FC = () => {
     updateFeatureConfig,
     operationRules,
     updateOperationRules,
+    isModuleEntitled,
+    isFeatureEntitled,
   } = useRestaurant();
   const { currentUser } = useAuth();
   const { showToast } = useToast();
@@ -206,6 +208,10 @@ export const FeaturesAndModulesSection: React.FC = () => {
     { key: 'mod_reports', label: 'Rapports & Statistiques', description: 'Chiffre d’affaires, marges et exports SYSCOHADA', icon: BarChart3 },
   ];
 
+  const entitledSidebarModules = useMemo(() => {
+    return sidebarModulesList.filter((m) => isModuleEntitled(m.key));
+  }, [sidebarModulesList, isModuleEntitled]);
+
   // État onglet Packs
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'ACTIVÉ' | 'SUSPENDU' | 'DÉSACTIVÉ' | 'recommended' | 'advanced' | 'experimental'>('all');
@@ -214,10 +220,14 @@ export const FeaturesAndModulesSection: React.FC = () => {
   const [localConfig, setLocalConfig] = useState<Record<string, any>>({});
   const [criticalModal, setCriticalModal] = useState<{ feature: FeatureItem; targetStatus: FeatureStatus } | null>(null);
 
+  const entitledFeatures = useMemo(() => {
+    return features.filter((f) => isFeatureEntitled(f.id));
+  }, [features, isFeatureEntitled]);
+
   const selectedFeature = useMemo(() => {
     if (!selectedFeatureId) return null;
-    return features.find((f) => f.id === selectedFeatureId) || null;
-  }, [features, selectedFeatureId]);
+    return entitledFeatures.find((f) => f.id === selectedFeatureId) || null;
+  }, [entitledFeatures, selectedFeatureId]);
 
   const handleOpenFeatureModal = (feature: FeatureItem) => {
     setSelectedFeatureId(feature.id);
@@ -260,7 +270,7 @@ export const FeaturesAndModulesSection: React.FC = () => {
   };
 
   const filteredFeatures = useMemo(() => {
-    return features.filter((f) => {
+    return entitledFeatures.filter((f) => {
       const q = searchQuery.toLowerCase().trim();
       const matchSearch =
         !q ||
@@ -284,7 +294,7 @@ export const FeaturesAndModulesSection: React.FC = () => {
       const matchCategory = categoryFilter === 'all' || f.category === categoryFilter;
       return matchSearch && matchStatus && matchCategory;
     });
-  }, [features, searchQuery, statusFilter, categoryFilter]);
+  }, [entitledFeatures, searchQuery, statusFilter, categoryFilter]);
 
   const handleStatusChange = (feature: FeatureItem, newStatus: FeatureStatus) => {
     if (!isSuperAdmin) {
@@ -344,7 +354,7 @@ export const FeaturesAndModulesSection: React.FC = () => {
             <Layers className="w-3.5 h-3.5 text-amber-500" />
             <span>Menu Latéral & Modules</span>
             <span className="text-[10px] tabular-nums bg-slate-200 px-1.5 py-0.5 rounded-md font-black">
-              {sidebarModulesList.length}
+              {entitledSidebarModules.length}
             </span>
           </button>
           <button
@@ -359,7 +369,7 @@ export const FeaturesAndModulesSection: React.FC = () => {
             <Sparkles className="w-3.5 h-3.5 text-indigo-500" />
             <span>Packs & Licences</span>
             <span className="text-[10px] tabular-nums bg-indigo-100 text-indigo-800 px-1.5 py-0.5 rounded-md font-black">
-              {features.length}
+              {entitledFeatures.length}
             </span>
           </button>
         </div>
@@ -405,7 +415,7 @@ export const FeaturesAndModulesSection: React.FC = () => {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
-            {sidebarModulesList.map((m) => {
+            {entitledSidebarModules.map((m) => {
               const isChecked = options[m.key] ?? true;
               return (
                 <ModernRuleToggle

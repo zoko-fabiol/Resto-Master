@@ -21,6 +21,7 @@ import {
   MapPin,
   Check,
   Lock,
+  LogOut,
   Key,
   Tablet,
   Monitor,
@@ -85,7 +86,7 @@ export const Header: React.FC<HeaderProps> = ({
   openUserGuide,
   openOnboarding,
 }) => {
-  const { currentUser, lockSession } = useAuth();
+  const { currentUser, lockSession, logout } = useAuth();
   const confirm = useConfirm();
   const {
     notifications,
@@ -133,6 +134,20 @@ export const Header: React.FC<HeaderProps> = ({
 
   const tabInfo = TAB_TITLES[currentTab] || { title: 'RestoMaster', subtitle: 'Gestion de restaurant' };
   const currentRoleLabel = ROLE_LABELS[currentUser.role] || { label: currentUser.role, color: 'bg-gray-100 text-gray-800' };
+
+  const handleLogout = async () => {
+    const ok = await confirm({
+      title: 'Déconnexion du compte',
+      message: 'Voulez-vous vraiment vous déconnecter de RestoMaster OS ? Vous devrez saisir à nouveau vos identifiants pour accéder à ce restaurant.',
+      confirmText: 'Se déconnecter',
+      cancelText: 'Rester connecté',
+      variant: 'danger',
+    });
+    if (ok) {
+      setRoleMenuOpen(false);
+      await logout();
+    }
+  };
 
   return (
     <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-xs min-w-0">
@@ -347,6 +362,17 @@ export const Header: React.FC<HeaderProps> = ({
                     <Key className="w-3.5 h-3.5" />
                     <span>Modifier mon code PIN</span>
                   </button>
+
+                  <div className="pt-1 border-t border-amber-200/60">
+                    <button
+                      type="button"
+                      onClick={handleLogout}
+                      className="w-full flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg bg-white hover:bg-rose-50 text-rose-700 hover:text-rose-800 text-xs font-bold border border-rose-200 shadow-2xs transition-colors cursor-pointer"
+                    >
+                      <LogOut className="w-3.5 h-3.5 text-rose-600" />
+                      <span>Se déconnecter</span>
+                    </button>
+                  </div>
                 </div>
               </div>
             )}
@@ -433,11 +459,21 @@ export const Header: React.FC<HeaderProps> = ({
           {/* Quick Lock Session Button */}
           <button
             onClick={() => lockSession()}
-            className="p-1.5 rounded-lg text-slate-500 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+            className="p-1.5 rounded-lg text-slate-500 hover:text-amber-600 hover:bg-amber-50 transition-colors cursor-pointer"
             title="Verrouiller la session (Code PIN requis)"
             aria-label="Verrouiller"
           >
             <Lock className="w-4 h-4" />
+          </button>
+
+          {/* Quick Logout Button */}
+          <button
+            onClick={handleLogout}
+            className="p-1.5 rounded-lg text-slate-500 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+            title="Se déconnecter du compte"
+            aria-label="Se déconnecter"
+          >
+            <LogOut className="w-4 h-4" />
           </button>
         </div>
       </div>
@@ -523,7 +559,7 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
 
           {/* Assistant de Mise en Service / Prêt à Livrer Indicator */}
-          {openOnboarding && (currentUser.role === 'superadmin' || currentUser.role === 'direction') && (
+          {openOnboarding && currentUser.role === 'superadmin' && (
             <button
               type="button"
               onClick={openOnboarding}

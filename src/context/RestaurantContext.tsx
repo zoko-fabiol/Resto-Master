@@ -3022,6 +3022,57 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       if (entitlements?.modules && entitlements.modules[moduleKey] !== undefined) {
         return entitlements.modules[moduleKey];
       }
+      // Raccordement direct si seules les features sont configurées dans entitlements
+      if (entitlements?.features) {
+        if (moduleKey === 'mod_tables' && entitlements.features['tables_management']) {
+          return entitlements.features['tables_management'].status === 'ACTIVÉ';
+        }
+        if (moduleKey === 'res_management' && entitlements.features['table_reservations']) {
+          return entitlements.features['table_reservations'].status === 'ACTIVÉ';
+        }
+        if (moduleKey === 'mod_cuisine' && entitlements.features['kds_kitchen']) {
+          return entitlements.features['kds_kitchen'].status === 'ACTIVÉ';
+        }
+        if (moduleKey === 'mod_bar' && entitlements.features['kds_bar']) {
+          return entitlements.features['kds_bar'].status === 'ACTIVÉ';
+        }
+        if (moduleKey === 'mod_bar_pos' && entitlements.features['bar_pos_exclusive']) {
+          return entitlements.features['bar_pos_exclusive'].status === 'ACTIVÉ';
+        }
+        if (moduleKey === 'mod_stock' && entitlements.features['stock_lots_fefo']) {
+          return entitlements.features['stock_lots_fefo'].status === 'ACTIVÉ';
+        }
+        if (moduleKey === 'mod_purchases' && entitlements.features['purchases_suppliers']) {
+          return entitlements.features['purchases_suppliers'].status === 'ACTIVÉ';
+        }
+        if (moduleKey === 'mod_fiscal' && entitlements.features['cameroon_fiscal_framework']) {
+          return entitlements.features['cameroon_fiscal_framework'].status === 'ACTIVÉ';
+        }
+        if (moduleKey === 'mod_delivery' && entitlements.features['delivery_orders']) {
+          return entitlements.features['delivery_orders'].status === 'ACTIVÉ';
+        }
+        if (moduleKey === 'mod_events' && entitlements.features['events_banquets']) {
+          return entitlements.features['events_banquets'].status === 'ACTIVÉ';
+        }
+        if (moduleKey === 'mod_hygiene' && entitlements.features['haccp_hygiene']) {
+          return entitlements.features['haccp_hygiene'].status === 'ACTIVÉ';
+        }
+        if (moduleKey === 'mod_staff' && entitlements.features['staff_planning']) {
+          return entitlements.features['staff_planning'].status === 'ACTIVÉ';
+        }
+        if (moduleKey === 'mod_main_courante' && entitlements.features['hotelpro_maincourante']) {
+          return entitlements.features['hotelpro_maincourante'].status === 'ACTIVÉ';
+        }
+        if (moduleKey === 'mod_documents' && entitlements.features['documents_scanner_ged']) {
+          return entitlements.features['documents_scanner_ged'].status === 'ACTIVÉ';
+        }
+        if (moduleKey === 'mod_recipes_yield' && entitlements.features['recipes_bom_yield']) {
+          return entitlements.features['recipes_bom_yield'].status === 'ACTIVÉ';
+        }
+        if (moduleKey === 'mod_audit' && entitlements.features['audit_trail_immutable']) {
+          return entitlements.features['audit_trail_immutable'].status === 'ACTIVÉ';
+        }
+      }
       return true;
     },
     [entitlements]

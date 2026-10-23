@@ -1,16 +1,35 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { Utensils, Lock, Mail, Eye, EyeOff, AlertCircle, CheckCircle2, ArrowLeft, Loader2, ShieldCheck } from 'lucide-react';
+import { Utensils, Lock, Mail, Eye, EyeOff, AlertCircle, CheckCircle2, ArrowLeft, Loader2, ShieldCheck, Sparkles } from 'lucide-react';
 import { RestaurantSignupModal } from './RestaurantSignupModal';
+
+/**
+ * Identifiants transmis par le lien de l'e-mail d'activation (?restaurantCode=...&email=...).
+ * Capturés au chargement du module : le routeur redirige vers la page par défaut pendant le
+ * chargement de la session, ce qui efface la query string avant l'affichage de l'écran de connexion.
+ */
+const INITIAL_LOGIN_HINTS = (() => {
+  try {
+    const params = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '');
+    return {
+      code: (params.get('restaurantCode') || params.get('code') || '').trim(),
+      email: (params.get('email') || '').trim(),
+    };
+  } catch {
+    return { code: '', email: '' };
+  }
+})();
 
 export const LoginScreen: React.FC = () => {
   const { loginWithEmail, sendPasswordReset } = useAuth();
 
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState(INITIAL_LOGIN_HINTS.email);
   const [password, setPassword] = useState('');
+  const [restaurantCode, setRestaurantCode] = useState(INITIAL_LOGIN_HINTS.code);
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  const isPreFilled = Boolean(INITIAL_LOGIN_HINTS.code || INITIAL_LOGIN_HINTS.email);
 
   // Mode réinitialisation mot de passe
   const [isResetMode, setIsResetMode] = useState(false);
@@ -42,8 +61,8 @@ export const LoginScreen: React.FC = () => {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email.trim() || !password) {
-      setErrorMessage('Veuillez renseigner votre adresse e-mail et votre mot de passe.');
+    if (!email.trim() || !password || !restaurantCode.trim()) {
+      setErrorMessage('Veuillez renseigner le code restaurant, votre e-mail et votre mot de passe.');
       return;
     }
 
@@ -51,7 +70,7 @@ export const LoginScreen: React.FC = () => {
     setErrorMessage('');
 
     try {
-      await loginWithEmail(email.trim(), password);
+      await loginWithEmail(email.trim(), password, restaurantCode.trim());
     } catch (err: any) {
       setErrorMessage(getFrenchAuthErrorMessage(err));
     } finally {
@@ -112,6 +131,16 @@ export const LoginScreen: React.FC = () => {
                 </p>
               </div>
 
+              {isPreFilled && (
+                <div className="flex items-start gap-2.5 p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs animate-in fade-in">
+                  <Sparkles className="w-4 h-4 shrink-0 mt-0.5 text-amber-400" />
+                  <div className="leading-relaxed">
+                    <span className="font-semibold block text-amber-200">Bienvenue sur votre restaurant !</span>
+                    Votre Code Restaurant et votre E-mail ont été automatiquement pré-remplis. Saisissez votre <strong>mot de passe temporaire</strong> reçu par e-mail pour accéder à votre espace.
+                  </div>
+                </div>
+              )}
+
               {errorMessage && (
                 <div
                   role="alert"
@@ -140,6 +169,27 @@ export const LoginScreen: React.FC = () => {
                     autoComplete="email"
                     required
                     className="w-full pl-10 pr-4 py-3 bg-slate-950/60 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent transition"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label htmlFor="login-restaurant-code" className="block text-xs font-semibold text-slate-300">
+                  Code restaurant
+                </label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 flex items-center pl-3.5 text-slate-500 pointer-events-none">
+                    <ShieldCheck className="w-4 h-4" />
+                  </div>
+                  <input
+                    id="login-restaurant-code"
+                    type="text"
+                    value={restaurantCode}
+                    onChange={(e) => setRestaurantCode(e.target.value.toUpperCase())}
+                    placeholder="RMS-ABCD-2345"
+                    autoComplete="organization"
+                    required
+                    className="w-full pl-10 pr-4 py-3 bg-slate-950/60 border border-slate-700 rounded-xl text-sm font-mono tracking-wider text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent transition"
                   />
                 </div>
               </div>

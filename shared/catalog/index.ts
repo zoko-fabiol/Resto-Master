@@ -1,3 +1,3 @@
-export * from './packs';
-export * from './pricing';
-export * from './resolver';
+export * from './packs.js';
+export * from './pricing.js';
+export * from './resolver.js';

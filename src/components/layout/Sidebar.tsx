@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useRestaurant } from '../../context/RestaurantContext';
+import { useConfirm } from '../ui/ConfirmDialog';
 import { ROLE_LABELS } from '../../lib/utils';
 import {
   LayoutDashboard,
@@ -30,6 +31,7 @@ import {
   ChevronRight,
   PanelLeftClose,
   PanelLeftOpen,
+  LogOut,
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -88,7 +90,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   collapsed,
   setCollapsed,
 }) => {
-  const { currentUser, canAccess } = useAuth();
+  const { currentUser, canAccess, logout } = useAuth();
+  const confirm = useConfirm();
   const {
     orders,
     tables,
@@ -506,20 +509,46 @@ export const Sidebar: React.FC<SidebarProps> = ({
           })}
         </nav>
 
-        {/* Footer Realtime Indicator */}
-        <div className={`p-3 border-t border-slate-800/80 bg-slate-950/40 text-[11px] text-slate-400 flex items-center ${collapsed ? 'justify-center' : 'justify-between'}`}>
-          <div className="flex items-center gap-2">
-            <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-            </span>
-            {!collapsed && <span className="text-slate-300 font-medium">Cloud Connecté</span>}
+        {/* Footer Realtime Indicator & Déconnexion */}
+        <div className="p-3 border-t border-slate-800/80 bg-slate-950/40 text-[11px] text-slate-400 space-y-2.5">
+          <div className={`flex items-center ${collapsed ? 'justify-center' : 'justify-between'}`}>
+            <div className="flex items-center gap-2">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+              </span>
+              {!collapsed && <span className="text-slate-300 font-medium">Cloud Connecté</span>}
+            </div>
+            {!collapsed && unreadNotifsCount > 0 && (
+              <span className="text-[10px] font-bold text-amber-400 bg-amber-500/20 px-2 py-0.5 rounded-full">
+                {unreadNotifsCount} alertes
+              </span>
+            )}
           </div>
-          {!collapsed && unreadNotifsCount > 0 && (
-            <span className="text-[10px] font-bold text-amber-400 bg-amber-500/20 px-2 py-0.5 rounded-full">
-              {unreadNotifsCount} alertes
-            </span>
-          )}
+
+          <button
+            type="button"
+            onClick={async () => {
+              const ok = await confirm({
+                title: 'Déconnexion du compte',
+                message: 'Voulez-vous vraiment vous déconnecter de RestoMaster OS ?',
+                confirmText: 'Se déconnecter',
+                cancelText: 'Rester connecté',
+                variant: 'danger',
+              });
+              if (ok) {
+                setMobileOpen(false);
+                await logout();
+              }
+            }}
+            title={collapsed ? 'Se déconnecter' : undefined}
+            className={`w-full flex items-center ${
+              collapsed ? 'justify-center p-2' : 'gap-2.5 px-3 py-2'
+            } rounded-xl text-slate-400 hover:text-rose-300 hover:bg-rose-950/40 border border-transparent hover:border-rose-900/40 transition-colors cursor-pointer group`}
+          >
+            <LogOut className="w-4 h-4 text-rose-400/80 group-hover:text-rose-400 shrink-0" />
+            {!collapsed && <span className="text-xs font-semibold">Se déconnecter</span>}
+          </button>
         </div>
       </aside>
     </>

@@ -28,3 +28,8 @@ src-tauri/gen/android/local.properties
 serviceAccountKey.json
 *serviceAccount*.json
 *firebase-adminsdk*.json
+
+# Fichiers temporaires de tests et émulateurs
+scripts/.e2e-output/
+.firebase/
+

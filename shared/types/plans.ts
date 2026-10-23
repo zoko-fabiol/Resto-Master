@@ -1,4 +1,4 @@
-import { TenantLimits } from './tenant';
+import { TenantLimits } from './tenant.js';
 
 export interface Plan {
   id: string;

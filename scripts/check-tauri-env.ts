@@ -62,9 +62,43 @@ const results: CheckResult[] = [
   checkCommand('Rust', 'rustc', ['--version'], false),
   checkCommand('Cargo', 'cargo', ['--version'], false),
   checkCommand('rustup', 'rustup', ['--version'], false),
+  {
+    label: 'Tauri CLI',
+    value: (() => {
+      try {
+        const pkg = JSON.parse(
+          fs.readFileSync(path.resolve('node_modules/@tauri-apps/cli/package.json'), 'utf8')
+        ) as { version?: string };
+        return pkg.version ? `tauri-cli ${pkg.version}` : 'absent';
+      } catch {
+        return 'absent';
+      }
+    })(),
+    required: false,
+  },
   checkCommand('Java', 'java', ['--version'], false),
   checkCommand('Android Debug Bridge', 'adb', ['version'], false),
 ];
+
+const MIN_RUST_VERSION = [1, 90];
+
+function readJson(file: string): { version?: string } | null {
+  try {
+    return JSON.parse(fs.readFileSync(path.resolve(file), 'utf8')) as { version?: string };
+  } catch {
+    return null;
+  }
+}
+
+function readCargoVersion(): string | null {
+  try {
+    const toml = fs.readFileSync(path.resolve('src-tauri/Cargo.toml'), 'utf8');
+    return /^version\s*=\s*"([^"]+)"/m.exec(toml)?.[1] ?? null;
+  } catch {
+    return null;
+  }
+}
+
 
 if (isWindows) {
   results.push(
@@ -102,8 +136,34 @@ if (isWindows) {
   console.log('  - Microsoft C++ Build Tools et WebView2 Runtime.');
 }
 
+// Version minimale de Rust (rust-version de Cargo.toml)
+const rustValue = results.find((r) => r.label === 'Rust')?.value ?? 'absent';
+const rustMatch = /rustc (\d+)\.(\d+)/.exec(rustValue);
+if (rustMatch) {
+  const [major, minor] = [Number(rustMatch[1]), Number(rustMatch[2])];
+  if (major < MIN_RUST_VERSION[0] || (major === MIN_RUST_VERSION[0] && minor < MIN_RUST_VERSION[1])) {
+    console.error(`\n[ÉCHEC] Rust ${MIN_RUST_VERSION.join('.')}+ requis (détecté : ${rustValue}). Lancez : rustup update stable`);
+    blockingErrors += 1;
+  }
+}
+
+// Cohérence des versions applicatives
+const versions = {
+  'package.json': readJson('package.json')?.version,
+  'src-tauri/Cargo.toml': readCargoVersion(),
+  'src-tauri/tauri.conf.json': readJson('src-tauri/tauri.conf.json')?.version,
+};
+console.log('\nVersions applicatives :');
+for (const [file, version] of Object.entries(versions)) {
+  console.log(`  - ${file}: ${version ?? 'introuvable'}`);
+}
+if (new Set(Object.values(versions)).size > 1) {
+  console.error('\n[ÉCHEC] Les versions de package.json, Cargo.toml et tauri.conf.json doivent être identiques.');
+  blockingErrors += 1;
+}
+
 if (blockingErrors > 0) {
-  console.error('\n[ÉCHEC] Node.js et npm sont nécessaires pour poursuivre.');
+  console.error('\n[ÉCHEC] Corrigez les points bloquants ci-dessus pour poursuivre.');
   process.exit(1);
 }
 

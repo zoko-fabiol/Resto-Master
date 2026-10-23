@@ -41,8 +41,11 @@ import {
   Check,
   Crown,
   Star,
+  Mail,
+  Zap,
 } from 'lucide-react';
 import { ModernRuleToggle } from './ModernRuleToggle';
+import { RestaurantEmailConfigSection } from './RestaurantEmailConfigSection';
 
 interface Props {
   subTab:
@@ -84,6 +87,7 @@ export const HardwareAndSecuritySection: React.FC<Props> = ({ subTab }) => {
   const [savedSuccess, setSavedSuccess] = useState(false);
   const [copiedTerminalId, setCopiedTerminalId] = useState<string | null>(null);
   const [showRolesGuide, setShowRolesGuide] = useState(false);
+  const [notifTab, setNotifTab] = useState<'emails_gas' | 'local_alerts'>('emails_gas');
 
   const rolesList: { role: UserRole; label: string; desc: string }[] = [
     { role: 'direction', label: 'Direction Générale / Propriétaire', desc: 'Accès sans restriction à tous les modules, configurations et clôtures.' },
@@ -505,7 +509,7 @@ export const HardwareAndSecuritySection: React.FC<Props> = ({ subTab }) => {
     );
   }
 
-  // 6. NOTIFICATIONS
+  // 6. NOTIFICATIONS & E-MAILS GOOGLE APPS SCRIPT
   if (subTab === 'notifications') {
     const notifRules = [
       {
@@ -547,64 +551,100 @@ export const HardwareAndSecuritySection: React.FC<Props> = ({ subTab }) => {
     ];
 
     return (
-      <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-xs space-y-6">
-        <div className="flex items-center justify-between border-b border-slate-100 pb-4">
-          <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-amber-500 to-yellow-400 text-slate-950 flex items-center justify-center shadow-md shadow-amber-500/20">
-              <Bell className="w-5 h-5" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h3 className="text-sm sm:text-base font-black text-slate-900">
-                  Notifications & Alertes Système
-                </h3>
-                <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">
-                  Section 26
-                </span>
-              </div>
-              <p className="text-xs text-slate-500 mt-0.5">
-                Canaux et déclencheurs d’alertes pour les stocks critiques, écarts caisse et échéances fiscales
-              </p>
-            </div>
-          </div>
-          {savedSuccess && (
-            <span className="flex items-center gap-1.5 text-xs font-bold text-emerald-700 bg-emerald-50 px-3.5 py-1.5 rounded-xl border border-emerald-200 shadow-xs">
-              <CheckCircle2 className="w-4 h-4 text-emerald-600" /> Paramètres enregistrés
-            </span>
-          )}
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
-          {notifRules.map((rule) => {
-            const isChecked = (operationRules as any)?.[rule.key] ?? true;
-            return (
-              <ModernRuleToggle
-                key={rule.key}
-                id={rule.key}
-                label={rule.label}
-                description={rule.description}
-                icon={rule.icon}
-                checked={isChecked}
-                onChange={() => updateOperationRules({ [rule.key]: !isChecked })}
-              />
-            );
-          })}
-        </div>
-
-        <div className="pt-4 border-t border-slate-100 flex justify-end">
+      <div className="space-y-6">
+        {/* Barre d'onglets Notifications */}
+        <div className="flex items-center gap-2 bg-white p-2 rounded-2xl border border-slate-200 shadow-xs">
           <button
             type="button"
-            onClick={() => {
-              setSavedSuccess(true);
-              addAuditLog('Alertes système', 'Paramètres', 'Configuration des alertes mise à jour');
-              setTimeout(() => setSavedSuccess(false), 2000);
-            }}
-            className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-slate-900 text-white font-bold text-xs hover:bg-slate-800 shadow-xs transition-colors"
+            onClick={() => setNotifTab('emails_gas')}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              notifTab === 'emails_gas'
+                ? 'bg-slate-900 text-white shadow-xs'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+            }`}
           >
-            <Save className="w-4 h-4" />
-            <span>Enregistrer les notifications</span>
+            <Mail className={`w-4 h-4 ${notifTab === 'emails_gas' ? 'text-amber-400' : 'text-slate-400'}`} />
+            <span>Passerelle E-mails Google Apps Script (Restaurant)</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setNotifTab('local_alerts')}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              notifTab === 'local_alerts'
+                ? 'bg-slate-900 text-white shadow-xs'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+            }`}
+          >
+            <Bell className={`w-4 h-4 ${notifTab === 'local_alerts' ? 'text-amber-400' : 'text-slate-400'}`} />
+            <span>Alertes Visuelles & Bips Sonores KDS</span>
           </button>
         </div>
+
+        {/* CONTENU ONGLETS */}
+        {notifTab === 'emails_gas' ? (
+          <RestaurantEmailConfigSection />
+        ) : (
+          <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-xs space-y-6">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-amber-500 to-yellow-400 text-slate-950 flex items-center justify-center shadow-md shadow-amber-500/20">
+                  <Bell className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-sm sm:text-base font-black text-slate-900">
+                      Alertes Visuelles & Bips Sonores Système
+                    </h3>
+                    <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">
+                      Section 26
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Déclencheurs d'alertes en temps réel sur les écrans POS, Cuisine KDS et caisses
+                  </p>
+                </div>
+              </div>
+              {savedSuccess && (
+                <span className="flex items-center gap-1.5 text-xs font-bold text-emerald-700 bg-emerald-50 px-3.5 py-1.5 rounded-xl border border-emerald-200 shadow-xs">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600" /> Paramètres enregistrés
+                </span>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+              {notifRules.map((rule) => {
+                const isChecked = (operationRules as any)?.[rule.key] ?? true;
+                return (
+                  <ModernRuleToggle
+                    key={rule.key}
+                    id={rule.key}
+                    label={rule.label}
+                    description={rule.description}
+                    icon={rule.icon}
+                    checked={isChecked}
+                    onChange={() => updateOperationRules({ [rule.key]: !isChecked })}
+                  />
+                );
+              })}
+            </div>
+
+            <div className="pt-4 border-t border-slate-100 flex justify-end">
+              <button
+                type="button"
+                onClick={() => {
+                  setSavedSuccess(true);
+                  addAuditLog('Alertes système', 'Paramètres', 'Configuration des alertes mise à jour');
+                  setTimeout(() => setSavedSuccess(false), 2000);
+                }}
+                className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-slate-900 text-white font-bold text-xs hover:bg-slate-800 shadow-xs transition-colors cursor-pointer"
+              >
+                <Save className="w-4 h-4" />
+                <span>Enregistrer les alertes locales</span>
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     );
   }

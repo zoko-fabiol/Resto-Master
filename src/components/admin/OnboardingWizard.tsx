@@ -45,15 +45,15 @@ interface OnboardingWizardProps {
 }
 
 const configurationSlides = [
-  { id: 1, title: 'Identité légale', description: 'Présentons votre établissement et ses informations officielles.', icon: Building2 },
-  { id: 2, title: 'Fiscalité & finances', description: 'Préparons les règles fiscales et les moyens de paiement.', icon: Receipt },
-  { id: 3, title: 'Établissement principal', description: 'Définissons le lieu où votre activité va démarrer.', icon: Store },
-  { id: 4, title: 'Salle & tables', description: 'Organisons vos espaces de service et vos tables.', icon: LayoutGrid },
-  { id: 5, title: 'Caisses & paiements', description: 'Mettons en place votre caisse et vos encaissements.', icon: Coins },
-  { id: 6, title: 'Matériel & appareils', description: 'Connectons les terminaux et les périphériques utiles.', icon: Printer },
-  { id: 7, title: 'Carte & catalogue', description: 'Créons la première structure de votre carte.', icon: UtensilsCrossed },
-  { id: 8, title: 'Accès opérationnels', description: 'Préparons les accès de votre équipe.', icon: Users },
-  { id: 9, title: 'Contrôle & certification', description: 'Vérifions tout avant de mettre le système en service.', icon: ShieldCheck },
+  { id: 1, title: 'Identité légale', description: 'Présentons votre établissement et ses informations officielles.', icon: Building2, animClass: 'icon-anim-building' },
+  { id: 2, title: 'Fiscalité & finances', description: 'Préparons les règles fiscales et les moyens de paiement.', icon: Receipt, animClass: 'icon-anim-receipt' },
+  { id: 3, title: 'Établissement principal', description: 'Définissons le lieu où votre activité va démarrer.', icon: Store, animClass: 'icon-anim-store' },
+  { id: 4, title: 'Salle & tables', description: 'Organisons vos espaces de service et vos tables.', icon: LayoutGrid, animClass: 'icon-anim-layoutgrid' },
+  { id: 5, title: 'Caisses & paiements', description: 'Mettons en place votre caisse et vos encaissements.', icon: Coins, animClass: 'icon-anim-coins' },
+  { id: 6, title: 'Matériel & appareils', description: 'Connectons les terminaux et les périphériques utiles.', icon: Printer, animClass: 'icon-anim-printer' },
+  { id: 7, title: 'Carte & catalogue', description: 'Créons la première structure de votre carte.', icon: UtensilsCrossed, animClass: 'icon-anim-utensils' },
+  { id: 8, title: 'Accès opérationnels', description: 'Préparons les accès de votre équipe.', icon: Users, animClass: 'icon-anim-users' },
+  { id: 9, title: 'Contrôle & certification', description: 'Vérifions tout avant de mettre le système en service.', icon: ShieldCheck, animClass: 'icon-anim-shield' },
 ];
 
 const launchSlide = {
@@ -61,6 +61,7 @@ const launchSlide = {
   title: 'Configuration initiale',
   description: 'Préparons votre appareil et votre système restaurant avec un parcours simple, clair et guidé.',
   icon: Rocket,
+  animClass: 'icon-anim-rocket',
 };
 
 interface ConfigurationToggleProps {
@@ -607,8 +608,8 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
           <div className="onboarding-system-ring onboarding-system-ring-one" aria-hidden="true" />
           <div className="onboarding-system-ring onboarding-system-ring-two" aria-hidden="true" />
           <div key={currentSlide.id} className={`relative z-10 onboarding-brand-content flex items-center gap-3 onboarding-slide-copy onboarding-slide-${slideDirection}`}>
-            <div className="relative w-12 h-12 rounded-2xl bg-gradient-to-tr from-amber-500 to-amber-300 text-slate-950 flex items-center justify-center shadow-lg shadow-amber-500/20 font-black onboarding-logo-pulse">
-              <CurrentSlideIcon className="w-6 h-6" />
+            <div className="relative w-12 h-12 rounded-2xl bg-gradient-to-tr from-amber-500 to-amber-300 text-slate-950 flex items-center justify-center shadow-lg shadow-amber-500/20 font-black shrink-0">
+              <CurrentSlideIcon className={`w-6 h-6 ${currentSlide.animClass}`} />
             </div>
             <div className="onboarding-brand-copy">
               <div className="flex items-center gap-2">
@@ -648,7 +649,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
         </div>
 
         {/* Step Indicator Pills */}
-        <div className="bg-slate-50 border-b border-slate-200 px-4 py-2.5 overflow-x-auto no-scrollbar shrink-0 onboarding-progress-track">
+        <div className="bg-slate-50 border-b border-slate-200 px-3 sm:px-4 py-2 sm:py-2.5 overflow-x-auto no-scrollbar shrink-0 onboarding-progress-track overscroll-x-contain">
           <div className="flex items-center gap-1.5 min-w-max">
             {!isLaunchScreen && [
               { id: 1, label: '1. Identité' },
@@ -668,9 +669,9 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
                   key={step.id}
                   type="button"
                   onClick={() => goToStep(step.id)}
-                  className={`onboarding-step-pill px-3 py-1.5 rounded-xl text-xs font-bold transition-transform duration-200 flex items-center gap-1.5 cursor-pointer active:scale-95 ${
+                  className={`onboarding-step-pill px-3 py-1.5 rounded-xl text-xs font-bold transition-all duration-200 flex items-center gap-1.5 cursor-pointer active:scale-95 ${
                     isActive
-                      ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/20'
+                      ? 'bg-emerald-500 text-white shadow-md shadow-emerald-500/25 ring-2 ring-emerald-400/30'
                       : isPast
                       ? 'bg-slate-200 text-slate-800 hover:bg-slate-300'
                       : 'text-slate-400 hover:text-slate-700 hover:bg-slate-100'
@@ -733,7 +734,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
             <div className="space-y-5 animate-in fade-in duration-150 onboarding-step-panel">
               <div className="border-b border-slate-100 pb-3">
                 <h3 className="text-base font-black text-slate-900 flex items-center gap-2">
-                  <Building2 className="w-5 h-5 text-amber-600" />
+                  <Building2 className="w-5 h-5 text-amber-600 icon-anim-building" />
                   <span>Identité Juridique de l'Établissement</span>
                 </h3>
                 <p className="text-xs text-slate-500 mt-0.5">
@@ -872,7 +873,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
             <div className="space-y-5 animate-in fade-in duration-150 onboarding-step-panel">
               <div className="border-b border-slate-100 pb-3">
                 <h3 className="text-base font-black text-slate-900 flex items-center gap-2">
-                  <Receipt className="w-5 h-5 text-blue-600" />
+                  <Receipt className="w-5 h-5 text-blue-600 icon-anim-receipt" />
                   <span>Cadre Fiscal & Monétaire Cameroun (CGI 2026)</span>
                 </h3>
                 <p className="text-xs text-slate-500 mt-0.5">
@@ -973,7 +974,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
             <div className="space-y-5 animate-in fade-in duration-150">
               <div className="border-b border-slate-100 pb-3">
                 <h3 className="text-base font-black text-slate-900 flex items-center gap-2">
-                  <Store className="w-5 h-5 text-amber-600" />
+                  <Store className="w-5 h-5 text-amber-600 icon-anim-store" />
                   <span>Établissement & Profil d'Exploitation</span>
                 </h3>
                 <p className="text-xs text-slate-500 mt-0.5">
@@ -996,6 +997,28 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
                 </div>
 
                 <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Ville du Point de Vente</label>
+                  <input
+                    type="text"
+                    value={outletCity}
+                    onChange={(e) => setOutletCity(e.target.value)}
+                    placeholder="Ex: Douala"
+                    className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-300 focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 font-semibold"
+                  />
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Téléphone Direct de la Caisse</label>
+                  <input
+                    type="text"
+                    value={outletPhone}
+                    onChange={(e) => setOutletPhone(e.target.value)}
+                    placeholder="Ex: +237 6XX XX XX XX"
+                    className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-300 focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
+                  />
+                </div>
+
+                <div className="md:col-span-2 pt-2">
                   <div className="mb-2 flex items-end justify-between gap-3">
                     <div>
                       <div className="text-sm font-extrabold text-slate-900">Profil opérationnel</div>
@@ -1003,7 +1026,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
                     </div>
                     <span className="hidden shrink-0 text-xs font-black uppercase tracking-wider text-amber-600 sm:block">1 choix</span>
                   </div>
-                  <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+                  <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
                     {[
                       { id: 'restaurant_classique', title: 'Restaurant classique', text: 'Salle et service à table', icon: UtensilsCrossed },
                       { id: 'bar_lounge', title: 'Bar & lounge', text: 'Boissons, tapas et ambiance', icon: Coins },
@@ -1032,28 +1055,6 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
                       );
                     })}
                   </div>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Ville du Point de Vente</label>
-                  <input
-                    type="text"
-                    value={outletCity}
-                    onChange={(e) => setOutletCity(e.target.value)}
-                    placeholder="Ex: Douala"
-                    className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-300 focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 font-semibold"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Téléphone Direct de la Caisse</label>
-                  <input
-                    type="text"
-                    value={outletPhone}
-                    onChange={(e) => setOutletPhone(e.target.value)}
-                    placeholder="Ex: +237 6XX XX XX XX"
-                    className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-300 focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
-                  />
                 </div>
               </div>
 
@@ -1085,7 +1086,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
             <div className="space-y-5 animate-in fade-in duration-150">
               <div className="border-b border-slate-100 pb-3">
                 <h3 className="text-base font-black text-slate-900 flex items-center gap-2">
-                  <LayoutGrid className="w-5 h-5 text-indigo-600" />
+                  <LayoutGrid className="w-5 h-5 text-indigo-600 icon-anim-layoutgrid" />
                   <span>Zones de Service & Tables Initiales</span>
                 </h3>
                 <p className="text-xs text-slate-500 mt-0.5">
@@ -1177,7 +1178,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
             <div className="space-y-5 animate-in fade-in duration-150">
               <div className="border-b border-slate-100 pb-3">
                 <h3 className="text-base font-black text-slate-900 flex items-center gap-2">
-                  <Coins className="w-5 h-5 text-emerald-600" />
+                  <Coins className="w-5 h-5 text-emerald-600 icon-anim-coins" />
                   <span>Caisses Enregistreuses & Moyens de Paiement</span>
                 </h3>
                 <p className="text-xs text-slate-500 mt-0.5">
@@ -1321,7 +1322,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
             <div className="space-y-5 animate-in fade-in duration-150">
               <div className="border-b border-slate-100 pb-3">
                 <h3 className="text-base font-black text-slate-900 flex items-center gap-2">
-                  <Printer className="w-5 h-5 text-indigo-600" />
+                  <Printer className="w-5 h-5 text-indigo-600 icon-anim-printer" />
                   <span>Matériel, Terminaux & Imprimantes Thermiques</span>
                 </h3>
                 <p className="text-xs text-slate-500 mt-0.5">
@@ -1410,7 +1411,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
             <div className="space-y-5 animate-in fade-in duration-150">
               <div className="border-b border-slate-100 pb-3">
                 <h3 className="text-base font-black text-slate-900 flex items-center gap-2">
-                  <UtensilsCrossed className="w-5 h-5 text-amber-600" />
+                  <UtensilsCrossed className="w-5 h-5 text-amber-600 icon-anim-utensils" />
                   <span>Structure de la Carte & Import CSV</span>
                 </h3>
                 <p className="text-xs text-slate-500 mt-0.5">
@@ -1492,7 +1493,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
             <div className="space-y-5 animate-in fade-in duration-150">
               <div className="border-b border-slate-100 pb-3">
                 <h3 className="text-base font-black text-slate-900 flex items-center gap-2">
-                  <Users className="w-5 h-5 text-indigo-600" />
+                  <Users className="w-5 h-5 text-indigo-600 icon-anim-users" />
                   <span>Comptes Opérationnels Initiaux & Codes PIN</span>
                 </h3>
                 <p className="text-xs text-slate-500 mt-0.5">
@@ -1591,7 +1592,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
               <div className="border-b border-slate-100 pb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <div>
                   <h3 className="text-base font-black text-slate-900 flex items-center gap-2">
-                    <ShieldCheck className="w-5 h-5 text-emerald-600" />
+                    <ShieldCheck className="w-5 h-5 text-emerald-600 icon-anim-shield" />
                     <span>Audit Automatisé « Prêt à Livrer »</span>
                   </h3>
                   <p className="text-xs text-slate-500 mt-0.5">
@@ -1701,13 +1702,13 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
         )}
 
         {/* Footer Navigation Bar */}
-        <div className="bg-white px-6 py-4 border-t border-slate-200 flex items-center justify-between shrink-0 onboarding-footer">
-          <div>
+        <div className="bg-white px-3 sm:px-6 py-3 sm:py-4 border-t border-slate-200 flex items-center justify-between shrink-0 onboarding-footer gap-2 sm:gap-4">
+          <div className="flex items-center gap-2">
             {!isLaunchScreen && currentStep > 1 && (
               <button
                 type="button"
                 onClick={() => goToStep(Math.max(1, currentStep - 1))}
-                className="flex items-center gap-2 px-4 py-2 rounded-xl text-slate-700 hover:bg-slate-100 font-bold text-xs transition cursor-pointer"
+                className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl text-slate-700 hover:bg-slate-100 font-bold text-xs transition cursor-pointer active:scale-95"
               >
                 <ArrowLeft className="w-4 h-4" />
                 <span>Précédent</span>
@@ -1715,21 +1716,23 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
             )}
           </div>
 
-          <div className="flex items-center gap-3">
-            {!isLaunchScreen && <button
-              type="button"
-              onClick={handleApplyConfiguration}
-              disabled={isSaving}
-              className="px-4 py-2 rounded-xl border border-slate-300 hover:bg-slate-50 text-slate-700 font-semibold text-xs transition cursor-pointer"
-            >
-              {isSaving ? 'Sauvegarde...' : 'Sauvegarder l’étape'}
-            </button>}
+          <div className="flex items-center gap-2 sm:gap-3">
+            {!isLaunchScreen && (
+              <button
+                type="button"
+                onClick={handleApplyConfiguration}
+                disabled={isSaving}
+                className="hidden sm:inline-flex px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-xl border border-slate-300 hover:bg-slate-50 text-slate-700 font-semibold text-xs transition cursor-pointer active:scale-95"
+              >
+                {isSaving ? 'Sauvegarde...' : 'Sauvegarder l’étape'}
+              </button>
+            )}
 
             {isLaunchScreen ? (
               <button
                 type="button"
                 onClick={() => setIsLaunchScreen(false)}
-                className="flex items-center gap-2 rounded-xl bg-slate-950 px-6 py-3 text-sm font-black text-white shadow-lg transition-transform duration-200 hover:-translate-y-0.5 hover:bg-slate-800 active:scale-95"
+                className="flex items-center gap-2 rounded-xl bg-slate-950 px-5 sm:px-6 py-2.5 sm:py-3 text-xs sm:text-sm font-black text-white shadow-lg transition-transform duration-200 hover:-translate-y-0.5 hover:bg-slate-800 active:scale-95 cursor-pointer"
               >
                 <span>Commencer la configuration</span>
                 <ArrowRight className="h-4 w-4 text-amber-400" />
@@ -1738,7 +1741,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
               <button
                 type="button"
                 onClick={() => goToStep(Math.min(9, currentStep + 1))}
-                className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs transition shadow-xs cursor-pointer active:scale-98"
+                className="flex items-center gap-1.5 sm:gap-2 px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs transition shadow-xs cursor-pointer active:scale-95"
               >
                 <span>Étape Suivante</span>
                 <ArrowRight className="w-4 h-4 text-amber-400" />
@@ -1748,7 +1751,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
                 type="button"
                 onClick={handleCertifyAndLock}
                 disabled={isSaving || !allChecksPassed}
-                className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs transition shadow-md shadow-amber-500/20 cursor-pointer active:scale-98"
+                className="flex items-center gap-2 px-4 sm:px-6 py-2 sm:py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs transition shadow-md shadow-amber-500/20 cursor-pointer active:scale-95"
               >
                 <ShieldCheck className="w-4 h-4" />
                 <span>Certifier & Terminer</span>
@@ -1762,8 +1765,8 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
       {/* MODALE D'IMPRESSION DE LA FICHE DE MISE EN SERVICE (A4)   */}
       {/* ========================================================= */}
       {showHandoverSlip && (
-        <div className="fixed inset-0 z-60 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-2xl w-full p-6 sm:p-8 space-y-6 shadow-2xl border border-slate-200">
+        <div className="fixed inset-0 z-60 bg-black/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-4">
+          <div className="bg-white rounded-3xl max-w-2xl w-full max-h-[92vh] overflow-y-auto p-5 sm:p-8 space-y-5 sm:space-y-6 shadow-2xl border border-slate-200">
             <div className="flex items-center justify-between border-b border-slate-200 pb-4">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-800 flex items-center justify-center font-black">

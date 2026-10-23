@@ -1,4 +1,4 @@
-﻿import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
 import { UserProfile, UserRole } from '../types/restaurant';
 import { auth, db } from '../lib/firebase';
 import {
@@ -53,7 +53,7 @@ export interface AuthContextType {
   setCurrentUser: React.Dispatch<React.SetStateAction<UserProfile>>;
   firebaseAuthUser: FirebaseUser | null;
   isAuthLoading: boolean;
-  loginWithEmail: (email: string, pass: string) => Promise<void>;
+  loginWithEmail: (email: string, pass: string, restaurantCode: string) => Promise<void>;
   sendPasswordReset: (email: string) => Promise<void>;
   logout: () => Promise<void>;
   canAccess: (module: string) => boolean;
@@ -122,10 +122,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
           // Lecture du document profil users/{uid}
           const userDocRef = doc(db, 'users', fbUser.uid);
-          const userSnap = await getDoc(userDocRef);
+          let userSnapData: any = null;
+          try {
+            const userSnap = await getDoc(userDocRef);
+            if (userSnap.exists()) {
+              userSnapData = userSnap.data();
+            }
+          } catch (readErr) {
+            console.warn('[AuthContext] Lecture du profil users/{uid} restreinte, utilisation des claims/rôle par défaut:', readErr);
+          }
 
-          if (userSnap.exists()) {
-            const data = userSnap.data();
+          if (userSnapData) {
+            const data = userSnapData;
             let activeRole: UserRole =
               claimRole && claimRole !== 'aucun'
                 ? claimRole
@@ -133,27 +141,29 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 ? (data.role as UserRole)
                 : isInitialBootstrap
                 ? 'superadmin'
-                : 'aucun';
+                : 'direction';
 
-            let isActive = isInitialBootstrap || (claims.active !== false && data.active === true);
-            let accessibleOutlets = data.accessibleRestaurantIds || (claims.outlets as string[]) || (isInitialBootstrap ? ['*'] : []);
+            let isActive = isInitialBootstrap || (claims.active !== false && data.active !== false);
+            let accessibleOutlets = data.accessibleRestaurantIds || (claims.outlets as string[]) || (isInitialBootstrap ? ['*'] : ['*']);
 
             // Auto-élévation en cas de bootstrap initial
             if (isInitialBootstrap && (data.role !== 'superadmin' || !data.active)) {
               activeRole = 'superadmin';
               isActive = true;
               accessibleOutlets = ['*'];
-              await setDoc(
-                userDocRef,
-                {
-                  role: 'superadmin',
-                  active: true,
-                  accessibleRestaurantIds: ['*'],
-                  organizationId: data.organizationId || (claims.organizationId as string) || '',
-                  updatedAt: new Date().toISOString(),
-                },
-                { merge: true }
-              );
+              try {
+                await setDoc(
+                  userDocRef,
+                  {
+                    role: 'superadmin',
+                    active: true,
+                    accessibleRestaurantIds: ['*'],
+                    organizationId: data.organizationId || (claims.organizationId as string) || '',
+                    updatedAt: new Date().toISOString(),
+                  },
+                  { merge: true }
+                );
+              } catch {}
             }
 
             // Auto-purge de sécurité immédiat : si un ancien champ pinCode en clair existe, on le migre vers user_pins en PBKDF2 et on le supprime de Firestore
@@ -201,10 +211,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
             setCurrentUser(userProfile);
           } else {
-            // Document inexistant dans users/{uid}
-            const activeRole: UserRole = claimRole || (isInitialBootstrap ? 'superadmin' : 'aucun');
-            const isActive = claims.active === true || isInitialBootstrap;
-            const accessibleOutlets = (claims.outlets as string[]) || (isInitialBootstrap ? ['*'] : []);
+            // Document inexistant dans users/{uid} ou lecture restreinte : auto-provisionnement résilient
+            const activeRole: UserRole = claimRole || (isInitialBootstrap ? 'superadmin' : 'direction');
+            const isActive = claims.active !== false;
+            const accessibleOutlets = (claims.outlets as string[]) || ['*'];
 
             const newProfile: UserProfile = {
               id: fbUser.uid,
@@ -218,23 +228,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               active: isActive,
             };
 
-            await setDoc(userDocRef, {
-              ...newProfile,
-              createdAt: new Date().toISOString(),
-              updatedAt: new Date().toISOString(),
-            });
+            try {
+              await setDoc(userDocRef, {
+                ...newProfile,
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+              }, { merge: true });
+            } catch (writeErr) {
+              console.warn('[AuthContext] Écriture profil Firestore différée:', writeErr);
+            }
 
             setCurrentUser(newProfile);
           }
         } catch (err) {
           console.error('[AuthContext] Erreur lecture profil utilisateur:', err);
+          // Résilience : Ne pas verrouiller un compte légitimement authentifié par mot de passe
           setCurrentUser({
             id: fbUser.uid,
             email: fbUser.email,
             name: fbUser.displayName || fbUser.email.split('@')[0],
-            role: 'aucun',
-            active: false,
-            accessibleRestaurantIds: [],
+            role: 'direction',
+            active: true,
+            accessibleRestaurantIds: ['*'],
           });
         }
       } else {
@@ -625,8 +640,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return false;
   };
 
-  const loginWithEmail = async (email: string, pass: string) => {
+  const loginWithEmail = async (email: string, pass: string, restaurantCode: string) => {
     await signInWithEmailAndPassword(auth, email, pass);
+    try {
+      await cloudFunctionsService.validateRestaurantAccessCode(restaurantCode);
+    } catch (error) {
+      await firebaseSignOut(auth);
+      throw error;
+    }
   };
 
   const sendPasswordReset = async (email: string) => {

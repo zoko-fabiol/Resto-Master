@@ -3,7 +3,7 @@
  * Source unique de vérité pour la tarification, les quotas et les modules.
  */
 
-import { TenantLimits } from '../types/tenant';
+import { TenantLimits } from '../types/tenant.js';
 
 export type PackId = 'minimum' | 'medium' | 'premium';
 
