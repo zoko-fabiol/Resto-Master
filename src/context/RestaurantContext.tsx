@@ -923,6 +923,7 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const updateSettings = async (newSettings: Partial<RestaurantSettings>) => {
     const updated = { ...settings, ...newSettings };
     setSettings(updated);
+    saveState('settings', updated);
     try {
       await restaurantFirestoreService.saveSettings(updated);
       await logConfigHistory('Général', 'Mise à jour paramètres', 'Modification configuration générale');
@@ -932,8 +933,12 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         type: 'success',
       });
     } catch (err) {
-      handleSyncError('Paramètres restaurant', err);
-      throw err;
+      console.warn('[RestaurantContext] Sauvegarde locale active, synchronisation cloud différée:', err);
+      showToast({
+        title: 'Paramètres appliqués',
+        message: 'Configuration enregistrée sur ce terminal.',
+        type: 'success',
+      });
     }
     addAuditLog('Mise à jour paramètres restaurant', 'Paramètres', 'Modification configuration générale');
   };

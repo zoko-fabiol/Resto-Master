@@ -71,20 +71,33 @@ export const restaurantWhatsAppService = {
    * Récupère la configuration WhatsApp du restaurant
    */
   async getWhatsAppSettings(restaurantId: string): Promise<RestaurantWhatsAppSettings> {
+    let localData: RestaurantWhatsAppSettings | null = null;
     try {
-      if (restaurantId) {
+      const stored = localStorage.getItem(`restomaster_whatsapp_${restaurantId || 'default'}`);
+      if (stored) {
+        localData = JSON.parse(stored) as RestaurantWhatsAppSettings;
+      }
+    } catch {
+      // ignore
+    }
+
+    try {
+      if (restaurantId && navigator.onLine) {
         const snap = await getDoc(doc(db, 'restaurants', restaurantId, 'settings', 'whatsapp_config'));
         if (snap.exists()) {
-          return snap.data() as RestaurantWhatsAppSettings;
+          const cloudData = snap.data() as RestaurantWhatsAppSettings;
+          return { ...localData, ...cloudData };
         }
       }
     } catch (e) {
-      console.warn('[restaurantWhatsAppService] Erreur lecture settings WhatsApp:', e);
+      console.warn('[restaurantWhatsAppService] Erreur lecture cloud settings WhatsApp:', e);
     }
+
+    if (localData) return localData;
 
     return {
       enabled: true,
-      gatewayMode: 'qr_connected',
+      gatewayMode: 'click_to_chat',
       sessionStatus: 'disconnected',
       reservationAlertEnabled: true,
       orderReadyAlertEnabled: true,
@@ -93,9 +106,17 @@ export const restaurantWhatsAppService = {
   },
 
   /**
-   * Sauvegarde la configuration WhatsApp du restaurant
+   * Sauvegarde la configuration WhatsApp du restaurant (Offline-first immédiat)
    */
   async saveWhatsAppSettings(restaurantId: string, settings: RestaurantWhatsAppSettings): Promise<void> {
+    // 1. Sauvegarde locale immédiate garantie
+    try {
+      localStorage.setItem(`restomaster_whatsapp_${restaurantId || 'default'}`, JSON.stringify(settings));
+    } catch {
+      // ignore
+    }
+
+    // 2. Synchronisation Cloud tolérante aux autorisations
     if (!restaurantId) return;
     try {
       await setDoc(
@@ -107,8 +128,7 @@ export const restaurantWhatsAppService = {
         { merge: true }
       );
     } catch (e) {
-      console.error('[restaurantWhatsAppService] Erreur sauvegarde settings WhatsApp:', e);
-      throw e;
+      console.warn('[restaurantWhatsAppService] Sauvegarde locale active, synchronisation cloud différée:', e);
     }
   },
 

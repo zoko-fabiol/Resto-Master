@@ -299,6 +299,38 @@ export const RestaurantWhatsAppConfigSection: React.FC = () => {
     }
   };
 
+  // Action directe : basculer immédiatement en mode Click-to-Chat (1-Clic gratuit)
+  const handleSwitchToClickToChat = async () => {
+    setGatewayMode('click_to_chat');
+    setQrImageError(false);
+    try {
+      const cleanPhone = formatWhatsAppPhoneNumber(restaurantPhoneNumber);
+      await restaurantWhatsAppService.saveWhatsAppSettings(restaurantId, {
+        enabled: true,
+        gatewayMode: 'click_to_chat',
+        sessionStatus: 'disconnected',
+        restaurantPhoneNumber: cleanPhone,
+        senderTitle: senderTitle.trim(),
+        reservationAlertEnabled,
+        orderReadyAlertEnabled,
+        digitalReceiptAlertEnabled,
+      });
+      await updateSettings({
+        whatsappGatewayEnabled: true,
+        whatsappGatewayMode: 'click_to_chat',
+        whatsappSessionStatus: 'disconnected',
+        whatsappPhoneNumber: cleanPhone,
+      });
+      showToast({
+        type: 'success',
+        title: 'Mode 1-Clic Activé !',
+        message: 'Vous pouvez désormais envoyer tous les messages WhatsApp en 1 clic direct sans aucun compte tiers.',
+      });
+    } catch {
+      // Local state is already updated
+    }
+  };
+
   // Déconnexion de l'appareil
   const handleDisconnect = async () => {
     setSaving(true);
@@ -739,7 +771,7 @@ export const RestaurantWhatsAppConfigSection: React.FC = () => {
                             </button>
                             <button
                               type="button"
-                              onClick={() => setGatewayMode('click_to_chat')}
+                              onClick={handleSwitchToClickToChat}
                               className="w-full py-1.5 px-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-[10px] rounded-lg shadow-2xs cursor-pointer"
                             >
                               Passer en Mode 1-Clic Gratuit
@@ -906,7 +938,7 @@ export const RestaurantWhatsAppConfigSection: React.FC = () => {
               </span>
               <button
                 type="button"
-                onClick={handleSaveCredentials}
+                onClick={handleSwitchToClickToChat}
                 disabled={saving}
                 className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-xs cursor-pointer shadow-xs"
               >

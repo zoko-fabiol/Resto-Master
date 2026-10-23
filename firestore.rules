@@ -268,6 +268,11 @@ service cloud.firestore {
       allow read: if isPlatformAdmin() || (isAuthenticated() && hasOutletAccess(restaurantId));
       allow create, update: if isPlatformWriter() || (isDirection() && (resource == null || isTenantMember(resource.data.organizationId)));
       allow delete: if isPlatformWriter();
+
+      match /settings/{settingId} {
+        allow read: if isPlatformAdmin() || (isAuthenticated() && hasOutletAccess(restaurantId));
+        allow write: if isPlatformWriter() || (isAuthenticated() && (hasOutletAccess(restaurantId) || isDirection() || isManager()));
+      }
     }
 
     match /settings/{docId} {
@@ -279,7 +284,8 @@ service cloud.firestore {
       );
       // Un document verrouillé (configurationVerrouillee == true) ne peut JAMAIS être modifié par la direction
       allow write: if isPlatformWriter() || (
-        isDirection() &&
+        isAuthenticated() &&
+        (isDirection() || isManager()) &&
         (resource == null || resource.data.organizationId == callerOrgId() || hasDocRestaurantAccess()) &&
         (request.resource == null || request.resource.data.organizationId == callerOrgId() || hasIncomingRestaurantAccess()) &&
         (resource == null || !('configurationVerrouillee' in resource.data) || resource.data.configurationVerrouillee != true)
