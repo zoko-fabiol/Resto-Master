@@ -47,6 +47,8 @@ export const RestaurantEmailConfigSection: React.FC = () => {
   const [copiedScript, setCopiedScript] = useState(false);
 
   // Configuration e-mail
+  const [providerMode, setProviderMode] = useState<'restomaster' | 'custom'>('restomaster');
+  const [customEmailAddress, setCustomEmailAddress] = useState('');
   const [webhookUrl, setWebhookUrl] = useState('');
   const [senderName, setSenderName] = useState('');
   const [stockAlertEnabled, setStockAlertEnabled] = useState(true);
@@ -86,6 +88,20 @@ export const RestaurantEmailConfigSection: React.FC = () => {
     setLoading(true);
     try {
       const config = await restaurantEmailService.getEmailSettings(restaurantId);
+      if (config.providerMode) {
+        setProviderMode(config.providerMode);
+      } else if (config.gasWebhookUrl && !config.gasWebhookUrl.includes('AKfycbzCyGQ5xmYyFDWWAq0fK0bstffHFUuBqB8EsEcUBGnwzm3WqQLzPPRYuCG_6EKhEYp3')) {
+        setProviderMode('custom');
+      } else {
+        setProviderMode('restomaster');
+      }
+
+      if (config.customEmailAddress) {
+        setCustomEmailAddress(config.customEmailAddress);
+      } else if (activeRestaurant?.email) {
+        setCustomEmailAddress(activeRestaurant.email);
+      }
+
       if (config.gasWebhookUrl) setWebhookUrl(config.gasWebhookUrl);
       if (config.senderName) setSenderName(config.senderName);
       else setSenderName(restaurantName);
@@ -129,11 +145,11 @@ export const RestaurantEmailConfigSection: React.FC = () => {
   };
 
   const handleSaveSettings = async () => {
-    if (webhookUrl && !webhookUrl.trim().startsWith('https://script.google.com/macros/s/')) {
+    if (providerMode === 'custom' && webhookUrl && !webhookUrl.trim().startsWith('https://script.google.com/macros/s/')) {
       showToast({
         type: 'warning',
         title: 'URL de Webhook non conforme',
-        message: "L'URL doit obligatoirement commencer par 'https://script.google.com/macros/s/'",
+        message: "L'URL Google Apps Script doit obligatoirement commencer par 'https://script.google.com/macros/s/'",
       });
       return;
     }
@@ -141,6 +157,8 @@ export const RestaurantEmailConfigSection: React.FC = () => {
     setSaving(true);
     try {
       const newConfig: RestaurantEmailSettings = {
+        providerMode,
+        customEmailAddress: customEmailAddress.trim(),
         gasWebhookUrl: webhookUrl.trim(),
         senderName: senderName.trim() || restaurantName,
         stockAlertEnabled,
@@ -161,7 +179,9 @@ export const RestaurantEmailConfigSection: React.FC = () => {
       showToast({
         type: 'success',
         title: 'Configuration E-mail Enregistrée',
-        message: 'La passerelle Google Apps Script et les alertes du restaurant sont à jour.',
+        message: providerMode === 'custom'
+          ? 'Votre propre passerelle e-mail Google Apps Script est activée pour le restaurant.'
+          : 'La passerelle mutualisée RestoMaster est sélectionnée par défaut.',
       });
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Erreur inconnue';
@@ -407,6 +427,7 @@ export const RestaurantEmailConfigSection: React.FC = () => {
       const res = await restaurantEmailService.sendEmail({
         restaurantId,
         restaurantName,
+        providerMode,
         webhookUrl: webhookUrl.trim(),
         to: testRecipient.trim(),
         subject: `[TEST RESTAURANT] ${data.email.subject}`,
@@ -417,12 +438,12 @@ export const RestaurantEmailConfigSection: React.FC = () => {
       if (res.success) {
         setTestStatus({
           type: 'success',
-          message: `E-mail de test transmis avec succès à ${testRecipient} !`,
+          message: `E-mail de test transmis avec succès à ${testRecipient} (${providerMode === 'custom' ? 'via votre passerelle Google Apps Script' : 'via la passerelle RestoMaster'}) !`,
         });
       } else {
         setTestStatus({
           type: 'error',
-          message: `Échec de l'envoi : ${res.message}. Vérifiez le paramétrage "Tout le monde" sur Google Apps Script.`,
+          message: `Échec de l'envoi : ${res.message}. Vérifiez le paramétrage "Tout le monde" sur Google Apps Script si vous utilisez votre propre script.`,
         });
       }
     } catch (err: unknown) {
@@ -447,31 +468,303 @@ export const RestaurantEmailConfigSection: React.FC = () => {
   return (
     <div className="space-y-6">
       
-      {/* 1. État de la Passerelle Gérée par RestoMaster */}
-      <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-indigo-950 text-white p-5 rounded-2xl border border-slate-800 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-md">
-        <div className="flex items-center gap-3.5">
-          <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center font-black shrink-0">
-            <Mail className="w-5 h-5" />
-          </div>
+      {/* 1. Sélecteur du Mode d'Expédition E-mail */}
+      <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-xs space-y-6">
+        <div className="border-b border-slate-100 pb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <div>
-            <div className="flex items-center gap-2 flex-wrap">
-              <h2 className="text-sm font-black text-white">
-                Passerelle E-mails & Notifications Restaurant
-              </h2>
-              <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                Gérée par RestoMaster
-              </span>
-            </div>
-            <p className="text-xs text-slate-300 mt-0.5 max-w-2xl">
-              L'infrastructure d'envoi est automatiquement supervisée par la plateforme. Renseignez ci-dessous les adresses de destination des collaborateurs pour les alertes de stock, les rapports Z et les bilans de direction.
+            <h2 className="text-sm font-black text-slate-900 flex items-center gap-2">
+              <Mail className="w-4 h-4 text-amber-500" />
+              1. Passerelle d'Expédition des E-mails & Notifications
+            </h2>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Choisissez comment votre restaurant expédie ses tickets de caisse, alertes de stock et bilans de direction.
             </p>
+          </div>
+          <div className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-700">
+            <span>Mode actif :</span>
+            <strong className="text-slate-900">
+              {providerMode === 'custom' ? 'Mon Propre E-mail (Google Script)' : 'Passerelle RestoMaster'}
+            </strong>
           </div>
         </div>
 
-        <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 text-xs font-bold shrink-0">
-          <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-          <span>Passerelle Active</span>
+        {/* Choix des Deux Modes */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Option A : Passerelle RestoMaster */}
+          <button
+            type="button"
+            onClick={() => setProviderMode('restomaster')}
+            className={`text-left p-4 rounded-2xl border-2 transition-all cursor-pointer relative flex flex-col justify-between ${
+              providerMode === 'restomaster'
+                ? 'border-emerald-500 bg-emerald-50/40 shadow-sm'
+                : 'border-slate-200 bg-slate-50/40 hover:border-slate-300'
+            }`}
+          >
+            <div>
+              <div className="flex items-center justify-between gap-2 mb-2">
+                <div className="flex items-center gap-2">
+                  <div className={`w-8 h-8 rounded-xl flex items-center justify-center font-bold ${
+                    providerMode === 'restomaster'
+                      ? 'bg-emerald-500 text-white shadow-xs'
+                      : 'bg-slate-200 text-slate-600'
+                  }`}>
+                    <Zap className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="font-black text-xs text-slate-900">Passerelle RestoMaster Cloud</h3>
+                    <span className="text-[10px] font-bold text-emerald-600 uppercase">Zéro configuration · Immédiat</span>
+                  </div>
+                </div>
+                {providerMode === 'restomaster' && (
+                  <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0" />
+                )}
+              </div>
+              <p className="text-xs text-slate-600 leading-relaxed mt-2">
+                Expédition automatique gérée directement par notre infrastructure cloud sécurisée. Prêt à l'emploi en 1 clic sans démarche technique ni script à créer.
+              </p>
+            </div>
+
+            <div className="mt-4 pt-3 border-t border-slate-200/60 flex items-center justify-between text-[11px] text-slate-500 font-medium">
+              <span>Quota : Illimité plateforme</span>
+              <span className={`px-2 py-0.5 rounded-md font-bold text-[10px] uppercase ${
+                providerMode === 'restomaster'
+                  ? 'bg-emerald-100 text-emerald-800'
+                  : 'bg-slate-200 text-slate-600'
+              }`}>
+                {providerMode === 'restomaster' ? 'Sélectionné' : 'Choisir ce mode'}
+              </span>
+            </div>
+          </button>
+
+          {/* Option B : E-mail Personnel Restaurant */}
+          <button
+            type="button"
+            onClick={() => setProviderMode('custom')}
+            className={`text-left p-4 rounded-2xl border-2 transition-all cursor-pointer relative flex flex-col justify-between ${
+              providerMode === 'custom'
+                ? 'border-amber-500 bg-amber-50/40 shadow-sm'
+                : 'border-slate-200 bg-slate-50/40 hover:border-slate-300'
+            }`}
+          >
+            <div>
+              <div className="flex items-center justify-between gap-2 mb-2">
+                <div className="flex items-center gap-2">
+                  <div className={`w-8 h-8 rounded-xl flex items-center justify-center font-bold ${
+                    providerMode === 'custom'
+                      ? 'bg-amber-500 text-slate-950 shadow-xs'
+                      : 'bg-slate-200 text-slate-600'
+                  }`}>
+                    <Code2 className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="font-black text-xs text-slate-900">Mon Propre E-mail Restaurant</h3>
+                    <span className="text-[10px] font-bold text-amber-700 uppercase">Google Apps Script · Votre Nom</span>
+                  </div>
+                </div>
+                {providerMode === 'custom' && (
+                  <CheckCircle2 className="w-5 h-5 text-amber-600 shrink-0" />
+                )}
+              </div>
+              <p className="text-xs text-slate-600 leading-relaxed mt-2">
+                Les e-mails partent directement depuis la boîte Gmail ou Google Workspace de votre restaurant. Vos clients voient votre véritable adresse et identité.
+              </p>
+            </div>
+
+            <div className="mt-4 pt-3 border-t border-slate-200/60 flex items-center justify-between text-[11px] text-slate-500 font-medium">
+              <span>Quota Google : 100 mails/jour gratuits</span>
+              <span className={`px-2 py-0.5 rounded-md font-bold text-[10px] uppercase ${
+                providerMode === 'custom'
+                  ? 'bg-amber-200 text-amber-900'
+                  : 'bg-slate-200 text-slate-600'
+              }`}>
+                {providerMode === 'custom' ? 'Sélectionné' : 'Choisir ce mode'}
+              </span>
+            </div>
+          </button>
         </div>
+
+        {/* Détails et Tutoriel si Option B "Mon Propre E-mail" est sélectionnée */}
+        {providerMode === 'custom' && (
+          <div className="p-5 rounded-2xl border-2 border-amber-300 bg-gradient-to-br from-amber-50/70 via-white to-amber-50/30 space-y-5">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-amber-200/70">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-amber-500 text-slate-950 flex items-center justify-center font-black shrink-0 shadow-xs">
+                  <Code2 className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-black text-xs text-slate-900">
+                    Configuration de votre Script Google Apps Script
+                  </h3>
+                  <p className="text-[11px] text-slate-600">
+                    Suivez ce tutoriel en 4 étapes chrono (environ 2 minutes) pour lier votre boîte Gmail.
+                  </p>
+                </div>
+              </div>
+
+              {/* Boutons d'Action Rapides (1-Clic) */}
+              <div className="flex items-center gap-2 flex-wrap">
+                <a
+                  href="https://script.google.com/home/start"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-xs transition"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  <span>1. Ouvrir Google Apps Script</span>
+                </a>
+
+                <button
+                  type="button"
+                  onClick={handleCopyScript}
+                  className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl font-bold text-xs shadow-xs transition cursor-pointer ${
+                    copiedScript
+                      ? 'bg-emerald-600 text-white'
+                      : 'bg-slate-900 hover:bg-slate-800 text-white'
+                  }`}
+                >
+                  {copiedScript ? (
+                    <>
+                      <Check className="w-3.5 h-3.5" />
+                      <span>Code du Script Copié !</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-3.5 h-3.5" />
+                      <span>2. Copier le Code du Script</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+
+            {/* Tutoriel Pédagogique en 4 Étapes */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+              <div className="p-3.5 rounded-xl bg-white border border-amber-200/80 shadow-2xs space-y-1">
+                <div className="flex items-center gap-2">
+                  <span className="w-5 h-5 rounded-full bg-amber-500 text-slate-950 font-black text-[11px] flex items-center justify-center">1</span>
+                  <span className="font-bold text-xs text-slate-900">Créer le projet</span>
+                </div>
+                <p className="text-[11px] text-slate-600 leading-snug">
+                  Cliquez sur <strong>« Ouvrir Google Apps Script »</strong>, puis sur le bouton bleu <strong>« + Nouveau projet »</strong> en haut à gauche.
+                </p>
+              </div>
+
+              <div className="p-3.5 rounded-xl bg-white border border-amber-200/80 shadow-2xs space-y-1">
+                <div className="flex items-center gap-2">
+                  <span className="w-5 h-5 rounded-full bg-amber-500 text-slate-950 font-black text-[11px] flex items-center justify-center">2</span>
+                  <span className="font-bold text-xs text-slate-900">Coller le script</span>
+                </div>
+                <p className="text-[11px] text-slate-600 leading-snug">
+                  Cliquez sur <strong>« Copier le Code »</strong>, effacez tout le texte dans le fichier <code className="bg-slate-100 px-1 py-0.5 rounded text-[10px]">Code.gs</code> et collez.
+                </p>
+              </div>
+
+              <div className="p-3.5 rounded-xl bg-white border border-amber-200/80 shadow-2xs space-y-1">
+                <div className="flex items-center gap-2">
+                  <span className="w-5 h-5 rounded-full bg-amber-500 text-slate-950 font-black text-[11px] flex items-center justify-center">3</span>
+                  <span className="font-bold text-xs text-slate-900">Déployer en Web App</span>
+                </div>
+                <p className="text-[11px] text-slate-600 leading-snug">
+                  Cliquez sur <strong>« Déployer »</strong> &gt; <strong>« Nouveau déploiement »</strong> &gt; Type <strong>« Application Web »</strong>. Qui a accès : <strong>« Tout le monde » (Anyone)</strong>.
+                </p>
+              </div>
+
+              <div className="p-3.5 rounded-xl bg-white border border-amber-200/80 shadow-2xs space-y-1">
+                <div className="flex items-center gap-2">
+                  <span className="w-5 h-5 rounded-full bg-amber-500 text-slate-950 font-black text-[11px] flex items-center justify-center">4</span>
+                  <span className="font-bold text-xs text-slate-900">Coller l'URL Webhook</span>
+                </div>
+                <p className="text-[11px] text-slate-600 leading-snug">
+                  Autorisez l'accès Google, copiez l'URL de l'application Web se terminant par <code className="bg-slate-100 px-1 py-0.5 rounded text-[10px]">/exec</code> et collez-la ci-dessous.
+                </p>
+              </div>
+            </div>
+
+            {/* Champs de Saisie du Webhook Personnel */}
+            <div className="pt-2 grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div className="md:col-span-2 space-y-1">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-slate-800 block">
+                    URL du Webhook Google Apps Script du restaurant :
+                  </label>
+                  {webhookUrl.trim().startsWith('https://script.google.com/macros/s/') && webhookUrl.trim().endsWith('/exec') && (
+                    <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-600">
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      URL Conforme
+                    </span>
+                  )}
+                </div>
+                <input
+                  type="url"
+                  value={webhookUrl}
+                  onChange={(e) => setWebhookUrl(e.target.value)}
+                  placeholder="https://script.google.com/macros/s/AKfycb.../exec"
+                  className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs bg-white text-slate-900 font-mono focus:outline-none focus:ring-2 focus:ring-amber-500/30"
+                />
+                <p className="text-[10px] text-slate-500">
+                  L'URL doit commencer par <code className="text-slate-700">https://script.google.com/macros/s/</code> et se terminer par <code className="text-slate-700">/exec</code>.
+                </p>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-800 block">
+                  Nom d'expéditeur affiché :
+                </label>
+                <input
+                  type="text"
+                  value={senderName}
+                  onChange={(e) => setSenderName(e.target.value)}
+                  placeholder={restaurantName}
+                  className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs bg-white text-slate-900 font-bold focus:outline-none focus:ring-2 focus:ring-amber-500/30"
+                />
+                <p className="text-[10px] text-slate-500">
+                  Ex: {restaurantName}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex justify-end pt-2">
+              <button
+                type="button"
+                disabled={saving}
+                onClick={handleSaveSettings}
+                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 disabled:bg-slate-400 text-slate-950 font-black text-xs shadow-md shadow-amber-500/20 transition cursor-pointer"
+              >
+                {saving ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>Enregistrement...</span>
+                  </>
+                ) : (
+                  <>
+                    <Check className="w-3.5 h-3.5" />
+                    <span>Valider & Enregistrer ma Passerelle Google Script</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Confirmation visuelle si Mode RestoMaster Cloud */}
+        {providerMode === 'restomaster' && (
+          <div className="p-4 rounded-2xl bg-emerald-50/70 border border-emerald-200/80 flex items-center justify-between gap-3 text-xs text-emerald-950">
+            <div className="flex items-center gap-2.5">
+              <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+              <span>
+                <strong>Passerelle RestoMaster Cloud activée :</strong> Tous vos e-mails de caisse, alertes et rapports sont acheminés instantanément sans configuration.
+              </span>
+            </div>
+            <button
+              type="button"
+              disabled={saving}
+              onClick={handleSaveSettings}
+              className="px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shrink-0 transition cursor-pointer"
+            >
+              {saving ? 'Enregistrement...' : 'Confirmer ce choix'}
+            </button>
+          </div>
+        )}
       </div>
 
       {/* 2. Déclencheurs Automatiques Métier */}
@@ -705,6 +998,12 @@ export const RestaurantEmailConfigSection: React.FC = () => {
             <p className="text-xs text-slate-500 mt-0.5">
               Prévisualisez chaque modèle aux couleurs de <strong>{restaurantName}</strong> et testez l'expédition en boîte réelle.
             </p>
+          </div>
+          <div className="flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-slate-100 text-slate-700">
+            <span>Passerelle test :</span>
+            <span className={providerMode === 'custom' ? 'text-amber-700' : 'text-emerald-700'}>
+              {providerMode === 'custom' ? 'Google Apps Script (Propre)' : 'RestoMaster Cloud'}
+            </span>
           </div>
         </div>
 

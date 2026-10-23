@@ -7,7 +7,9 @@ import { db } from '../../lib/firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 
 export interface RestaurantEmailSettings {
+  providerMode?: 'restomaster' | 'custom';
   gasWebhookUrl?: string;
+  customEmailAddress?: string;
   senderName?: string;
   stockAlertEnabled?: boolean;
   stockAlertRecipient?: string;
@@ -21,6 +23,9 @@ export interface RestaurantEmailSettings {
   directorEmailRecipient?: string;
 }
 
+export const RESTOMASTER_DEFAULT_GATEWAY_URL =
+  'https://script.google.com/macros/s/AKfycbzCyGQ5xmYyFDWWAq0fK0bstffHFUuBqB8EsEcUBGnwzm3WqQLzPPRYuCG_6EKhEYp3/exec';
+
 export const restaurantEmailService = {
   /**
    * Récupère la configuration e-mail propre au restaurant actif,
@@ -31,19 +36,25 @@ export const restaurantEmailService = {
       if (restaurantId) {
         const snap = await getDoc(doc(db, 'restaurants', restaurantId, 'settings', 'email_config'));
         if (snap.exists()) {
-          return snap.data() as RestaurantEmailSettings;
+          const data = snap.data() as RestaurantEmailSettings;
+          return {
+            providerMode: data.providerMode || (data.gasWebhookUrl ? 'custom' : 'restomaster'),
+            ...data,
+          };
         }
       }
     } catch (e) {
       console.warn('[restaurantEmailService] Erreur lecture settings restaurant:', e);
     }
 
+    const storedLocal = typeof localStorage !== 'undefined' ? localStorage.getItem('restomaster_gas_webhook_url') : null;
     const defaultUrl =
-      localStorage.getItem('restomaster_gas_webhook_url') ||
-      import.meta.env.VITE_GAS_WEBHOOK_URL ||
-      'https://script.google.com/macros/s/AKfycbzCyGQ5xmYyFDWWAq0fK0bstffHFUuBqB8EsEcUBGnwzm3WqQLzPPRYuCG_6EKhEYp3/exec';
+      storedLocal ||
+      import.meta.env?.VITE_GAS_WEBHOOK_URL ||
+      RESTOMASTER_DEFAULT_GATEWAY_URL;
 
     return {
+      providerMode: 'restomaster',
       gasWebhookUrl: defaultUrl,
       senderName: 'RestoMaster OS',
       stockAlertEnabled: true,
@@ -75,35 +86,42 @@ export const restaurantEmailService = {
   },
 
   /**
-   * Envoi d'un e-mail via la passerelle Google Apps Script du restaurant
+   * Envoi d'un e-mail via la passerelle choisie (Passerelle RestoMaster ou E-mail dédié du restaurant)
    */
   async sendEmail(params: {
     restaurantId?: string;
     restaurantName?: string;
     webhookUrl?: string;
+    providerMode?: 'restomaster' | 'custom';
     to: string;
     subject: string;
     htmlBody: string;
     textBody?: string;
   }): Promise<{ success: boolean; message: string }> {
     let targetWebhook = params.webhookUrl;
+    let effectiveMode = params.providerMode;
 
-    if (!targetWebhook && params.restaurantId) {
+    if (params.restaurantId && (!targetWebhook || !effectiveMode)) {
       const config = await this.getEmailSettings(params.restaurantId);
-      targetWebhook = config.gasWebhookUrl;
+      if (!effectiveMode) effectiveMode = config.providerMode;
+      if (!targetWebhook && effectiveMode === 'custom') {
+        targetWebhook = config.gasWebhookUrl;
+      }
     }
 
-    if (!targetWebhook) {
+    // Si mode RestoMaster ou si mode custom sans URL configurée, repli automatique sur la passerelle RestoMaster
+    if (effectiveMode === 'restomaster' || !targetWebhook || !targetWebhook.trim()) {
+      const storedLocal = typeof localStorage !== 'undefined' ? localStorage.getItem('restomaster_gas_webhook_url') : null;
       targetWebhook =
-        localStorage.getItem('restomaster_gas_webhook_url') ||
-        import.meta.env.VITE_GAS_WEBHOOK_URL ||
-        'https://script.google.com/macros/s/AKfycbx6zKdA_7SAwejIXUjJd49rTikO6wTsO_5MPZFEl2lU3rjYjBwApSAxr7OuTUMACnY/exec';
+        storedLocal ||
+        import.meta.env?.VITE_GAS_WEBHOOK_URL ||
+        RESTOMASTER_DEFAULT_GATEWAY_URL;
     }
 
     if (!targetWebhook) {
       return {
         success: false,
-        message: "Aucune URL de Webhook Google Apps Script n'est configurée pour ce restaurant.",
+        message: "Aucune URL de passerelle e-mail n'est configurée.",
       };
     }
 

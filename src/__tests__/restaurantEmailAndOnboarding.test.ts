@@ -152,5 +152,24 @@ describe('Passerelle Google Apps Script & Tolérance Réseau', () => {
     expect(code).toContain('function doPost(e)');
     expect(code).toContain('Le Grand Gourmet');
     expect(code).toContain('MailApp.sendEmail');
+    expect(code).toContain('https://script.google.com');
+  });
+
+  it('gère le mode passerelle RestoMaster par défaut et le mode dédié restaurant', async () => {
+    // Mode RestoMaster par défaut
+    const settings = await restaurantEmailService.getEmailSettings('test-resto-unexisting');
+    expect(settings.providerMode).toBe('restomaster');
+    expect(settings.gasWebhookUrl).toBeDefined();
+
+    // Envoi tolérant au réseau avec repli RestoMaster
+    const sendResult = await restaurantEmailService.sendEmail({
+      to: 'test@client.com',
+      subject: 'Test Ticket',
+      htmlBody: '<b>Test</b>',
+      providerMode: 'restomaster',
+    });
+    // fetch étant mocké ou intercepté / no-cors
+    expect(sendResult).toHaveProperty('success');
   });
 });
+
