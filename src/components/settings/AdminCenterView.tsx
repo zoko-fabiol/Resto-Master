@@ -411,6 +411,7 @@ export const AdminCenterView: React.FC = () => {
         gradient: 'from-zinc-700 to-slate-900',
         badge: 'ESC/POS & Réseau',
         tags: ['impression', 'imprimante', 'thermique', '80mm', '58mm', 'tiroir', 'reseau', 'escpos'],
+        featureKey: 'printers_hardware',
       },
       {
         key: 'terminaux',
@@ -423,6 +424,7 @@ export const AdminCenterView: React.FC = () => {
         gradient: 'from-cyan-700 to-blue-800',
         badge: 'Caisses & Tablettes',
         tags: ['terminal', 'tablette', 'caisse', 'pos', 'tactile', 'kds'],
+        featureKey: 'hardware_provisioning',
       },
       {
         key: 'offline',
@@ -435,6 +437,7 @@ export const AdminCenterView: React.FC = () => {
         gradient: 'from-emerald-700 to-teal-800',
         badge: '100% Hors Ligne',
         tags: ['offline', 'hors ligne', 'pwa', 'sync', 'stockage local'],
+        featureKey: 'offline_sync_engine',
       },
     ];
 

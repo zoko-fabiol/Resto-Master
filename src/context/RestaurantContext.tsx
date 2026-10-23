@@ -3061,24 +3061,78 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
   const isFeatureEntitled = useCallback(
     (featureKey: string): boolean => {
+      // 1. Si la fonctionnalité est explicitement désactivée dans la configuration système (features)
+      const sysFeat = features.find((f) => f.id === featureKey);
+      if (sysFeat && sysFeat.status === 'DÉSACTIVÉ') {
+        return false;
+      }
+
+      // 2. Si les droits de l'établissement (entitlements Cloud) sont résolus
       if (entitlements?.features && entitlements.features[featureKey]) {
         return entitlements.features[featureKey].status === 'ACTIVÉ';
       }
+
+      // 3. Fallback sur le statut de la fonctionnalité système locale
+      if (sysFeat) {
+        return sysFeat.status === 'ACTIVÉ';
+      }
+
       return false;
     },
-    [entitlements]
+    [entitlements, features]
   );
 
   const isFeatureEnabled = isFeatureEntitled;
 
   const isModuleEntitled = useCallback(
     (moduleKey: string): boolean => {
-      if (!entitlements || !entitlements.modules) {
-        return ['mod_dashboard', 'mod_pos', 'mod_caisse'].includes(moduleKey);
+      // 1. Si les droits de l'établissement (entitlements Cloud) sont résolus
+      if (entitlements && entitlements.modules) {
+        return Boolean(entitlements.modules[moduleKey]);
       }
-      return Boolean(entitlements.modules[moduleKey]);
+
+      // 2. Fallback direct selon les fonctionnalités système configurées
+      if (moduleKey === 'mod_tables') {
+        const feat = features.find((f) => f.id === 'tables_management');
+        return feat ? feat.status === 'ACTIVÉ' : true;
+      }
+      if (moduleKey === 'mod_cuisine') {
+        const feat = features.find((f) => f.id === 'kds_kitchen');
+        return feat ? feat.status === 'ACTIVÉ' : true;
+      }
+      if (moduleKey === 'mod_bar') {
+        const feat = features.find((f) => f.id === 'kds_bar');
+        return feat ? feat.status === 'ACTIVÉ' : true;
+      }
+      if (moduleKey === 'mod_bar_pos') {
+        const feat = features.find((f) => f.id === 'bar_pos_exclusive');
+        return feat ? feat.status === 'ACTIVÉ' : true;
+      }
+      if (moduleKey === 'mod_delivery') {
+        const feat = features.find((f) => f.id === 'delivery_orders');
+        return feat ? feat.status === 'ACTIVÉ' : true;
+      }
+      if (moduleKey === 'mod_events') {
+        const feat = features.find((f) => f.id === 'events_banquets');
+        return feat ? feat.status === 'ACTIVÉ' : true;
+      }
+      return [
+        'mod_dashboard',
+        'mod_pos',
+        'mod_caisse',
+        'mod_settings',
+        'mod_staff',
+        'mod_clients',
+        'mod_reports',
+        'mod_stock',
+        'mod_menu',
+        'mod_fiscal',
+        'mod_finance',
+        'mod_documents',
+        'mod_audit',
+      ].includes(moduleKey);
     },
-    [entitlements]
+    [entitlements, features]
   );
 
   const isConfigKeyLocked = useCallback(

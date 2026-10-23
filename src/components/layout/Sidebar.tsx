@@ -425,8 +425,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {/* Navigation Sections */}
         <nav className="flex-1 overflow-y-auto px-2 py-3 space-y-4 custom-scrollbar">
           {navSections.map((section) => {
-            // Filter visible items in section via unified resolveAccess
+            // Filter visible items in section via unified resolveAccess, features and entitlements
             const visibleItems = section.items.filter((item) => {
+              if (item.featureKey && !isFeatureEnabled(item.featureKey)) {
+                return false;
+              }
+              const moduleKey = ITEM_RULE_MAP[item.id];
+              if (moduleKey && !isModuleEntitled(moduleKey)) {
+                return false;
+              }
               return canAccess(item.id);
             });
 

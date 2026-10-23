@@ -104,6 +104,8 @@ export const Header: React.FC<HeaderProps> = ({
     currentDeviceProfile,
     syncError,
     clearSyncError,
+    isFeatureEntitled,
+    isModuleEntitled,
   } = useRestaurant();
 
   const [roleMenuOpen, setRoleMenuOpen] = useState(false);
@@ -617,7 +619,7 @@ export const Header: React.FC<HeaderProps> = ({
           )}
 
           {/* Quick Launch Customer Order Display (TV Retrait) */}
-          {openCustomerDisplay && (
+          {openCustomerDisplay && (isFeatureEntitled('customer_display') || isModuleEntitled('mod_delivery') || isFeatureEntitled('kds_kitchen')) && (
             <button
               onClick={openCustomerDisplay}
               className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 transition-colors shadow-2xs cursor-pointer"
@@ -630,19 +632,21 @@ export const Header: React.FC<HeaderProps> = ({
           )}
 
           {/* Quick Launch Client Tablet Kiosk */}
-          <button
-            onClick={() => setCurrentTab('kiosk')}
-            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl transition-colors shadow-2xs text-xs font-bold cursor-pointer ${
-              currentTab === 'kiosk'
-                ? 'bg-amber-500 text-slate-950 font-black'
-                : 'bg-white hover:bg-slate-100 text-slate-700 border border-slate-200'
-            }`}
-            title="Ouvrir le Mode Borne / Tablette Client Kiosk"
-            aria-label="Ouvrir le mode borne kiosk client"
-          >
-            <Tablet className="w-3.5 h-3.5 text-slate-600" aria-hidden="true" />
-            <span className="hidden 2xl:inline">Borne Kiosk</span>
-          </button>
+          {(isFeatureEntitled('kiosk_ordering') || isModuleEntitled('mod_tables')) && (
+            <button
+              onClick={() => setCurrentTab('kiosk')}
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl transition-colors shadow-2xs text-xs font-bold cursor-pointer ${
+                currentTab === 'kiosk'
+                  ? 'bg-amber-500 text-slate-950 font-black'
+                  : 'bg-white hover:bg-slate-100 text-slate-700 border border-slate-200'
+              }`}
+              title="Ouvrir le Mode Borne / Tablette Client Kiosk"
+              aria-label="Ouvrir le mode borne kiosk client"
+            >
+              <Tablet className="w-3.5 h-3.5 text-slate-600" aria-hidden="true" />
+              <span className="hidden 2xl:inline">Borne Kiosk</span>
+            </button>
+          )}
 
           {/* Paired Terminal Identity Pill & Provisioning Trigger */}
           {openPairingModal && (
