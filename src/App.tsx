@@ -101,6 +101,7 @@ const AppContent: React.FC = () => {
   const {
     seatReservation,
     isFeatureEnabled,
+    isModuleEntitled,
     isRuleEnabled,
     currentDeviceProfile,
     unpairCurrentDevice,
@@ -248,24 +249,25 @@ const AppContent: React.FC = () => {
     }
   }, [currentUser, currentDeviceProfile, currentTab, kioskTableId, isTabletKioskUnlocked, navigate]);
 
-  // Route guard : refus immédiat de tout accès direct par URL si l'onglet ou le module est interdit
+  // Route guard : refus immédiat et invisible de tout accès si l'onglet ou le module n'est pas souscrit
   useEffect(() => {
     if (currentUser.role === 'tablette' || currentUser.accountType === 'tablette') {
       return;
     }
 
-    if (!canAccess(currentTab)) {
-      let fallback = 'dashboard';
-      if (canAccess('pos')) fallback = 'pos';
-      else if (canAccess('kitchen_kds')) fallback = 'kitchen_kds';
-      else if (canAccess('bar_kds')) fallback = 'bar_kds';
-      else if (canAccess('stock')) fallback = 'stock';
-      else if (canAccess('tables')) fallback = 'tables';
-      else if (canAccess('caisse')) fallback = 'caisse';
+    const moduleKey = ITEM_RULE_MAP[currentTab];
+    const isModuleAllowed = moduleKey ? isModuleEntitled(moduleKey) : true;
+    const isAccessAllowed = canAccess(currentTab);
+
+    if (!isModuleAllowed || !isAccessAllowed) {
+      let fallback = 'pos';
+      if (canAccess('pos') && isModuleEntitled('mod_pos')) fallback = 'pos';
+      else if (canAccess('dashboard') && isModuleEntitled('mod_dashboard')) fallback = 'dashboard';
+      else if (canAccess('caisse') && isModuleEntitled('mod_caisse')) fallback = 'caisse';
 
       navigate(`/${fallback}`, { replace: true });
     }
-  }, [currentUser.role, currentUser.accountType, currentTab, canAccess, navigate]);
+  }, [currentUser.role, currentUser.accountType, currentTab, canAccess, isModuleEntitled, navigate]);
 
   const handleOpenOrderOnTable = (tableId: string) => {
     setPosInitialTableId(tableId);

@@ -38,13 +38,8 @@ export const FeatureGate: React.FC<FeatureGateProps> = ({
     return <>{children}</>;
   }
 
-  if (fallback) {
-    return <>{fallback}</>;
-  }
-
-  if (!showUpgradePrompt) {
-    return null;
-  }
+  // Règle stricte d'invisibilité : si non disponible dans l'abonnement, masquer totalement sans polluer l'interface
+  return null;
 
   const handleSendRequest = async () => {
     if (!featureKey && !moduleKey) return;

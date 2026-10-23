@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useRestaurant } from '../../context/RestaurantContext';
 import { useConfirm } from '../ui/ConfirmDialog';
@@ -106,7 +106,37 @@ export const Header: React.FC<HeaderProps> = ({
     clearSyncError,
     isFeatureEntitled,
     isModuleEntitled,
+    terminals,
   } = useRestaurant();
+
+  // Détection de présence réelle d'écran TV ou Kiosk souscrit ET configuré
+  const hasConfiguredTvScreen = useMemo(() => {
+    const isEntitled =
+      isFeatureEntitled('customer_display') ||
+      isModuleEntitled('mod_delivery') ||
+      isFeatureEntitled('kds_kitchen');
+    if (!isEntitled) return false;
+    return terminals.some(
+      (t) =>
+        t.active &&
+        (t.type === 'ecran_retrait' ||
+          t.name.toLowerCase().includes('tv') ||
+          t.name.toLowerCase().includes('retrait'))
+    );
+  }, [isFeatureEntitled, isModuleEntitled, terminals]);
+
+  const hasConfiguredKioskTablet = useMemo(() => {
+    const isEntitled = isFeatureEntitled('kiosk_ordering') || isModuleEntitled('mod_tables');
+    if (!isEntitled) return false;
+    return terminals.some(
+      (t) =>
+        t.active &&
+        (t.type === 'tablette_table' ||
+          t.assignedRole === 'tablette' ||
+          t.name.toLowerCase().includes('kiosk') ||
+          t.name.toLowerCase().includes('borne'))
+    );
+  }, [isFeatureEntitled, isModuleEntitled, terminals]);
 
   const [roleMenuOpen, setRoleMenuOpen] = useState(false);
   const [outletMenuOpen, setOutletMenuOpen] = useState(false);
@@ -618,8 +648,8 @@ export const Header: React.FC<HeaderProps> = ({
             </button>
           )}
 
-          {/* Quick Launch Customer Order Display (TV Retrait) */}
-          {openCustomerDisplay && (isFeatureEntitled('customer_display') || isModuleEntitled('mod_delivery') || isFeatureEntitled('kds_kitchen')) && (
+          {/* Quick Launch Customer Order Display (TV Retrait) - uniquement si souscrit ET configuré */}
+          {openCustomerDisplay && hasConfiguredTvScreen && (
             <button
               onClick={openCustomerDisplay}
               className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 transition-colors shadow-2xs cursor-pointer"
@@ -631,8 +661,8 @@ export const Header: React.FC<HeaderProps> = ({
             </button>
           )}
 
-          {/* Quick Launch Client Tablet Kiosk */}
-          {(isFeatureEntitled('kiosk_ordering') || isModuleEntitled('mod_tables')) && (
+          {/* Quick Launch Client Tablet Kiosk - uniquement si souscrit ET configuré */}
+          {hasConfiguredKioskTablet && (
             <button
               onClick={() => setCurrentTab('kiosk')}
               className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl transition-colors shadow-2xs text-xs font-bold cursor-pointer ${
