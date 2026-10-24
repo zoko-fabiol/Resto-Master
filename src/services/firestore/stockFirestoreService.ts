@@ -232,19 +232,24 @@ export const stockFirestoreService = {
     callback: (items: StockItem[]) => void
   ): () => void {
     try {
+      if (!restaurantId || restaurantId.trim() === '') {
+        callback([]);
+        return () => {};
+      }
+
       const colRef = collection(db, 'stock_items');
-      const q = restaurantId
-        ? query(colRef, where('restaurantId', '==', restaurantId))
-        : query(colRef);
+      const q = restaurantId === 'all'
+        ? query(colRef)
+        : query(colRef, where('restaurantId', '==', restaurantId));
 
       return onSnapshot(
         q,
         (snapshot) => {
-          if (!snapshot.empty) {
-            callback(snapshot.docs.map((d) => d.data() as StockItem));
-          }
+          callback(snapshot.docs.map((d) => d.data() as StockItem));
         },
-        () => {}
+        (err) => {
+          console.warn('[stockFirestoreService] Écoute stock_items interrompue:', err);
+        }
       );
     } catch {
       return () => {};
@@ -261,18 +266,29 @@ export const stockFirestoreService = {
     }
   },
 
-  subscribeToStockMovements(callback: (movements: StockMovement[]) => void): () => void {
+  subscribeToStockMovements(
+    callback: (movements: StockMovement[]) => void,
+    restaurantId?: string
+  ): () => void {
     try {
+      if (!restaurantId || restaurantId.trim() === '') {
+        callback([]);
+        return () => {};
+      }
+
       const colRef = collection(db, 'stock_movements');
-      const q = query(colRef, orderBy('timestamp', 'desc'), limit(150));
+      const q = restaurantId === 'all'
+        ? query(colRef, orderBy('timestamp', 'desc'), limit(150))
+        : query(colRef, where('restaurantId', '==', restaurantId), orderBy('timestamp', 'desc'), limit(150));
+
       return onSnapshot(
         q,
         (snapshot) => {
-          if (!snapshot.empty) {
-            callback(snapshot.docs.map((d) => d.data() as StockMovement));
-          }
+          callback(snapshot.docs.map((d) => d.data() as StockMovement));
         },
-        () => {}
+        (err) => {
+          console.warn('[stockFirestoreService] Écoute stock_movements interrompue:', err);
+        }
       );
     } catch {
       return () => {};
@@ -297,17 +313,29 @@ export const stockFirestoreService = {
     }
   },
 
-  subscribeToStockLots(callback: (lots: StockLot[]) => void): () => void {
+  subscribeToStockLots(
+    callback: (lots: StockLot[]) => void,
+    restaurantId?: string
+  ): () => void {
     try {
+      if (!restaurantId || restaurantId.trim() === '') {
+        callback([]);
+        return () => {};
+      }
+
       const colRef = collection(db, 'stock_lots');
+      const q = restaurantId === 'all'
+        ? query(colRef)
+        : query(colRef, where('restaurantId', '==', restaurantId));
+
       return onSnapshot(
-        colRef,
+        q,
         (snapshot) => {
-          if (!snapshot.empty) {
-            callback(snapshot.docs.map((d) => d.data() as StockLot));
-          }
+          callback(snapshot.docs.map((d) => d.data() as StockLot));
         },
-        () => {}
+        (err) => {
+          console.warn('[stockFirestoreService] Écoute stock_lots interrompue:', err);
+        }
       );
     } catch {
       return () => {};

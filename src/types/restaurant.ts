@@ -564,6 +564,8 @@ export interface Payment {
 
 export interface CashRegisterSession {
   id: string;
+  restaurantId?: string;
+  cashRegisterId?: string;
   openedAt: string;
   closedAt?: string;
   openedBy: string;
@@ -580,6 +582,7 @@ export interface CashRegisterSession {
 
 export interface CashMovement {
   id: string;
+  restaurantId?: string;
   sessionId: string;
   type: 'entree' | 'sortie' | 'encaissement_vente' | 'remboursement' | 'avance';
   amount: number;
@@ -813,6 +816,7 @@ export interface DocumentItem {
 
 export interface Expense {
   id: string;
+  restaurantId?: string;
   date: string;
   amount: number;
   category:

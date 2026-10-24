@@ -39,19 +39,24 @@ export const reservationsFirestoreService = {
     callback: (reservations: Reservation[]) => void
   ): () => void {
     try {
+      if (!restaurantId || restaurantId.trim() === '') {
+        callback([]);
+        return () => {};
+      }
+
       const colRef = collection(db, 'reservations');
-      const q = restaurantId
-        ? query(colRef, where('restaurantId', '==', restaurantId))
-        : query(colRef);
+      const q = restaurantId === 'all'
+        ? query(colRef)
+        : query(colRef, where('restaurantId', '==', restaurantId));
 
       return onSnapshot(
         q,
         (snapshot) => {
-          if (!snapshot.empty) {
-            callback(snapshot.docs.map((d) => d.data() as Reservation));
-          }
+          callback(snapshot.docs.map((d) => d.data() as Reservation));
         },
-        () => {}
+        (err) => {
+          console.warn('[reservationsFirestoreService] Écoute réservations interrompue:', err);
+        }
       );
     } catch {
       return () => {};
@@ -76,17 +81,29 @@ export const reservationsFirestoreService = {
     }
   },
 
-  subscribeToDeliveries(callback: (deliveries: DeliveryOrder[]) => void): () => void {
+  subscribeToDeliveries(
+    callback: (deliveries: DeliveryOrder[]) => void,
+    restaurantId?: string
+  ): () => void {
     try {
+      if (!restaurantId || restaurantId.trim() === '') {
+        callback([]);
+        return () => {};
+      }
+
       const colRef = collection(db, 'deliveries');
+      const q = restaurantId === 'all'
+        ? query(colRef)
+        : query(colRef, where('restaurantId', '==', restaurantId));
+
       return onSnapshot(
-        colRef,
+        q,
         (snapshot) => {
-          if (!snapshot.empty) {
-            callback(snapshot.docs.map((d) => d.data() as DeliveryOrder));
-          }
+          callback(snapshot.docs.map((d) => d.data() as DeliveryOrder));
         },
-        () => {}
+        (err) => {
+          console.warn('[reservationsFirestoreService] Écoute livraisons interrompue:', err);
+        }
       );
     } catch {
       return () => {};
@@ -111,18 +128,29 @@ export const reservationsFirestoreService = {
     }
   },
 
-  subscribeToEvents(callback: (events: RestaurantEvent[]) => void): () => void {
+  subscribeToEvents(
+    callback: (events: RestaurantEvent[]) => void,
+    restaurantId?: string
+  ): () => void {
     try {
+      if (!restaurantId || restaurantId.trim() === '') {
+        callback([]);
+        return () => {};
+      }
+
       const colRef = collection(db, 'events');
-      const q = query(colRef, orderBy('date', 'desc'));
+      const q = restaurantId === 'all'
+        ? query(colRef, orderBy('date', 'desc'))
+        : query(colRef, where('restaurantId', '==', restaurantId), orderBy('date', 'desc'));
+
       return onSnapshot(
         q,
         (snapshot) => {
-          if (!snapshot.empty) {
-            callback(snapshot.docs.map((d) => d.data() as RestaurantEvent));
-          }
+          callback(snapshot.docs.map((d) => d.data() as RestaurantEvent));
         },
-        () => {}
+        (err) => {
+          console.warn('[reservationsFirestoreService] Écoute événements interrompue:', err);
+        }
       );
     } catch {
       return () => {};

@@ -420,10 +420,15 @@ export const tablesFirestoreService = {
     callback: (tables: RestaurantTable[]) => void
   ): () => void {
     try {
+      if (!restaurantId || restaurantId.trim() === '') {
+        callback([]);
+        return () => {};
+      }
+
       const colRef = collection(db, 'tables');
-      const q = restaurantId && restaurantId !== 'all'
-        ? query(colRef, where('restaurantId', '==', restaurantId))
-        : query(colRef);
+      const q = restaurantId === 'all'
+        ? query(colRef)
+        : query(colRef, where('restaurantId', '==', restaurantId));
 
       return onSnapshot(
         q,
@@ -445,10 +450,15 @@ export const tablesFirestoreService = {
     callback: (zones: Zone[]) => void
   ): () => void {
     try {
+      if (!restaurantId || restaurantId.trim() === '') {
+        callback([]);
+        return () => {};
+      }
+
       const colRef = collection(db, 'zones');
-      const q = restaurantId && restaurantId !== 'all'
-        ? query(colRef, where('restaurantId', '==', restaurantId))
-        : query(colRef);
+      const q = restaurantId === 'all'
+        ? query(colRef)
+        : query(colRef, where('restaurantId', '==', restaurantId));
 
       return onSnapshot(
         q,
@@ -470,10 +480,15 @@ export const tablesFirestoreService = {
     callback: (decor: DecorElement[]) => void
   ): () => void {
     try {
+      if (!restaurantId || restaurantId.trim() === '') {
+        callback([]);
+        return () => {};
+      }
+
       const colRef = collection(db, 'decor_elements');
-      const q = restaurantId && restaurantId !== 'all'
-        ? query(colRef, where('restaurantId', '==', restaurantId))
-        : query(colRef);
+      const q = restaurantId === 'all'
+        ? query(colRef)
+        : query(colRef, where('restaurantId', '==', restaurantId));
 
       return onSnapshot(
         q,

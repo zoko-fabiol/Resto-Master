@@ -34,19 +34,24 @@ export const fiscalFirestoreService = {
     callback: (invoices: Invoice[]) => void
   ): () => void {
     try {
+      if (!restaurantId || restaurantId.trim() === '') {
+        callback([]);
+        return () => {};
+      }
+
       const colRef = collection(db, 'invoices');
-      const q = restaurantId
-        ? query(colRef, where('restaurantId', '==', restaurantId), orderBy('date', 'desc'), limit(200))
-        : query(colRef, orderBy('date', 'desc'), limit(200));
+      const q = restaurantId === 'all'
+        ? query(colRef, orderBy('date', 'desc'), limit(200))
+        : query(colRef, where('restaurantId', '==', restaurantId), orderBy('date', 'desc'), limit(200));
 
       return onSnapshot(
         q,
         (snapshot) => {
-          if (!snapshot.empty) {
-            callback(snapshot.docs.map((d) => d.data() as Invoice));
-          }
+          callback(snapshot.docs.map((d) => d.data() as Invoice));
         },
-        () => {}
+        (err) => {
+          console.warn('[fiscalFirestoreService] Écoute factures interrompue:', err);
+        }
       );
     } catch {
       return () => {};
@@ -68,19 +73,24 @@ export const fiscalFirestoreService = {
     callback: (journal: FiscalJournalItem[]) => void
   ): () => void {
     try {
+      if (!restaurantId || restaurantId.trim() === '') {
+        callback([]);
+        return () => {};
+      }
+
       const colRef = collection(db, 'fiscal_journal');
-      const q = restaurantId
-        ? query(colRef, where('restaurantId', '==', restaurantId), orderBy('date', 'desc'), limit(200))
-        : query(colRef, orderBy('date', 'desc'), limit(200));
+      const q = restaurantId === 'all'
+        ? query(colRef, orderBy('date', 'desc'), limit(200))
+        : query(colRef, where('restaurantId', '==', restaurantId), orderBy('date', 'desc'), limit(200));
 
       return onSnapshot(
         q,
         (snapshot) => {
-          if (!snapshot.empty) {
-            callback(snapshot.docs.map((d) => d.data() as FiscalJournalItem));
-          }
+          callback(snapshot.docs.map((d) => d.data() as FiscalJournalItem));
         },
-        () => {}
+        (err) => {
+          console.warn('[fiscalFirestoreService] Écoute journal fiscal interrompue:', err);
+        }
       );
     } catch {
       return () => {};

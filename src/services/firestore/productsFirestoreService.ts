@@ -49,10 +49,15 @@ export const productsFirestoreService = {
     callback: (products: Product[]) => void
   ): () => void {
     try {
+      if (!restaurantId || restaurantId.trim() === '') {
+        callback([]);
+        return () => {};
+      }
+
       const colRef = collection(db, 'products');
-      const q = restaurantId
-        ? query(colRef, where('restaurantId', '==', restaurantId))
-        : query(colRef);
+      const q = restaurantId === 'all'
+        ? query(colRef)
+        : query(colRef, where('restaurantId', '==', restaurantId));
 
       return onSnapshot(
         q,

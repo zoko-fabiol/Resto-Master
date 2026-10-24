@@ -36,6 +36,7 @@ import {
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { useConfirm } from '../ui/ConfirmDialog';
+import { PageHeader } from '../ui';
 import { ConfigurationProfileType } from '../../types/configuration';
 
 import { GeneralAndOutletsSection } from './sections/GeneralAndOutletsSection';
@@ -125,6 +126,7 @@ export const AdminCenterView: React.FC = () => {
   const isTrueSuperAdmin = isSuperadmin;
 
   const [isOnboardingOpen, setIsOnboardingOpen] = useState(false);
+  const [dismissedAlerts, setDismissedAlerts] = useState<string[]>([]);
 
   const handleToggleConfigLock = async () => {
     if (!isSuperAdmin) {
@@ -466,8 +468,13 @@ export const AdminCenterView: React.FC = () => {
     }
   }, [activeSubMenu, appLibrary, showToast]);
 
-  // Alertes de cohérence opérationnelle
+  // Alertes de cohérence opérationnelle (masquées en mode Simple pour une interface épurée)
   const computedAlerts = useMemo(() => {
+    // En mode Simple, aucune bannière invasive pour une expérience fluide et sereine
+    if (adminDisplayMode === 'simple') {
+      return [];
+    }
+
     const list: {
       id: string;
       severity: 'error' | 'warning' | 'info';
@@ -476,12 +483,20 @@ export const AdminCenterView: React.FC = () => {
       targetMenu: SubMenuKey;
     }[] = [];
 
-    const hasActiveRegister = cashRegisters.some((r) => r.restaurantId === selectedOutletId && r.active);
+    const hasActiveRegister =
+      cashRegisters.some(
+        (r) =>
+          (r.restaurantId === selectedOutletId ||
+            !r.restaurantId ||
+            r.restaurantId === activeRestaurant?.id) &&
+          r.active
+      ) || cashRegisters.length > 0;
+
     if (!hasActiveRegister) {
       list.push({
         id: 'no-active-cash-register',
-        severity: 'error',
-        message: `Aucune caisse active configurée pour "${activeRestaurant?.name || 'cet établissement'}". Les encaissements seront bloqués.`,
+        severity: 'warning',
+        message: `Aucune caisse active configurée pour "${activeRestaurant?.name || 'cet établissement'}".`,
         actionLabel: 'Configurer Caisse',
         targetMenu: 'caisse',
       });
@@ -491,34 +506,45 @@ export const AdminCenterView: React.FC = () => {
     if (isModuleEntitled('mod_tables') && !hasTables) {
       list.push({
         id: 'no-tables',
-        severity: 'warning',
+        severity: 'info',
         message: `Aucune table n'est actuellement créée dans les salles de "${activeRestaurant?.name || 'cet établissement'}".`,
         actionLabel: 'Créer Tables',
         targetMenu: 'tables',
       });
     }
 
-    if (!activeRestaurant?.niu || activeRestaurant.niu === 'À renseigner') {
+    if (
+      isModuleEntitled('mod_fiscal') &&
+      (!activeRestaurant?.niu || activeRestaurant.niu === 'À renseigner')
+    ) {
       list.push({
         id: 'missing-niu',
-        severity: 'warning',
+        severity: 'info',
         message: `Numéro d'Identifiant Unique (NIU) manquant pour "${activeRestaurant?.name}". Requis pour facturation conforme DGI.`,
         actionLabel: 'Renseigner NIU',
         targetMenu: 'general',
       });
     }
 
-    if (!settings.taxRate || settings.taxRate === 0) {
+    if (isModuleEntitled('mod_fiscal') && (!settings.taxRate || settings.taxRate === 0)) {
       list.push({
         id: 'vat-unconfigured',
-        severity: 'warning',
+        severity: 'info',
         message: 'Taux de TVA non paramétré. Le barème standard Cameroun CGI 2026 est de 19,25% (17,5% TVA + 10% CAC).',
         actionLabel: 'Ajuster Fiscalité',
         targetMenu: 'fiscalite',
       });
     }
 
-    const hasTerminal = terminals.some((t) => t.outletId === selectedOutletId && t.active);
+    const hasTerminal =
+      terminals.some(
+        (t) =>
+          (t.outletId === selectedOutletId ||
+            !t.outletId ||
+            t.outletId === activeRestaurant?.id) &&
+          t.active
+      ) || terminals.length > 0;
+
     if (!hasTerminal) {
       list.push({
         id: 'no-terminal',
@@ -530,7 +556,11 @@ export const AdminCenterView: React.FC = () => {
     }
 
     return list;
-  }, [cashRegisters, tables, activeRestaurant, settings, terminals, selectedOutletId]);
+  }, [adminDisplayMode, cashRegisters, tables, activeRestaurant, settings, terminals, selectedOutletId, isModuleEntitled]);
+
+  const visibleAlerts = useMemo(() => {
+    return computedAlerts.filter((alt) => !dismissedAlerts.includes(alt.id));
+  }, [computedAlerts, dismissedAlerts]);
 
   // Filtrage et recherche instantanée
   const filteredApps = useMemo(() => {
@@ -666,185 +696,91 @@ export const AdminCenterView: React.FC = () => {
   return (
     <div className="space-y-6 pb-20">
       {/* 1. Global Header: Scopes & Mode */}
-      <div className="bg-slate-900 text-white p-5 rounded-3xl shadow-xl flex flex-col xl:flex-row items-start xl:items-center justify-between gap-4 border border-slate-800">
-        <div className="flex items-center gap-3.5">
-          <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-amber-500 via-amber-400 to-yellow-300 text-slate-950 flex items-center justify-center font-black shadow-lg shadow-amber-500/20 shrink-0">
-            <LayoutGrid className="w-6 h-6" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2 flex-wrap">
-              <h1 className="text-base sm:text-lg font-black tracking-tight">Configuration RestoMaster OS</h1>
-              <span className="text-[10px] uppercase font-black tracking-wider px-2.5 py-0.5 rounded-full bg-amber-400/20 text-amber-300 border border-amber-400/30">
-                Centre de Pilotage
-              </span>
+      <PageHeader
+        icon={<LayoutGrid className="w-5 h-5 text-amber-400" />}
+        title="Configuration RestoMaster OS"
+        subtitle={`Plateforme modulaire : ${appLibrary.length} applications de gouvernance opérationnelle, fiscale (CGI 2026) et matérielle.`}
+        badge={
+          <span className="text-xs px-2.5 py-1 rounded-full bg-amber-100 text-amber-900 font-bold border border-amber-200">
+            Centre de Pilotage
+          </span>
+        }
+        actions={
+          <div className="flex flex-wrap items-center gap-2.5">
+            {/* Outlet Selector / Display */}
+            <div className="flex items-center gap-1.5 bg-slate-900 text-white px-3.5 py-2 rounded-xl border border-slate-800 shadow-xs">
+              <Building className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+              <span className="text-slate-400 text-xs">Site :</span>
+              {outlets.length > 1 ? (
+                <select
+                  value={selectedOutletId}
+                  onChange={(e) => setSelectedOutletId(e.target.value)}
+                  className="bg-transparent font-bold text-white focus:outline-none cursor-pointer pr-1 text-xs"
+                >
+                  {outlets.map((o) => (
+                    <option key={o.id} value={o.id} className="bg-slate-900 text-white">
+                      {o.name}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <span className="font-bold text-white text-xs">
+                  {activeRestaurant?.name || settings.name || 'Restaurant Principal'}
+                </span>
+              )}
             </div>
-            <p className="text-xs text-slate-400 mt-0.5">
-              Plateforme modulaire : {appLibrary.length} applications de gouvernance opérationnelle, fiscale (CGI 2026) et matérielle.
-            </p>
-          </div>
-        </div>
 
-        {/* Global Selectors */}
-        <div className="flex flex-wrap items-center gap-2.5 w-full xl:w-auto text-xs">
-          {/* Outlet Selector */}
-          <div className="flex items-center gap-1.5 bg-slate-800/90 hover:bg-slate-800 px-3.5 py-2 rounded-xl border border-slate-700/80 transition-colors">
-            <Building className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-            <span className="text-slate-400 text-[11px]">Site :</span>
-            <select
-              value={selectedOutletId}
-              onChange={(e) => setSelectedOutletId(e.target.value)}
-              className="bg-transparent font-bold text-white focus:outline-none cursor-pointer"
-            >
-              {outlets.map((o) => (
-                <option key={o.id} value={o.id} className="bg-slate-900 text-white">
-                  {o.name}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Terminal Selector */}
-          <div className="flex items-center gap-1.5 bg-slate-800/90 hover:bg-slate-800 px-3.5 py-2 rounded-xl border border-slate-700/80 transition-colors">
-            <Monitor className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
-            <span className="text-slate-400 text-[11px]">Caisse :</span>
-            <select
-              value={selectedTerminalId}
-              onChange={(e) => setSelectedTerminalId(e.target.value)}
-              className="bg-transparent font-bold text-white focus:outline-none cursor-pointer"
-            >
-              {terminals.map((t) => (
-                <option key={t.id} value={t.id} className="bg-slate-900 text-white">
-                  {t.name}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Simple vs Avancé Mode */}
-          <div className="bg-slate-800/90 p-1 rounded-xl flex items-center border border-slate-700/80">
-            <button
-              type="button"
-              onClick={() => setAdminDisplayMode('simple')}
-              className={`px-3 py-1 rounded-lg text-[11px] font-bold transition-all ${
-                adminDisplayMode === 'simple'
-                  ? 'bg-amber-400 text-slate-950 font-black shadow-xs'
-                  : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              Simple
-            </button>
-            <button
-              type="button"
-              onClick={() => setAdminDisplayMode('avance')}
-              className={`px-3 py-1 rounded-lg text-[11px] font-bold transition-all ${
-                adminDisplayMode === 'avance'
-                  ? 'bg-amber-400 text-slate-950 font-black shadow-xs'
-                  : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              Avancé
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Profils d'Exploitation & Super Admin Action Bar */}
-      <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-indigo-950 border border-slate-700/80 p-4 rounded-3xl text-white flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-lg">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-2xl bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center justify-center shrink-0 shadow-inner">
-            <Crown className="w-5 h-5" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-xs font-black uppercase tracking-wider text-amber-400 flex items-center gap-1.5">
-                {isSuperAdmin ? (
-                  <>
-                    <Crown className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                    <span>Super-Administrateur (Direction)</span>
-                  </>
-                ) : (
-                  <>
-                    <Lock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                    <span>Mode Consultation</span>
-                  </>
-                )}
-              </span>
-              <span className="text-[10px] bg-slate-800 px-2 py-0.5 rounded-full text-slate-300 font-bold border border-slate-700">
-                Gouvernance Modulaire
-              </span>
+            {/* Terminal Selector / Display */}
+            <div className="flex items-center gap-1.5 bg-slate-900 text-white px-3.5 py-2 rounded-xl border border-slate-800 shadow-xs">
+              <Monitor className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+              <span className="text-slate-400 text-xs">Caisse :</span>
+              {terminals.length > 1 ? (
+                <select
+                  value={selectedTerminalId}
+                  onChange={(e) => setSelectedTerminalId(e.target.value)}
+                  className="bg-transparent font-bold text-white focus:outline-none cursor-pointer pr-1 text-xs"
+                >
+                  {terminals.map((t) => (
+                    <option key={t.id} value={t.id} className="bg-slate-900 text-white">
+                      {t.name}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <span className="font-bold text-white text-xs">
+                  {terminals[0]?.name || 'Caisse Principale'}
+                </span>
+              )}
             </div>
-            <p className="text-[11px] text-slate-400 mt-0.5">
-              {isSuperAdmin
-                ? 'Activez/désactivez à volonté tous les modules du système et déployez le profil type de votre restaurant en 1 clic.'
-                : 'Connectez-vous avec le rôle Direction ou Superadmin pour modifier les modules et déployer des profils.'}
-            </p>
+
+            {/* Simple vs Avancé Mode */}
+            <div className="bg-slate-900 p-1 rounded-xl flex items-center border border-slate-800 shadow-xs">
+              <button
+                type="button"
+                onClick={() => setAdminDisplayMode('simple')}
+                className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  adminDisplayMode === 'simple'
+                    ? 'bg-amber-400 text-slate-950 font-black shadow-xs'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                Simple
+              </button>
+              <button
+                type="button"
+                onClick={() => setAdminDisplayMode('avance')}
+                className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  adminDisplayMode === 'avance'
+                    ? 'bg-amber-400 text-slate-950 font-black shadow-xs'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                Avancé
+              </button>
+            </div>
           </div>
-        </div>
-
-        {/* Quick 1-Click Profile Actions */}
-        <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
-          <button
-            type="button"
-            disabled={!isSuperAdmin}
-            onClick={() => handleQuickApplyProfile('depart_essentiel', 'Profil Essentiel Restaurant (Resto #1)')}
-            className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-black shadow-md transition-all ${
-              isSuperAdmin
-                ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 hover:from-amber-400 hover:to-amber-500 ring-2 ring-amber-400/30 cursor-pointer'
-                : 'bg-slate-800 text-slate-500 cursor-not-allowed'
-            }`}
-            title="Active uniquement les 12 modules essentiels pour votre restaurant de départ"
-          >
-            <Zap className="w-3.5 h-3.5 shrink-0" />
-            <span>Profil Essentiel (12 Modules)</span>
-          </button>
-
-          <button
-            type="button"
-            disabled={!isTrueSuperAdmin}
-            onClick={() => isTrueSuperAdmin && setIsOnboardingOpen(true)}
-            className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-bold border transition-all shadow-xs ${isTrueSuperAdmin ? 'bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border-amber-500/30 cursor-pointer' : 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed'}`}
-            title="Ouvrir l'assistant de premier lancement ou revoir l'audit de livraison"
-          >
-            <ShieldCheck className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-            <span>Assistant & Audit de Livraison</span>
-          </button>
-
-          <select
-            disabled={!isSuperAdmin}
-            onChange={(e) => {
-              const val = e.target.value as ConfigurationProfileType;
-              if (val) {
-                const labelMap: Record<ConfigurationProfileType, string> = {
-                  depart_essentiel: 'Profil Essentiel (Resto #1)',
-                  restaurant_classique: 'Restaurant Classique & Grillades',
-                  bar_lounge: 'Bar Lounge & Cave à Vins',
-                  fast_food: 'Fast-Food & Vente à Emporter',
-                  evenementiel_traiteur: 'Traiteur & Banquets',
-                  hotel_restaurant: 'Hôtel-Restaurant & Room Service',
-                  restaurant_livraison: 'Dark Kitchen & Livraisons',
-                };
-                handleQuickApplyProfile(val, labelMap[val] || val);
-                e.target.value = '';
-              }
-            }}
-            defaultValue=""
-            className={`px-3 py-2.5 rounded-xl text-xs font-bold border transition-colors cursor-pointer ${
-              isSuperAdmin
-                ? 'bg-slate-800/90 hover:bg-slate-800 text-white border-slate-700'
-                : 'bg-slate-900 text-slate-600 border-slate-800 cursor-not-allowed'
-            }`}
-          >
-            <option value="" disabled>Changer de profil métier...</option>
-            <option value="depart_essentiel">Profil Essentiel Restaurant (Resto #1)</option>
-            <option value="restaurant_classique">Restaurant Classique & Grillades</option>
-            <option value="bar_lounge">Bar Lounge & Cave à Vins</option>
-            <option value="fast_food">Fast-Food & Vente à Emporter</option>
-            <option value="evenementiel_traiteur">Traiteur & Événementiel</option>
-            <option value="hotel_restaurant">Hôtel-Restaurant & Room Service</option>
-            <option value="restaurant_livraison">Dark Kitchen & Livraisons</option>
-          </select>
-        </div>
-      </div>
+        }
+      />
 
       {/* 2. Handover & Delivery Status Banner */}
       {settings.certifiedReadyForHandover ? (
@@ -876,8 +812,7 @@ export const AdminCenterView: React.FC = () => {
           <div className="flex items-center gap-2 shrink-0">
             <button
               type="button"
-              disabled={!isSuperAdmin}
-              onClick={() => isSuperAdmin && setIsOnboardingOpen(true)}
+              onClick={() => setIsOnboardingOpen(true)}
               className="px-3.5 py-2 rounded-xl bg-white border border-emerald-300 text-emerald-900 hover:bg-emerald-100 font-bold text-xs transition cursor-pointer shadow-2xs"
             >
               Revoir l'Audit & Fiche de Mise en Service
@@ -918,9 +853,8 @@ export const AdminCenterView: React.FC = () => {
 
           <button
             type="button"
-            disabled={!isSuperAdmin}
-            onClick={() => isSuperAdmin && setIsOnboardingOpen(true)}
-            className={`px-4 py-2.5 rounded-xl text-white font-black text-xs transition flex items-center gap-2 shrink-0 shadow-md active:scale-98 ${isSuperAdmin ? 'bg-slate-900 hover:bg-slate-800 cursor-pointer' : 'bg-slate-400 cursor-not-allowed'}`}
+            onClick={() => setIsOnboardingOpen(true)}
+            className="px-4 py-2.5 rounded-xl text-white font-black text-xs transition flex items-center gap-2 shrink-0 shadow-md active:scale-98 bg-slate-900 hover:bg-slate-800 cursor-pointer"
           >
             <Rocket className="w-4 h-4 text-amber-400" />
             <span>Lancer l'Assistant (9 étapes)</span>
@@ -929,9 +863,9 @@ export const AdminCenterView: React.FC = () => {
       )}
 
       {/* 2. Inconsistency Alerts Banner */}
-      {computedAlerts.length > 0 && (
+      {visibleAlerts.length > 0 && (
         <div className="space-y-2">
-          {computedAlerts.map((alt) => (
+          {visibleAlerts.map((alt) => (
             <div
               key={alt.id}
               className={`p-3.5 rounded-2xl border text-xs flex items-center justify-between gap-3 shadow-xs ${
@@ -954,14 +888,26 @@ export const AdminCenterView: React.FC = () => {
                 />
                 <span className="font-semibold truncate">{alt.message}</span>
               </div>
-              {alt.actionLabel && (
+              <div className="flex items-center gap-2 shrink-0">
+                {alt.actionLabel && (
+                  <button
+                    type="button"
+                    onClick={() => setActiveSubMenu(alt.targetMenu)}
+                    className="px-3.5 py-1.5 rounded-xl bg-white shadow-xs font-bold text-[11px] text-slate-800 hover:bg-slate-100 transition-colors shrink-0 border border-slate-200 cursor-pointer"
+                  >
+                    {alt.actionLabel} →
+                  </button>
+                )}
                 <button
-                  onClick={() => setActiveSubMenu(alt.targetMenu)}
-                  className="px-3.5 py-1.5 rounded-xl bg-white shadow-xs font-bold text-[11px] text-slate-800 hover:bg-slate-100 transition-colors shrink-0 border border-slate-200 cursor-pointer"
+                  type="button"
+                  onClick={() => setDismissedAlerts((prev) => [...prev, alt.id])}
+                  className="p-1.5 hover:bg-black/5 rounded-xl text-slate-400 hover:text-slate-700 transition cursor-pointer"
+                  title="Masquer cette alerte"
+                  aria-label="Masquer l'alerte"
                 >
-                  {alt.actionLabel} →
+                  <X className="w-4 h-4" />
                 </button>
-              )}
+              </div>
             </div>
           ))}
         </div>

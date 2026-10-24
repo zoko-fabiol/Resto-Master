@@ -4,6 +4,9 @@ import {
   doc,
   setDoc,
   updateDoc,
+  deleteDoc,
+  getDocs,
+  writeBatch,
   onSnapshot,
   query,
   where,
@@ -144,10 +147,15 @@ export const ordersFirestoreService = {
     callback: (orders: Order[]) => void
   ): () => void {
     try {
+      if (!restaurantId || restaurantId.trim() === '') {
+        callback([]);
+        return () => {};
+      }
+
       const colRef = collection(db, 'orders');
-      const q = restaurantId && restaurantId !== 'all'
-        ? query(colRef, where('restaurantId', '==', restaurantId))
-        : query(colRef);
+      const q = restaurantId === 'all'
+        ? query(colRef)
+        : query(colRef, where('restaurantId', '==', restaurantId));
 
       return onSnapshot(
         q,
@@ -165,6 +173,43 @@ export const ordersFirestoreService = {
     } catch (err) {
       console.error('Erreur lors de la création de la souscription aux commandes:', err);
       return () => {};
+    }
+  },
+
+  /**
+   * Purge toutes les commandes de test d'un établissement pour remise à blanc (0 FCFA)
+   */
+  async purgeRestaurantOrders(restaurantId: string): Promise<number> {
+    try {
+      const colRef = collection(db, 'orders');
+      const snap = await getDocs(colRef);
+
+      const toDelete: typeof snap.docs = [];
+      snap.docs.forEach((d) => {
+        const data = d.data();
+        if (
+          restaurantId === 'all' ||
+          data.restaurantId === restaurantId ||
+          !data.restaurantId ||
+          data.restaurantId === ''
+        ) {
+          toDelete.push(d);
+        }
+      });
+
+      const chunkSize = 400;
+      for (let i = 0; i < toDelete.length; i += chunkSize) {
+        const chunk = toDelete.slice(i, i + chunkSize);
+        const batch = writeBatch(db);
+        chunk.forEach((d) => batch.delete(d.ref));
+        await batch.commit();
+      }
+
+      console.log(`[OrdersFirestoreService] ${toDelete.length} commandes purgées (scope: ${restaurantId})`);
+      return toDelete.length;
+    } catch (err) {
+      console.error('[OrdersFirestoreService] Erreur lors de la purge des commandes:', err);
+      throw err;
     }
   },
 };

@@ -28,7 +28,14 @@ import {
   ExternalLink,
   Crown,
   Rocket,
+  Sparkles,
+  Flame,
+  Coffee,
+  Wine,
+  ShoppingBag,
 } from 'lucide-react';
+import { db } from '../../lib/firebase';
+import { collection, query, where, getDocs } from 'firebase/firestore';
 import { useRestaurant } from '../../context/RestaurantContext';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
@@ -102,6 +109,108 @@ const ConfigurationToggle: React.FC<ConfigurationToggleProps> = ({
   </div>
 );
 
+interface RestaurantActivityPreset {
+  id: string;
+  title: string;
+  badge: string;
+  desc: string;
+  icon: any;
+  defaultZoneName: string;
+  defaultTables: number;
+  defaultCategory: string;
+  defaultProduct: string;
+  defaultPrice: number;
+  defaultPrinter: string;
+  defaultTerminal: string;
+}
+
+const RESTAURANT_PRESETS: RestaurantActivityPreset[] = [
+  {
+    id: 'restaurant_classique',
+    title: 'Restaurant & Brasserie',
+    badge: 'Service à table',
+    desc: 'Service en salle, cuisine chaude, carte élaborée et addition à table',
+    icon: UtensilsCrossed,
+    defaultZoneName: 'Salle Principale & Véranda',
+    defaultTables: 12,
+    defaultCategory: 'Plats Chauds & Spécialités',
+    defaultProduct: 'Poulet DG Camerounais Traditionnel',
+    defaultPrice: 4500,
+    defaultPrinter: 'Imprimante Caisse Thermique 80mm',
+    defaultTerminal: 'Poste Caisse & Encaissement',
+  },
+  {
+    id: 'fast_food',
+    title: 'Fast-Food & Burger',
+    badge: 'Comptoir & Takeaway',
+    desc: 'Encaissement rapide au comptoir, bip KDS, vente à emporter',
+    icon: Rocket,
+    defaultZoneName: 'Comptoir Rapide & Terrasse',
+    defaultTables: 8,
+    defaultCategory: 'Burgers & Sandwiches',
+    defaultProduct: 'Menu Double Burger & Frites',
+    defaultPrice: 3500,
+    defaultPrinter: 'Imprimante Reçus Rapide 80mm',
+    defaultTerminal: 'Comptoir Commande Express',
+  },
+  {
+    id: 'bar_lounge',
+    title: 'Bar Lounge & Nightclub',
+    badge: 'Boissons & Ambiance',
+    desc: 'Gestion des bouteilles, cocktails, terrasse, salons VIP et musique',
+    icon: Wine,
+    defaultZoneName: 'Espace Bar & Salons VIP',
+    defaultTables: 10,
+    defaultCategory: 'Cocktails & Spiritueux',
+    defaultProduct: 'Cocktail Signature RestoMaster',
+    defaultPrice: 3000,
+    defaultPrinter: 'Imprimante Bar Thermique 80mm',
+    defaultTerminal: 'Poste Comptoir Bar',
+  },
+  {
+    id: 'grillades_braiserie',
+    title: 'Braiserie & Grillades',
+    badge: 'Poissons & Viandes',
+    desc: 'Barbecue, poissons braisés entiers, viandes et accompagnements locaux',
+    icon: Flame,
+    defaultZoneName: 'Terrasse Braiserie & Jardin',
+    defaultTables: 14,
+    defaultCategory: 'Poissons & Viandes Braisés',
+    defaultProduct: 'Poisson Bar Braisé Entier (1.2kg)',
+    defaultPrice: 6000,
+    defaultPrinter: 'Imprimante Caisse Braiserie 80mm',
+    defaultTerminal: 'Poste Caisse Grillades',
+  },
+  {
+    id: 'patisserie_boulangerie',
+    title: 'Pâtisserie & Salon de Thé',
+    badge: 'Vitrine & Douceurs',
+    desc: 'Gâteaux, viennoiseries, caféterie et vente directe au comptoir',
+    icon: ShoppingBag,
+    defaultZoneName: 'Espace Salon & Dégustation',
+    defaultTables: 6,
+    defaultCategory: 'Pâtisseries & Douceurs',
+    defaultProduct: 'Tarte Spéciale Fruits des Tropiques',
+    defaultPrice: 2000,
+    defaultPrinter: 'Imprimante Caisse Ticket 80mm',
+    defaultTerminal: 'Caisse Vitrine Pâtisserie',
+  },
+  {
+    id: 'cafe_snack',
+    title: 'Café & Snack Gourmand',
+    badge: 'Petits Déjeuners',
+    desc: 'Espressos, jus pressés, petits déjeuners et snacks à toute heure',
+    icon: Coffee,
+    defaultZoneName: 'Salle Café & Comptoir',
+    defaultTables: 8,
+    defaultCategory: 'Caféterie & Boissons Chaudes',
+    defaultProduct: 'Formule Café & Petit Déjeuner Complet',
+    defaultPrice: 2500,
+    defaultPrinter: 'Imprimante Ticket 80mm',
+    defaultTerminal: 'Poste Caisse Café',
+  },
+];
+
 export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
   isOpen,
   onClose,
@@ -126,6 +235,9 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
     addPeripheral,
     categories,
     products,
+    selectedOutletId,
+    setSelectedOutletId,
+    changeActiveRestaurant,
   } = useRestaurant() as any;
 
   const { currentUser } = useAuth();
@@ -143,17 +255,17 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
   // -------------------------------------------------------------
   // STEP 1 : Identité Légale
   // -------------------------------------------------------------
-  const [legalName, setLegalName] = useState(settings.name || organization?.legalName || '');
-  const [commercialName, setCommercialName] = useState(settings.slogan || organization?.name || '');
-  const [niu, setNiu] = useState(settings.niu || organization?.niu || '');
-  const [rccm, setRccm] = useState(settings.rccm || organization?.rccm || '');
-  const [city, setCity] = useState(settings.city || organization?.city || 'Douala');
-  const [bp, setBp] = useState(settings.bp || organization?.postalBox || '');
-  const [address, setAddress] = useState(settings.address || organization?.headquartersAddress || '');
-  const [phone, setPhone] = useState(settings.phone || organization?.phone || '');
-  const [email, setEmail] = useState(settings.email || organization?.email || '');
+  const [legalName, setLegalName] = useState(settings?.name || organization?.legalName || '');
+  const [commercialName, setCommercialName] = useState(settings?.slogan || organization?.name || '');
+  const [niu, setNiu] = useState(settings?.niu || organization?.niu || '');
+  const [rccm, setRccm] = useState(settings?.rccm || organization?.rccm || '');
+  const [city, setCity] = useState(settings?.city || organization?.city || 'Douala');
+  const [bp, setBp] = useState(settings?.bp || organization?.postalBox || '');
+  const [address, setAddress] = useState(settings?.address || organization?.headquartersAddress || '');
+  const [phone, setPhone] = useState(settings?.phone || organization?.phone || '');
+  const [email, setEmail] = useState(settings?.email || organization?.email || '');
   const [receiptFooter, setReceiptFooter] = useState(
-    settings.receiptFooter || 'Merci de votre visite • Facture certifiée conforme CGI 2026'
+    settings?.receiptFooter || 'Merci de votre visite • Facture certifiée conforme CGI 2026'
   );
 
   // -------------------------------------------------------------
@@ -164,19 +276,19 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
   const [cacRate, setCacRate] = useState(1.75);
   const [combinedTaxRate, setCombinedTaxRate] = useState(19.25);
   const [enableStockAutoDeduction, setEnableStockAutoDeduction] = useState(
-    settings.enableStockAutoDeduction !== false
+    settings?.enableStockAutoDeduction !== false
   );
-  const [taxCenter, setTaxCenter] = useState(settings.taxCenter || 'DGI - Centre Spécialisé');
-  const [taxSystem, setTaxSystem] = useState(settings.taxSystem || 'Régime Réel');
+  const [taxCenter, setTaxCenter] = useState(settings?.taxCenter || 'DGI - Centre Spécialisé');
+  const [taxSystem, setTaxSystem] = useState(settings?.taxSystem || 'Régime Réel');
 
   // -------------------------------------------------------------
   // STEP 3 : Établissement Initial
   // -------------------------------------------------------------
-  const [outletName, setOutletName] = useState(outlets[0]?.name || 'Restaurant Principal');
-  const [outletCity, setOutletCity] = useState(outlets[0]?.city || city || 'Douala');
-  const [outletAddress, setOutletAddress] = useState(outlets[0]?.address || address || '');
-  const [outletPhone, setOutletPhone] = useState(outlets[0]?.phone || phone || '');
-  const [outletProfile, setOutletProfile] = useState(outlets[0]?.operationalProfile || 'restaurant_classique');
+  const [outletName, setOutletName] = useState(outlets?.[0]?.name || 'Restaurant Principal');
+  const [outletCity, setOutletCity] = useState(outlets?.[0]?.city || city || 'Douala');
+  const [outletAddress, setOutletAddress] = useState(outlets?.[0]?.address || address || '');
+  const [outletPhone, setOutletPhone] = useState(outlets?.[0]?.phone || phone || '');
+  const [outletProfile, setOutletProfile] = useState(outlets?.[0]?.operationalProfile || 'restaurant_classique');
 
   // -------------------------------------------------------------
   // STEP 4 : Zones & Tables
@@ -189,19 +301,19 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
   // STEP 5 : Caisses & Moyens de Paiement
   // -------------------------------------------------------------
   const [registerName, setRegisterName] = useState(
-    cashRegisters[0]?.name || 'Caisse Principale N°1'
+    cashRegisters?.[0]?.name || 'Caisse Principale N°1'
   );
   const [initialFloat, setInitialFloat] = useState<number>(
-    cashRegisters[0]?.initialAmount || 25000
+    cashRegisters?.[0]?.initialAmount || 25000
   );
   const [acceptCash, setAcceptCash] = useState(true);
   const [acceptCard, setAcceptCard] = useState(true);
-  const [acceptOrangeMoney, setAcceptOrangeMoney] = useState(Boolean(settings.orangeMoneyMerchantCode));
-  const [orangeMoneyCode, setOrangeMoneyCode] = useState(settings.orangeMoneyMerchantCode || '');
-  const [orangeMoneyPhone, setOrangeMoneyPhone] = useState(settings.orangeMoneyPhone || '');
-  const [acceptMtnMoMo, setAcceptMtnMoMo] = useState(Boolean(settings.mtnMoMoMerchantCode));
-  const [mtnMoMoCode, setMtnMoMoCode] = useState(settings.mtnMoMoMerchantCode || '');
-  const [mtnMoMoPhone, setMtnMoMoPhone] = useState(settings.mtnMoMoPhone || '');
+  const [acceptOrangeMoney, setAcceptOrangeMoney] = useState(Boolean(settings?.orangeMoneyMerchantCode));
+  const [orangeMoneyCode, setOrangeMoneyCode] = useState(settings?.orangeMoneyMerchantCode || '');
+  const [orangeMoneyPhone, setOrangeMoneyPhone] = useState(settings?.orangeMoneyPhone || '');
+  const [acceptMtnMoMo, setAcceptMtnMoMo] = useState(Boolean(settings?.mtnMoMoMerchantCode));
+  const [mtnMoMoCode, setMtnMoMoCode] = useState(settings?.mtnMoMoMerchantCode || '');
+  const [mtnMoMoPhone, setMtnMoMoPhone] = useState(settings?.mtnMoMoPhone || '');
 
   // -------------------------------------------------------------
   // STEP 6 : Périphériques & Matériel
@@ -229,21 +341,21 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
   // AUDIT & CHECKLIST CALCULATIONS (STEP 9)
   // -------------------------------------------------------------
   const checklist = useMemo(() => {
-    const isStep1Ok = Boolean(legalName.trim() && niu.trim() && rccm.trim() && city.trim());
+    const isStep1Ok = Boolean(legalName.trim() && commercialName.trim() && city.trim() && phone.trim() && email.trim());
     const isStep2Ok = currency === 'FCFA' && combinedTaxRate === 19.25 && taxRate === 17.5;
-    const isStep3Ok = outlets.length > 0 || Boolean(outletName.trim());
-    const isStep4Ok = (zones.length > 0 || Boolean(newZoneName.trim())) && (tables.length > 0 || tablesToGenerate > 0);
-    const isStep5Ok = cashRegisters.length > 0 || Boolean(registerName.trim());
-    const isStep6Ok = terminals.length > 0 || Boolean(terminalName.trim());
-    const isStep7Ok = (categories.length > 0 || Boolean(sampleCategoryName.trim())) && (products.length > 0 || Boolean(sampleProductName.trim()));
+    const isStep3Ok = (outlets?.length || 0) > 0 || Boolean(outletName.trim());
+    const isStep4Ok = ((zones?.length || 0) > 0 || Boolean(newZoneName.trim())) && ((tables?.length || 0) > 0 || tablesToGenerate > 0);
+    const isStep5Ok = (cashRegisters?.length || 0) > 0 || Boolean(registerName.trim());
+    const isStep6Ok = (terminals?.length || 0) > 0 || Boolean(terminalName.trim());
+    const isStep7Ok = ((categories?.length || 0) > 0 || Boolean(sampleCategoryName.trim())) && ((products?.length || 0) > 0 || Boolean(sampleProductName.trim()));
     const isStep8Ok = directionPin.length >= 4 && caissePin.length >= 4 && serveurPin.length >= 4;
-    const isCleanZeroDemo = !settings.name?.toLowerCase().includes('demo') && !organization?.name?.toLowerCase().includes('demo');
+    const isCleanZeroDemo = !settings?.name?.toLowerCase().includes('demo') && !organization?.name?.toLowerCase().includes('demo');
 
     return [
       {
         id: 1,
-        title: 'Identité Légale & Fiscale',
-        description: 'Raison sociale, NIU, RCCM, Ville et contacts renseignés',
+        title: 'Identité Légale & Établissement',
+        description: 'Raison sociale, nom commercial, ville et contacts renseignés',
         isValid: isStep1Ok,
         targetStep: 1,
       },
@@ -329,7 +441,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
     directionPin,
     caissePin,
     serveurPin,
-    settings.name,
+    settings?.name,
     organization?.name,
   ]);
 
@@ -345,9 +457,242 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
     }
   }, [isOpen]);
 
+  const [signupSourceInfo, setSignupSourceInfo] = useState<string | null>(null);
+
+  // Synchronisation dynamique : recherche de la demande d'adhésion correspondante à l'email connecté
+  useEffect(() => {
+    if (!isOpen) return;
+
+    let isMounted = true;
+    const fetchSignupAndPrefill = async () => {
+      let signupData: any = null;
+      try {
+        if (currentUser?.email) {
+          const signupsRef = collection(db, 'tenant_signups');
+          const q = query(signupsRef, where('email', '==', currentUser.email.toLowerCase().trim()));
+          const snap = await getDocs(q);
+          if (!snap.empty && isMounted) {
+            signupData = snap.docs[0].data();
+            setSignupSourceInfo(signupData.companyName || signupData.applicantName || 'Demande d’adhésion');
+          }
+        }
+      } catch (e) {
+        console.warn('[OnboardingWizard] Lecture tenant_signups:', e);
+      }
+
+      if (!isMounted) return;
+
+      const company = settings?.name || organization?.legalName || signupData?.companyName || organization?.name || '';
+      const slogan = settings?.slogan || organization?.name || signupData?.companyName || '';
+      const taxId = settings?.niu || organization?.niu || '';
+      const regCom = settings?.rccm || organization?.rccm || '';
+      const userCity = settings?.city || organization?.city || signupData?.city || 'Douala';
+      const userBp = settings?.bp || organization?.postalBox || '';
+      const userAddress = settings?.address || organization?.headquartersAddress || '';
+      const userPhone = settings?.phone || organization?.phone || currentUser?.phone || signupData?.phone || '';
+      const userEmail = settings?.email || organization?.email || currentUser?.email || signupData?.email || '';
+      const mainOutletName = outlets?.[0]?.name || signupData?.companyName || 'Restaurant Principal';
+      const estTables = signupData?.estimatedTables ? Number(signupData.estimatedTables) : 8;
+
+      setLegalName((prev: string) => (prev.trim() ? prev : company));
+      setCommercialName((prev: string) => (prev.trim() ? prev : slogan));
+      setNiu((prev: string) => (prev.trim() ? prev : taxId));
+      setRccm((prev: string) => (prev.trim() ? prev : regCom));
+      setCity((prev: string) => (prev.trim() ? prev : userCity));
+      setBp((prev: string) => (prev.trim() ? prev : userBp));
+      setAddress((prev: string) => (prev.trim() ? prev : userAddress));
+      setPhone((prev: string) => (prev.trim() ? prev : userPhone));
+      setEmail((prev: string) => (prev.trim() ? prev : userEmail));
+      setOutletName((prev: string) => (prev.trim() ? prev : mainOutletName));
+      setTablesToGenerate((prev: number) => (prev ? prev : estTables));
+    };
+
+    void fetchSignupAndPrefill();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isOpen, settings, organization, currentUser, outlets]);
+
+  const handleSelectPreset = (presetId: string) => {
+    const preset = RESTAURANT_PRESETS.find((p) => p.id === presetId);
+    if (!preset) return;
+    setOutletProfile(preset.id);
+    if (!newZoneName || newZoneName === 'Salle Principale Climatisation' || newZoneName === 'Salle Principale') {
+      setNewZoneName(preset.defaultZoneName);
+    }
+    if (!tablesToGenerate || tablesToGenerate === 6) {
+      setTablesToGenerate(preset.defaultTables);
+    }
+    if (!sampleCategoryName || sampleCategoryName === 'Plats Principaux') {
+      setSampleCategoryName(preset.defaultCategory);
+    }
+    if (!sampleProductName || sampleProductName === 'Plat du Jour Spécial') {
+      setSampleProductName(preset.defaultProduct);
+    }
+    if (!sampleProductPrice || sampleProductPrice === 4500) {
+      setSampleProductPrice(preset.defaultPrice);
+    }
+    if (!printerName || printerName === 'Imprimante Caisse Thermique 80mm') {
+      setPrinterName(preset.defaultPrinter);
+    }
+    if (!terminalName || terminalName === 'Poste Encaissement Principal') {
+      setTerminalName(preset.defaultTerminal);
+    }
+    showToast({
+      title: `Profil adapté : ${preset.title}`,
+      message: `La configuration des zones, tables et carte test a été ajustée pour ${preset.title}.`,
+      type: 'info',
+    });
+  };
+
+  // VALIDATION STRICTE PAR ÉTAPE (Interdiction formelle de passer à l'étape suivante si un champ obligatoire avec astérisque * est vide)
+  const isStep1Valid = Boolean(
+    legalName.trim() &&
+    commercialName.trim() &&
+    city.trim() &&
+    phone.trim() &&
+    email.trim()
+  );
+
+  const isStep2Valid = currency === 'FCFA' && combinedTaxRate === 19.25 && Boolean(taxCenter.trim() && taxSystem.trim());
+
+  const isStep3Valid = (outlets?.length || 0) > 0 || Boolean(outletName.trim() && outletCity.trim() && outletPhone.trim());
+
+  const isStep4Valid = ((zones?.length || 0) > 0 || Boolean(newZoneName.trim())) && ((tables?.length || 0) > 0 || tablesToGenerate >= 1);
+
+  const isStep5Valid = ((cashRegisters?.length || 0) > 0 || Boolean(registerName.trim())) &&
+    (!acceptOrangeMoney || Boolean(orangeMoneyCode.trim())) &&
+    (!acceptMtnMoMo || Boolean(mtnMoMoCode.trim()));
+
+  const isStep6Valid = ((terminals?.length || 0) > 0 || Boolean(terminalName.trim())) && Boolean(printerName.trim());
+
+  const isStep7Valid = ((categories?.length || 0) > 0 && (products?.length || 0) > 0) ||
+    (Boolean(sampleCategoryName.trim()) && Boolean(sampleProductName.trim()) && Number(sampleProductPrice) > 0);
+
+  const isStep8Valid = directionPin.length >= 4 && caissePin.length >= 4 && serveurPin.length >= 4;
+
+  const isStepValid = (stepNumber: number): boolean => {
+    switch (stepNumber) {
+      case 1: return isStep1Valid;
+      case 2: return isStep2Valid;
+      case 3: return isStep3Valid;
+      case 4: return isStep4Valid;
+      case 5: return isStep5Valid;
+      case 6: return isStep6Valid;
+      case 7: return isStep7Valid;
+      case 8: return isStep8Valid;
+      case 9: return allChecksPassed;
+      default: return true;
+    }
+  };
+
+  const isCurrentStepValid = isStepValid(currentStep);
+
+  const missingStepFields = useMemo(() => {
+    const missing: string[] = [];
+    if (currentStep === 1) {
+      if (!legalName.trim()) missing.push('Raison Sociale');
+      if (!commercialName.trim()) missing.push('Nom Commercial');
+      if (!city.trim()) missing.push('Ville de Siège');
+      if (!phone.trim()) missing.push('Téléphone Principal');
+      if (!email.trim()) missing.push('Email Officiel');
+    } else if (currentStep === 2) {
+      if (!taxCenter.trim()) missing.push('Centre des Impôts');
+      if (!taxSystem.trim()) missing.push('Régime Fiscal');
+    } else if (currentStep === 3) {
+      if (!outletName.trim() && (!outlets || outlets.length === 0)) missing.push('Nom du Point de Vente');
+      if (!outletCity.trim()) missing.push('Ville du Point de Vente');
+      if (!outletPhone.trim()) missing.push('Téléphone de la Caisse');
+    } else if (currentStep === 4) {
+      if (!newZoneName.trim() && (!zones || zones.length === 0)) missing.push('Nom de la Zone de Service');
+      if (tablesToGenerate < 1 && (!tables || tables.length === 0)) missing.push('Nombre de tables (minimum 1)');
+    } else if (currentStep === 5) {
+      if (!registerName.trim() && (!cashRegisters || cashRegisters.length === 0)) missing.push('Nom du Poste de Caisse');
+      if (acceptOrangeMoney && !orangeMoneyCode.trim()) missing.push('Code Marchand Orange Money');
+      if (acceptMtnMoMo && !mtnMoMoCode.trim()) missing.push('Code Marchand MTN MoMo');
+    } else if (currentStep === 6) {
+      if (!terminalName.trim() && (!terminals || terminals.length === 0)) missing.push('Nom du Terminal POS');
+      if (!printerName.trim()) missing.push('Nom de l’Imprimante Ticket');
+    } else if (currentStep === 7) {
+      if ((!categories || categories.length === 0) && !sampleCategoryName.trim()) missing.push('Catégorie du Menu');
+      if ((!products || products.length === 0) && !sampleProductName.trim()) missing.push('Nom du Plat');
+      if ((!products || products.length === 0) && (!sampleProductPrice || sampleProductPrice <= 0)) missing.push('Prix de Vente');
+    } else if (currentStep === 8) {
+      if (directionPin.length < 4) missing.push('Code PIN Direction (min 4 chiffres)');
+      if (caissePin.length < 4) missing.push('Code PIN Caisse (min 4 chiffres)');
+      if (serveurPin.length < 4) missing.push('Code PIN Serveur (min 4 chiffres)');
+    }
+    return missing;
+  }, [
+    currentStep,
+    legalName,
+    commercialName,
+    niu,
+    rccm,
+    city,
+    phone,
+    email,
+    taxCenter,
+    taxSystem,
+    outletName,
+    outletCity,
+    outletPhone,
+    outlets,
+    newZoneName,
+    zones,
+    tablesToGenerate,
+    tables,
+    registerName,
+    cashRegisters,
+    acceptOrangeMoney,
+    orangeMoneyCode,
+    acceptMtnMoMo,
+    mtnMoMoCode,
+    terminalName,
+    terminals,
+    printerName,
+    categories,
+    sampleCategoryName,
+    products,
+    sampleProductName,
+    sampleProductPrice,
+    directionPin,
+    caissePin,
+    serveurPin,
+  ]);
+
+  const canGoToStep = (targetStep: number): boolean => {
+    if (targetStep <= currentStep) return true;
+    for (let s = 1; s < targetStep; s++) {
+      if (!isStepValid(s)) return false;
+    }
+    return true;
+  };
+
   const goToStep = (nextStep: number) => {
+    if (nextStep > currentStep && !canGoToStep(nextStep)) {
+      showToast({
+        title: 'Champs obligatoires requis (*)',
+        message: `Veuillez renseigner tous les champs obligatoires (*) de l'étape ${currentStep} (${missingStepFields.join(', ')}) avant d'avancer.`,
+        type: 'warning',
+      });
+      return;
+    }
     setSlideDirection(nextStep >= currentStep ? 'forward' : 'backward');
     setCurrentStep(nextStep);
+  };
+
+  const handleNextStep = () => {
+    if (!isCurrentStepValid) {
+      showToast({
+        title: 'Champs obligatoires requis (*)',
+        message: `Veuillez renseigner les champs obligatoires (*) : ${missingStepFields.join(', ')}.`,
+        type: 'warning',
+      });
+      return;
+    }
+    goToStep(Math.min(9, currentStep + 1));
   };
 
   // -------------------------------------------------------------
@@ -414,19 +759,16 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
         mtnMoMoPhone: acceptMtnMoMo ? mtnMoMoPhone.trim() : '',
       });
 
-      // 2. Mise à jour de l'organisation
-      const orgId = organization?.id;
-      if (!orgId) {
-        throw new Error("Aucune organisation rattachée à votre compte. Contactez l'administrateur de la plateforme.");
-      }
+      // 2. Mise à jour ou initialisation de l'organisation
+      const orgId = organization?.id?.trim() || currentUser?.organizationId?.trim() || 'default';
       if (updateOrganization) {
         await updateOrganization({
           id: orgId,
-          name: commercialName.trim() || legalName.trim(),
-          legalName: legalName.trim(),
+          name: commercialName.trim() || legalName.trim() || 'Restaurant',
+          legalName: legalName.trim() || commercialName.trim() || 'Restaurant',
           niu: niu.trim(),
           rccm: rccm.trim(),
-          city: city.trim(),
+          city: city.trim() || 'Douala',
           postalBox: bp.trim(),
           headquartersAddress: address.trim(),
           phone: phone.trim(),
@@ -434,31 +776,46 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
           taxRegime: taxSystem.trim(),
           currency: 'FCFA',
           active: true,
+        }).catch((orgErr: unknown) => {
+          console.warn('[OnboardingWizard] updateOrganization différé:', orgErr);
         });
       }
 
-      // 3. Établissement initial si aucun n'existe
-      let currentOutletId = outlets[0]?.id;
-      if (outlets.length === 0 && outletName.trim()) {
-        currentOutletId = `out-${Date.now()}`;
-        const newOutlet: Outlet = {
-          id: currentOutletId,
-          organizationId: orgId,
-          name: outletName.trim(),
-          commercialName: commercialName.trim() || outletName.trim(),
-          city: outletCity.trim() || city.trim() || 'Douala',
-          address: outletAddress.trim() || address.trim(),
-          phone: outletPhone.trim() || phone.trim(),
-          isMain: true,
-          active: true,
-          operationalProfile: outletProfile,
-        };
-        await addOutlet(newOutlet);
+      // 3. Établissement initial ou nouveau
+      let currentOutletId = selectedOutletId || outlets[0]?.id;
+      if (outletName.trim()) {
+        const existing = outlets.find(
+          (o: any) => o.id === currentOutletId || o.name.toLowerCase() === outletName.trim().toLowerCase()
+        );
+        if (!existing) {
+          currentOutletId = `out-${Date.now()}`;
+          const newOutlet: Outlet = {
+            id: currentOutletId,
+            organizationId: orgId,
+            name: outletName.trim(),
+            commercialName: commercialName.trim() || outletName.trim(),
+            city: outletCity.trim() || city.trim() || 'Douala',
+            address: outletAddress.trim() || address.trim(),
+            phone: outletPhone.trim() || phone.trim(),
+            isMain: outlets.length === 0,
+            active: true,
+            operationalProfile: outletProfile,
+          };
+          await addOutlet(newOutlet);
+        } else {
+          currentOutletId = existing.id;
+        }
       }
 
-      // 4. Création Zone & Tables si non configurées
-      let activeZoneId = zones[0]?.id;
-      if (zones.length === 0) {
+      if (currentOutletId) {
+        if (setSelectedOutletId) setSelectedOutletId(currentOutletId);
+        if (changeActiveRestaurant) changeActiveRestaurant(currentOutletId);
+      }
+
+      // 4. Création Zone & Tables si non configurées pour cet établissement
+      const currentZones = (zones || []).filter((z: any) => z.restaurantId === currentOutletId);
+      let activeZoneId = currentZones[0]?.id;
+      if (currentZones.length === 0) {
         const zoneCreated = await addZone({
           restaurantId: currentOutletId || 'out-main',
           name: newZoneName.trim() || 'Salle Principale',
@@ -467,7 +824,8 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
         activeZoneId = zoneCreated?.id;
       }
 
-      if (tables.length === 0 && tablesToGenerate > 0 && activeZoneId) {
+      const currentTables = (tables || []).filter((t: any) => t.restaurantId === currentOutletId);
+      if (currentTables.length === 0 && tablesToGenerate > 0 && activeZoneId) {
         for (let i = 1; i <= tablesToGenerate; i++) {
           await addTable({
             restaurantId: currentOutletId || 'out-main',
@@ -483,8 +841,9 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
         }
       }
 
-      // 5. Caisse principale si non configurée
-      if (cashRegisters.length === 0 && registerName.trim()) {
+      // 5. Caisse principale si non configurée pour cet établissement
+      const currentRegisters = (cashRegisters || []).filter((r: any) => r.restaurantId === currentOutletId);
+      if (currentRegisters.length === 0 && registerName.trim()) {
         await addCashRegister({
           restaurantId: currentOutletId || 'out-main',
           name: registerName.trim(),
@@ -569,7 +928,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
         certifiedReadyForHandover: true,
         configurationVerrouillee: true,
         certifiedAt: new Date().toISOString(),
-        certifiedBy: currentUser.email,
+        certifiedBy: currentUser?.email || 'admin@restomaster.com',
         handoverSlipPrinted: false,
       });
 
@@ -597,7 +956,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
     }
   };
 
-  if (!isOpen || currentUser.role !== 'superadmin') return null;
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-slate-950/95 p-0 select-none backdrop-blur-md onboarding-overlay">
@@ -616,7 +975,9 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
                 <span className="text-xs uppercase font-black tracking-widest text-amber-400 bg-amber-400/10 px-2.5 py-0.5 rounded-full border border-amber-400/20">
                   {isLaunchScreen ? 'Bienvenue' : `Page ${currentSlide.id} / 9`}
                 </span>
-                <span className="text-xs text-slate-400">Super Admin</span>
+                <span className="text-xs text-slate-400">
+                  {currentUser?.role === 'superadmin' ? 'Super Admin' : 'Direction'}
+                </span>
               </div>
               <h2 className="text-lg sm:text-xl font-black text-white tracking-tight mt-0.5">
                 {currentSlide.title}
@@ -664,17 +1025,22 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
             ].map((step) => {
               const isActive = currentStep === step.id;
               const isPast = currentStep > step.id;
+              const isAccessible = canGoToStep(step.id);
               return (
                 <button
                   key={step.id}
                   type="button"
+                  disabled={!isAccessible && !isPast && !isActive}
                   onClick={() => goToStep(step.id)}
-                  className={`onboarding-step-pill px-3 py-1.5 rounded-xl text-xs font-bold transition-all duration-200 flex items-center gap-1.5 cursor-pointer active:scale-95 ${
+                  title={!isAccessible ? `Terminez l'étape ${currentStep} pour débloquer` : undefined}
+                  className={`onboarding-step-pill px-3 py-1.5 rounded-xl text-xs font-bold transition-all duration-200 flex items-center gap-1.5 ${
                     isActive
-                      ? 'bg-emerald-500 text-white shadow-md shadow-emerald-500/25 ring-2 ring-emerald-400/30'
+                      ? 'bg-emerald-500 text-white shadow-md shadow-emerald-500/25 ring-2 ring-emerald-400/30 cursor-default'
                       : isPast
-                      ? 'bg-slate-200 text-slate-800 hover:bg-slate-300'
-                      : 'text-slate-400 hover:text-slate-700 hover:bg-slate-100'
+                      ? 'bg-slate-200 text-slate-800 hover:bg-slate-300 cursor-pointer active:scale-95'
+                      : isAccessible
+                      ? 'text-slate-600 hover:text-slate-900 hover:bg-slate-100 cursor-pointer active:scale-95'
+                      : 'text-slate-300 bg-slate-50 cursor-not-allowed opacity-60'
                   }`}
                 >
                   {isPast && <Check className="w-3.5 h-3.5 text-emerald-600" />}
@@ -742,68 +1108,141 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
                 </p>
               </div>
 
+              {/* Type d'établissement & Profil métier intuitif */}
+              <div className="bg-gradient-to-r from-amber-500/10 via-orange-500/10 to-amber-500/5 p-4 rounded-2xl border border-amber-200">
+                <div className="flex items-center justify-between gap-3 mb-2.5 flex-wrap">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-amber-600 shrink-0" />
+                    <span className="text-xs font-black text-amber-950 uppercase tracking-wider">
+                      Quel type d'établissement configurez-vous ?
+                    </span>
+                  </div>
+                  {signupSourceInfo && (
+                    <span className="text-[10px] font-bold text-emerald-800 bg-emerald-100 px-2.5 py-0.5 rounded-full border border-emerald-300">
+                      ✓ Synchronisé avec votre inscription ({signupSourceInfo})
+                    </span>
+                  )}
+                </div>
+                <p className="text-[11px] text-slate-600 mb-3">
+                  Sélectionnez un modèle : vos zones, tables et carte test s'adapteront immédiatement tout en restant 100% personnalisables.
+                </p>
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
+                  {RESTAURANT_PRESETS.map((preset) => {
+                    const IconComponent = preset.icon;
+                    const isSelected = outletProfile === preset.id;
+                    return (
+                      <button
+                        key={preset.id}
+                        type="button"
+                        onClick={() => handleSelectPreset(preset.id)}
+                        className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between gap-1.5 ${
+                          isSelected
+                            ? 'bg-amber-500 text-slate-950 border-amber-500 shadow-sm font-bold scale-[1.02]'
+                            : 'bg-white hover:bg-amber-50 text-slate-700 border-slate-200'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between w-full">
+                          <IconComponent className={`w-4 h-4 ${isSelected ? 'text-slate-950' : 'text-amber-600'}`} />
+                          <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${isSelected ? 'bg-slate-950 text-white' : 'bg-slate-100 text-slate-600'}`}>
+                            {preset.badge}
+                          </span>
+                        </div>
+                        <div className="text-[11px] font-black line-clamp-1 leading-tight">
+                          {preset.title}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Raison Sociale (Nom légal d'enregistrement) *
+                    Raison Sociale (Nom légal d'enregistrement) <span className="text-red-500 font-black">*</span>
                   </label>
                   <input
                     type="text"
                     value={legalName}
                     onChange={(e) => setLegalName(e.target.value)}
                     placeholder="Ex: LA SOURCE SARL"
-                    className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-300 focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 font-semibold"
+                    className={`w-full px-3.5 py-2.5 text-xs rounded-xl border font-semibold ${
+                      !legalName.trim()
+                        ? 'border-red-300 focus:border-red-500 focus:ring-red-200 bg-red-50/20'
+                        : 'border-slate-300 focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500'
+                    }`}
                   />
+                  {!legalName.trim() && (
+                    <span className="text-[10px] text-red-500 font-semibold mt-0.5 block">Champ obligatoire</span>
+                  )}
                 </div>
 
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Nom Commercial (Enseigne publique)
+                    Nom Commercial (Enseigne publique) <span className="text-red-500 font-black">*</span>
                   </label>
                   <input
                     type="text"
                     value={commercialName}
                     onChange={(e) => setCommercialName(e.target.value)}
                     placeholder="Ex: Restaurant Le Gourmet"
-                    className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-300 focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 font-semibold"
+                    className={`w-full px-3.5 py-2.5 text-xs rounded-xl border font-semibold ${
+                      !commercialName.trim()
+                        ? 'border-red-300 focus:border-red-500 focus:ring-red-200 bg-red-50/20'
+                        : 'border-slate-300 focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500'
+                    }`}
                   />
+                  {!commercialName.trim() && (
+                    <span className="text-[10px] text-red-500 font-semibold mt-0.5 block">Champ obligatoire</span>
+                  )}
                 </div>
 
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Numéro d'Identifiant Unique (NIU DGI) *
+                    Numéro d'Identifiant Unique (NIU DGI) <span className="text-slate-400 font-normal text-[11px]">(Optionnel)</span>
                   </label>
                   <input
                     type="text"
                     value={niu}
                     onChange={(e) => setNiu(e.target.value)}
                     placeholder="Ex: M000000000000X"
-                    className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-300 focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 font-mono font-bold"
+                    className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-300 focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 font-mono font-bold bg-white"
                   />
+                  <span className="text-[10px] text-slate-400 mt-0.5 block">Recommandé pour les factures officielles</span>
                 </div>
 
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Registre du Commerce (RCCM) *
+                    Registre du Commerce (RCCM) <span className="text-slate-400 font-normal text-[11px]">(Optionnel)</span>
                   </label>
                   <input
                     type="text"
                     value={rccm}
                     onChange={(e) => setRccm(e.target.value)}
                     placeholder="Ex: RC/DLA/2024/B/1042"
-                    className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-300 focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 font-mono font-bold"
+                    className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-300 focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 font-mono font-bold bg-white"
                   />
+                  <span className="text-[10px] text-slate-400 mt-0.5 block">À renseigner si immatriculé</span>
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Ville de Siège *</label>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Ville de Siège <span className="text-red-500 font-black">*</span>
+                  </label>
                   <input
                     type="text"
                     value={city}
                     onChange={(e) => setCity(e.target.value)}
                     placeholder="Ex: Douala, Yaoundé, Bafoussam..."
-                    className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-300 focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 font-semibold"
+                    className={`w-full px-3.5 py-2.5 text-xs rounded-xl border font-semibold ${
+                      !city.trim()
+                        ? 'border-red-300 focus:border-red-500 focus:ring-red-200 bg-red-50/20'
+                        : 'border-slate-300 focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500'
+                    }`}
                   />
+                  {!city.trim() && (
+                    <span className="text-[10px] text-red-500 font-semibold mt-0.5 block">Champ obligatoire</span>
+                  )}
                 </div>
 
                 <div>
@@ -829,25 +1268,43 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Téléphone Principal</label>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Téléphone Principal <span className="text-red-500 font-black">*</span>
+                  </label>
                   <input
                     type="text"
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
                     placeholder="Ex: +237 6XX XX XX XX"
-                    className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-300 focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 font-semibold"
+                    className={`w-full px-3.5 py-2.5 text-xs rounded-xl border font-semibold ${
+                      !phone.trim()
+                        ? 'border-red-300 focus:border-red-500 focus:ring-red-200 bg-red-50/20'
+                        : 'border-slate-300 focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500'
+                    }`}
                   />
+                  {!phone.trim() && (
+                    <span className="text-[10px] text-red-500 font-semibold mt-0.5 block">Champ obligatoire</span>
+                  )}
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Email Officiel</label>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Email Officiel <span className="text-red-500 font-black">*</span>
+                  </label>
                   <input
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="Ex: contact@restaurant.cm"
-                    className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-300 focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
+                    className={`w-full px-3.5 py-2.5 text-xs rounded-xl border font-semibold ${
+                      !email.trim()
+                        ? 'border-red-300 focus:border-red-500 focus:ring-red-200 bg-red-50/20'
+                        : 'border-slate-300 focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500'
+                    }`}
                   />
+                  {!email.trim() && (
+                    <span className="text-[10px] text-red-500 font-semibold mt-0.5 block">Champ obligatoire</span>
+                  )}
                 </div>
 
                 <div className="md:col-span-2">
@@ -931,19 +1388,28 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Centre des Impôts de Rattachement (DGI)
+                    Centre des Impôts de Rattachement (DGI) <span className="text-red-500 font-black">*</span>
                   </label>
                   <input
                     type="text"
                     value={taxCenter}
                     onChange={(e) => setTaxCenter(e.target.value)}
                     placeholder="Ex: CIME Douala 1 ou DGE"
-                    className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-300 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 font-semibold"
+                    className={`w-full px-3.5 py-2.5 text-xs rounded-xl border font-semibold ${
+                      !taxCenter.trim()
+                        ? 'border-red-300 focus:border-red-500 focus:ring-red-200 bg-red-50/20'
+                        : 'border-slate-300 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500'
+                    }`}
                   />
+                  {!taxCenter.trim() && (
+                    <span className="text-[10px] text-red-500 font-semibold mt-0.5 block">Centre fiscal obligatoire</span>
+                  )}
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Régime Fiscal</label>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Régime Fiscal <span className="text-red-500 font-black">*</span>
+                  </label>
                   <select
                     value={taxSystem}
                     onChange={(e) => setTaxSystem(e.target.value)}
@@ -985,37 +1451,62 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Nom du Restaurant / Point de Vente *
+                    Nom du Restaurant / Point de Vente <span className="text-red-500 font-black">*</span>
                   </label>
                   <input
                     type="text"
                     value={outletName}
                     onChange={(e) => setOutletName(e.target.value)}
                     placeholder="Ex: Restaurant Principal Akwa"
-                    className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-300 focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 font-semibold"
+                    className={`w-full px-3.5 py-2.5 text-xs rounded-xl border font-semibold ${
+                      !outletName.trim() && outlets.length === 0
+                        ? 'border-red-300 focus:border-red-500 focus:ring-red-200 bg-red-50/20'
+                        : 'border-slate-300 focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500'
+                    }`}
                   />
+                  {!outletName.trim() && outlets.length === 0 && (
+                    <span className="text-[10px] text-red-500 font-semibold mt-0.5 block">Nom du point de vente obligatoire</span>
+                  )}
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Ville du Point de Vente</label>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Ville du Point de Vente <span className="text-red-500 font-black">*</span>
+                  </label>
                   <input
                     type="text"
                     value={outletCity}
                     onChange={(e) => setOutletCity(e.target.value)}
                     placeholder="Ex: Douala"
-                    className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-300 focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 font-semibold"
+                    className={`w-full px-3.5 py-2.5 text-xs rounded-xl border font-semibold ${
+                      !outletCity.trim()
+                        ? 'border-red-300 focus:border-red-500 focus:ring-red-200 bg-red-50/20'
+                        : 'border-slate-300 focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500'
+                    }`}
                   />
+                  {!outletCity.trim() && (
+                    <span className="text-[10px] text-red-500 font-semibold mt-0.5 block">Ville obligatoire</span>
+                  )}
                 </div>
 
                 <div className="md:col-span-2">
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Téléphone Direct de la Caisse</label>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Téléphone Direct de la Caisse <span className="text-red-500 font-black">*</span>
+                  </label>
                   <input
                     type="text"
                     value={outletPhone}
                     onChange={(e) => setOutletPhone(e.target.value)}
                     placeholder="Ex: +237 6XX XX XX XX"
-                    className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-300 focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
+                    className={`w-full px-3.5 py-2.5 text-xs rounded-xl border font-semibold ${
+                      !outletPhone.trim()
+                        ? 'border-red-300 focus:border-red-500 focus:ring-red-200 bg-red-50/20'
+                        : 'border-slate-300 focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500'
+                    }`}
                   />
+                  {!outletPhone.trim() && (
+                    <span className="text-[10px] text-red-500 font-semibold mt-0.5 block">Téléphone obligatoire</span>
+                  )}
                 </div>
 
                 <div className="md:col-span-2 pt-2">
@@ -1042,7 +1533,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
                           type="button"
                           key={profile.id}
                           aria-pressed={isSelected}
-                          onClick={() => setOutletProfile(profile.id)}
+                          onClick={() => handleSelectPreset(profile.id)}
                           className={`configuration-profile-card ${isSelected ? 'is-selected' : ''}`}
                         >
                           <span className="configuration-profile-icon"><ProfileIcon className="h-5 w-5" /></span>
@@ -1099,15 +1590,22 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
                   <div className="text-xs font-bold text-slate-800">Zone Principale</div>
                   <div>
                     <label className="block text-[11px] font-semibold text-slate-600 mb-1">
-                      Nom de la première zone
+                      Nom de la première zone <span className="text-red-500 font-black">*</span>
                     </label>
                     <input
                       type="text"
-                      value={newZoneName || (zones[0]?.name ?? 'Salle Principale Climatisation')}
+                      value={newZoneName || (zones[0]?.name ?? '')}
                       onChange={(e) => setNewZoneName(e.target.value)}
                       placeholder="Ex: Salle Intérieure, Terrasse, Mezzanine..."
-                      className="w-full px-3.5 py-2 text-xs rounded-xl border border-slate-300 bg-white font-semibold"
+                      className={`w-full px-3.5 py-2 text-xs rounded-xl border bg-white font-semibold ${
+                        !newZoneName.trim() && zones.length === 0
+                          ? 'border-red-300 focus:border-red-500 focus:ring-red-200 bg-red-50/20'
+                          : 'border-slate-300'
+                      }`}
                     />
+                    {!newZoneName.trim() && zones.length === 0 && (
+                      <span className="text-[10px] text-red-500 font-semibold mt-0.5 block">Nom de zone obligatoire</span>
+                    )}
                   </div>
                   <div className="text-[11px] text-slate-500">
                     Actuellement {zones.length} zone(s) active(s) enregistrée(s).
@@ -1119,7 +1617,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
                   <div className="grid grid-cols-2 gap-2">
                     <div>
                       <label className="block text-[11px] font-semibold text-slate-600 mb-1">
-                        Nombre de tables
+                        Nombre de tables <span className="text-red-500 font-black">*</span>
                       </label>
                       <input
                         type="number"
@@ -1127,8 +1625,15 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
                         max="50"
                         value={tablesToGenerate}
                         onChange={(e) => setTablesToGenerate(Number(e.target.value))}
-                        className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 bg-white font-bold tabular-nums"
+                        className={`w-full px-3 py-2 text-xs rounded-xl border bg-white font-bold tabular-nums ${
+                          tablesToGenerate < 1 && tables.length === 0
+                            ? 'border-red-300 focus:border-red-500 focus:ring-red-200 bg-red-50/20'
+                            : 'border-slate-300'
+                        }`}
                       />
+                      {tablesToGenerate < 1 && tables.length === 0 && (
+                        <span className="text-[10px] text-red-500 font-semibold mt-0.5 block">Minimum 1 table</span>
+                      )}
                     </div>
                     <div>
                       <label className="block text-[11px] font-semibold text-slate-600 mb-1">
@@ -1189,15 +1694,22 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Nom du Poste de Caisse *
+                    Nom du Poste de Caisse <span className="text-red-500 font-black">*</span>
                   </label>
                   <input
                     type="text"
                     value={registerName}
                     onChange={(e) => setRegisterName(e.target.value)}
                     placeholder="Ex: Caisse Principale N°1"
-                    className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-300 focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 font-semibold"
+                    className={`w-full px-3.5 py-2.5 text-xs rounded-xl border font-semibold ${
+                      !registerName.trim() && cashRegisters.length === 0
+                        ? 'border-red-300 focus:border-red-500 focus:ring-red-200 bg-red-50/20'
+                        : 'border-slate-300 focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500'
+                    }`}
                   />
+                  {!registerName.trim() && cashRegisters.length === 0 && (
+                    <span className="text-[10px] text-red-500 font-semibold mt-0.5 block">Nom de caisse obligatoire</span>
+                  )}
                 </div>
 
                 <div>
@@ -1247,15 +1759,22 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
                       <div>
                         <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                          Code Marchand OM
+                          Code Marchand OM <span className="text-red-500 font-black">*</span>
                         </label>
                         <input
                           type="text"
                           value={orangeMoneyCode}
                           onChange={(e) => setOrangeMoneyCode(e.target.value)}
                           placeholder="Ex: Code OM"
-                          className="w-full px-3 py-2 text-xs rounded-xl border border-orange-300 bg-white font-mono font-bold"
+                          className={`w-full px-3 py-2 text-xs rounded-xl border bg-white font-mono font-bold ${
+                            !orangeMoneyCode.trim()
+                              ? 'border-red-400 focus:border-red-500 bg-red-50/30'
+                              : 'border-orange-300'
+                          }`}
                         />
+                        {!orangeMoneyCode.trim() && (
+                          <span className="text-[10px] text-red-500 font-semibold mt-0.5 block">Requis si Orange Money est activé</span>
+                        )}
                       </div>
                       <div>
                         <label className="block text-[11px] font-bold text-slate-700 mb-1">
@@ -1286,15 +1805,22 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
                       <div>
                         <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                          Code Marchand MoMo
+                          Code Marchand MoMo <span className="text-red-500 font-black">*</span>
                         </label>
                         <input
                           type="text"
                           value={mtnMoMoCode}
                           onChange={(e) => setMtnMoMoCode(e.target.value)}
                           placeholder="Ex: Code MoMo"
-                          className="w-full px-3 py-2 text-xs rounded-xl border border-yellow-300 bg-white font-mono font-bold"
+                          className={`w-full px-3 py-2 text-xs rounded-xl border bg-white font-mono font-bold ${
+                            !mtnMoMoCode.trim()
+                              ? 'border-red-400 focus:border-red-500 bg-red-50/30'
+                              : 'border-yellow-300'
+                          }`}
                         />
+                        {!mtnMoMoCode.trim() && (
+                          <span className="text-[10px] text-red-500 font-semibold mt-0.5 block">Requis si MTN MoMo est activé</span>
+                        )}
                       </div>
                       <div>
                         <label className="block text-[11px] font-bold text-slate-700 mb-1">
@@ -1338,14 +1864,21 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
                   </div>
                   <div>
                     <label className="block text-[11px] font-semibold text-slate-600 mb-1">
-                      Nom de l'imprimante
+                      Nom de l'imprimante <span className="text-red-500 font-black">*</span>
                     </label>
                     <input
                       type="text"
                       value={printerName}
                       onChange={(e) => setPrinterName(e.target.value)}
-                      className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 bg-white font-semibold"
+                      className={`w-full px-3 py-2 text-xs rounded-xl border bg-white font-semibold ${
+                        !printerName.trim()
+                          ? 'border-red-300 focus:border-red-500 focus:ring-red-200 bg-red-50/20'
+                          : 'border-slate-300'
+                      }`}
                     />
+                    {!printerName.trim() && (
+                      <span className="text-[10px] text-red-500 font-semibold mt-0.5 block">Imprimante obligatoire</span>
+                    )}
                   </div>
                   <div>
                     <label className="block text-[11px] font-semibold text-slate-600 mb-1">
@@ -1373,14 +1906,21 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
                   </div>
                   <div>
                     <label className="block text-[11px] font-semibold text-slate-600 mb-1">
-                      Nom du poste
+                      Nom du poste <span className="text-red-500 font-black">*</span>
                     </label>
                     <input
                       type="text"
                       value={terminalName}
                       onChange={(e) => setTerminalName(e.target.value)}
-                      className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 bg-white font-semibold"
+                      className={`w-full px-3 py-2 text-xs rounded-xl border bg-white font-semibold ${
+                        !terminalName.trim() && terminals.length === 0
+                          ? 'border-red-300 focus:border-red-500 focus:ring-red-200 bg-red-50/20'
+                          : 'border-slate-300'
+                      }`}
                     />
+                    {!terminalName.trim() && terminals.length === 0 && (
+                      <span className="text-[10px] text-red-500 font-semibold mt-0.5 block">Nom du terminal obligatoire</span>
+                    )}
                   </div>
                   <div>
                     <label className="block text-[11px] font-semibold text-slate-600 mb-1">
@@ -1442,41 +1982,62 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Première Catégorie du Menu
+                    Première Catégorie du Menu <span className="text-red-500 font-black">*</span>
                   </label>
                   <input
                     type="text"
                     value={sampleCategoryName}
                     onChange={(e) => setSampleCategoryName(e.target.value)}
                     placeholder="Ex: Plats Chauds & Grillades"
-                    className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-300 font-semibold"
+                    className={`w-full px-3.5 py-2.5 text-xs rounded-xl border font-semibold ${
+                      !sampleCategoryName.trim() && categories.length === 0
+                        ? 'border-red-300 focus:border-red-500 focus:ring-red-200 bg-red-50/20'
+                        : 'border-slate-300'
+                    }`}
                   />
+                  {!sampleCategoryName.trim() && categories.length === 0 && (
+                    <span className="text-[10px] text-red-500 font-semibold mt-0.5 block">Catégorie obligatoire</span>
+                  )}
                 </div>
 
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Premier Plat Témoin
+                    Premier Plat Témoin <span className="text-red-500 font-black">*</span>
                   </label>
                   <input
                     type="text"
                     value={sampleProductName}
                     onChange={(e) => setSampleProductName(e.target.value)}
                     placeholder="Ex: Poulet DG Traditionnel"
-                    className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-300 font-semibold"
+                    className={`w-full px-3.5 py-2.5 text-xs rounded-xl border font-semibold ${
+                      !sampleProductName.trim() && products.length === 0
+                        ? 'border-red-300 focus:border-red-500 focus:ring-red-200 bg-red-50/20'
+                        : 'border-slate-300'
+                    }`}
                   />
+                  {!sampleProductName.trim() && products.length === 0 && (
+                    <span className="text-[10px] text-red-500 font-semibold mt-0.5 block">Nom du plat obligatoire</span>
+                  )}
                 </div>
 
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Prix de Vente TTC (FCFA)
+                    Prix de Vente TTC (FCFA) <span className="text-red-500 font-black">*</span>
                   </label>
                   <input
                     type="number"
                     step="500"
                     value={sampleProductPrice}
                     onChange={(e) => setSampleProductPrice(Number(e.target.value))}
-                    className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-300 font-bold tabular-nums"
+                    className={`w-full px-3.5 py-2.5 text-xs rounded-xl border font-bold tabular-nums ${
+                      (!sampleProductPrice || sampleProductPrice <= 0) && products.length === 0
+                        ? 'border-red-300 focus:border-red-500 focus:ring-red-200 bg-red-50/20'
+                        : 'border-slate-300'
+                    }`}
                   />
+                  {(!sampleProductPrice || sampleProductPrice <= 0) && products.length === 0 && (
+                    <span className="text-[10px] text-red-500 font-semibold mt-0.5 block">Prix supérieur à 0 obligatoire</span>
+                  )}
                 </div>
 
                 <div className="flex items-center text-xs text-slate-500 pt-5">
@@ -1514,15 +2075,22 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
                   </p>
                   <div>
                     <label className="block text-[11px] font-semibold text-slate-700 mb-1">
-                      Code PIN Superviseur (6 chiffres)
+                      Code PIN Superviseur (4-6 chiffres) <span className="text-red-500 font-black">*</span>
                     </label>
                     <input
                       type="password"
                       maxLength={6}
                       value={directionPin}
                       onChange={(e) => setDirectionPin(e.target.value.replace(/\D/g, ''))}
-                      className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 bg-white font-mono font-bold tracking-widest text-center"
+                      className={`w-full px-3 py-2 text-xs rounded-xl border bg-white font-mono font-bold tracking-widest text-center ${
+                        directionPin.length < 4
+                          ? 'border-red-400 focus:border-red-500 focus:ring-red-200 bg-red-50/20'
+                          : 'border-slate-300'
+                      }`}
                     />
+                    {directionPin.length < 4 && (
+                      <span className="text-[10px] text-red-500 font-semibold mt-0.5 block">Min. 4 chiffres requis</span>
+                    )}
                   </div>
                 </div>
 
@@ -1538,15 +2106,22 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
                   </p>
                   <div>
                     <label className="block text-[11px] font-semibold text-slate-700 mb-1">
-                      Code PIN Caissier (4-6 chiffres)
+                      Code PIN Caissier (4-6 chiffres) <span className="text-red-500 font-black">*</span>
                     </label>
                     <input
                       type="password"
                       maxLength={6}
                       value={caissePin}
                       onChange={(e) => setCaissePin(e.target.value.replace(/\D/g, ''))}
-                      className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 bg-white font-mono font-bold tracking-widest text-center"
+                      className={`w-full px-3 py-2 text-xs rounded-xl border bg-white font-mono font-bold tracking-widest text-center ${
+                        caissePin.length < 4
+                          ? 'border-red-400 focus:border-red-500 focus:ring-red-200 bg-red-50/20'
+                          : 'border-slate-300'
+                      }`}
                     />
+                    {caissePin.length < 4 && (
+                      <span className="text-[10px] text-red-500 font-semibold mt-0.5 block">Min. 4 chiffres requis</span>
+                    )}
                   </div>
                 </div>
 
@@ -1562,15 +2137,22 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
                   </p>
                   <div>
                     <label className="block text-[11px] font-semibold text-slate-700 mb-1">
-                      Code PIN Serveur (4-6 chiffres)
+                      Code PIN Serveur (4-6 chiffres) <span className="text-red-500 font-black">*</span>
                     </label>
                     <input
                       type="password"
                       maxLength={6}
                       value={serveurPin}
                       onChange={(e) => setServeurPin(e.target.value.replace(/\D/g, ''))}
-                      className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 bg-white font-mono font-bold tracking-widest text-center"
+                      className={`w-full px-3 py-2 text-xs rounded-xl border bg-white font-mono font-bold tracking-widest text-center ${
+                        serveurPin.length < 4
+                          ? 'border-red-400 focus:border-red-500 focus:ring-red-200 bg-red-50/20'
+                          : 'border-slate-300'
+                      }`}
                     />
+                    {serveurPin.length < 4 && (
+                      <span className="text-[10px] text-red-500 font-semibold mt-0.5 block">Min. 4 chiffres requis</span>
+                    )}
                   </div>
                 </div>
               </div>
@@ -1714,6 +2296,14 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
                 <span>Précédent</span>
               </button>
             )}
+            {!isLaunchScreen && !isCurrentStepValid && missingStepFields.length > 0 && (
+              <div className="flex items-center gap-1.5 text-[11px] text-amber-800 bg-amber-50 border border-amber-200 px-3 py-1.5 rounded-xl animate-in fade-in">
+                <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                <span className="font-semibold line-clamp-1">
+                  Requis (*) : {missingStepFields.slice(0, 3).join(', ')}{missingStepFields.length > 3 ? ` (+${missingStepFields.length - 3})` : ''}
+                </span>
+              </div>
+            )}
           </div>
 
           <div className="flex items-center gap-2 sm:gap-3">
@@ -1740,11 +2330,17 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
             ) : currentStep < 9 ? (
               <button
                 type="button"
-                onClick={() => goToStep(Math.min(9, currentStep + 1))}
-                className="flex items-center gap-1.5 sm:gap-2 px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs transition shadow-xs cursor-pointer active:scale-95"
+                onClick={handleNextStep}
+                disabled={!isCurrentStepValid}
+                title={!isCurrentStepValid ? `Remplissez les champs obligatoires (*) : ${missingStepFields.join(', ')}` : 'Passer à l\'étape suivante'}
+                className={`flex items-center gap-1.5 sm:gap-2 px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl font-bold text-xs transition shadow-xs ${
+                  isCurrentStepValid
+                    ? 'bg-slate-900 hover:bg-slate-800 text-white cursor-pointer active:scale-95'
+                    : 'bg-slate-200 text-slate-400 cursor-not-allowed opacity-75'
+                }`}
               >
                 <span>Étape Suivante</span>
-                <ArrowRight className="w-4 h-4 text-amber-400" />
+                <ArrowRight className={`w-4 h-4 ${isCurrentStepValid ? 'text-amber-400' : 'text-slate-400'}`} />
               </button>
             ) : (
               <button

@@ -379,6 +379,7 @@ interface RestaurantContextType {
   isModuleEntitled: (moduleKey: string) => boolean;
   isConfigKeyLocked: (configKey: string) => boolean;
   requestFeatureUnlock: (featureKey: string, reason?: string) => Promise<void>;
+  purgeOperationalData: (scope?: 'current_restaurant' | 'all') => Promise<{ count: number }>;
 }
 
 const RestaurantContext = createContext<RestaurantContextType | undefined>(undefined);
@@ -408,7 +409,7 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
   // Versionnage et purge automatique des données résiduelles de test
   const STORAGE_VERSION_KEY = 'restomaster_storage_version';
-  const CURRENT_STORAGE_VERSION = '2.0.0-clean';
+  const CURRENT_STORAGE_VERSION = '2.1.0-clean-isolation';
 
   if (typeof window !== 'undefined') {
     try {
@@ -468,8 +469,20 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [attendances, setAttendances] = useState<Attendance[]>([]);
   const [userAccounts, setUserAccounts] = useState<UserAccount[]>([]);
-  const [cashSession, setCashSession] = useState<CashRegisterSession>(() => loadState('cashSession', DEFAULT_CASH_SESSION));
-  const [cashMovements, setCashMovements] = useState<CashMovement[]>(() => loadState('cashMovements', []));
+  const [cashSession, setCashSession] = useState<CashRegisterSession>(() => {
+    const savedOutlet = loadState('selectedOutletId', '');
+    if (savedOutlet) {
+      return loadState(`cashSession_${savedOutlet}`, { ...DEFAULT_CASH_SESSION, restaurantId: savedOutlet });
+    }
+    return DEFAULT_CASH_SESSION;
+  });
+  const [cashMovements, setCashMovements] = useState<CashMovement[]>(() => {
+    const savedOutlet = loadState('selectedOutletId', '');
+    if (savedOutlet) {
+      return loadState(`cashMovements_${savedOutlet}`, []);
+    }
+    return [];
+  });
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [documents, setDocuments] = useState<DocumentItem[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
@@ -561,34 +574,73 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const [activeZoneId, setActiveZoneId] = useState<string | 'all'>(() => loadState('activeZoneId', 'all'));
   const [activeCashRegisterId, setActiveCashRegisterId] = useState<string>(() => loadState('activeCashRegisterId', ''));
 
-  // Restaurant Actif & Données Filtrées
+  // Restaurant Actif & Données Filtrées (Prend impérativement le nom réel de l'enregistrement)
   const activeRestaurant = useMemo(() => {
-    return outlets.find((o) => o.id === selectedOutletId) || outlets[0];
-  }, [outlets, selectedOutletId]);
+    const found = outlets.find((o) => o.id === selectedOutletId) || outlets[0];
+    if (found) {
+      return {
+        ...found,
+        name: settings.name?.trim() ? settings.name.trim() : found.name,
+      };
+    }
+    const defaultName = settings.name?.trim() || organization.name?.trim() || 'Restaurant Principal';
+    return {
+      id: settings.restaurantId || 'out-main',
+      organizationId: organization?.id || '',
+      name: defaultName,
+      commercialName: defaultName,
+      city: settings.city || 'Douala',
+      address: settings.address || '',
+      phone: settings.phone || '',
+      isMain: true,
+      active: true,
+      operationalProfile: 'restaurant_classique' as const,
+    };
+  }, [outlets, selectedOutletId, settings.name, settings.restaurantId, settings.city, settings.address, settings.phone, organization.id, organization.name]);
 
   const activeTables = useMemo(() => {
-    return tables.filter((t) => !t.restaurantId || t.restaurantId === selectedOutletId);
+    if (!selectedOutletId) return [];
+    return tables.filter((t) => t.restaurantId === selectedOutletId);
   }, [tables, selectedOutletId]);
 
   const activeDecorElements = useMemo(() => {
-    return decorElements.filter((d) => !d.restaurantId || d.restaurantId === selectedOutletId);
+    if (!selectedOutletId) return [];
+    return decorElements.filter((d) => d.restaurantId === selectedOutletId);
   }, [decorElements, selectedOutletId]);
 
   const activeOrders = useMemo(() => {
-    return orders.filter((o) => !o.restaurantId || o.restaurantId === selectedOutletId);
+    if (!selectedOutletId) return [];
+    return orders.filter((o) => o.restaurantId === selectedOutletId);
   }, [orders, selectedOutletId]);
 
   const activeReservations = useMemo(() => {
-    return reservations.filter((r) => !r.restaurantId || r.restaurantId === selectedOutletId);
+    if (!selectedOutletId) return [];
+    return reservations.filter((r) => r.restaurantId === selectedOutletId);
   }, [reservations, selectedOutletId]);
 
   const activeZones = useMemo(() => {
-    return zones.filter((z) => !z.restaurantId || z.restaurantId === selectedOutletId);
+    if (!selectedOutletId) return zones;
+    const filtered = zones.filter((z) => !z.restaurantId || z.restaurantId === selectedOutletId);
+    return filtered.length > 0 ? filtered : zones;
   }, [zones, selectedOutletId]);
 
   const activeCashRegisters = useMemo(() => {
-    return cashRegisters.filter((r) => !r.restaurantId || r.restaurantId === selectedOutletId);
+    if (!selectedOutletId) return cashRegisters;
+    const filtered = cashRegisters.filter((r) => !r.restaurantId || r.restaurantId === selectedOutletId);
+    return filtered.length > 0 ? filtered : cashRegisters;
   }, [cashRegisters, selectedOutletId]);
+
+  const activeCashMovements = useMemo(() => {
+    if (!selectedOutletId) return cashMovements;
+    const filtered = cashMovements.filter((m) => !m.restaurantId || m.restaurantId === selectedOutletId);
+    return filtered.length > 0 ? filtered : cashMovements;
+  }, [cashMovements, selectedOutletId]);
+
+  const activeExpenses = useMemo(() => {
+    if (!selectedOutletId) return expenses;
+    const filtered = expenses.filter((e) => !e.restaurantId || e.restaurantId === selectedOutletId);
+    return filtered.length > 0 ? filtered : expenses;
+  }, [expenses, selectedOutletId]);
 
   // Écouteur statut réseau (Offline / Online)
   useEffect(() => {
@@ -602,18 +654,38 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     };
   }, []);
 
+  // Synchronisation de la session de caisse et des mouvements à chaque changement d'établissement
+  useEffect(() => {
+    if (!selectedOutletId) {
+      setCashSession(DEFAULT_CASH_SESSION);
+      setCashMovements([]);
+      return;
+    }
+    const scopedSession = loadState<CashRegisterSession>(
+      `cashSession_${selectedOutletId}`,
+      { ...DEFAULT_CASH_SESSION, restaurantId: selectedOutletId }
+    );
+    setCashSession(scopedSession);
+
+    const scopedMovements = loadState<CashMovement[]>(
+      `cashMovements_${selectedOutletId}`,
+      []
+    );
+    setCashMovements(scopedMovements);
+  }, [selectedOutletId]);
+
   // Persistance continue de la session de caisse et des mouvements (Tolérance aux coupures électriques)
   useEffect(() => {
-    if (cashSession && cashSession.status) {
-      saveState('cashSession', cashSession);
+    if (selectedOutletId && cashSession && cashSession.status) {
+      saveState(`cashSession_${selectedOutletId}`, cashSession);
     }
-  }, [cashSession]);
+  }, [cashSession, selectedOutletId]);
 
   useEffect(() => {
-    if (cashMovements && cashMovements.length > 0) {
-      saveState('cashMovements', cashMovements);
+    if (selectedOutletId && cashMovements) {
+      saveState(`cashMovements_${selectedOutletId}`, cashMovements);
     }
-  }, [cashMovements]);
+  }, [cashMovements, selectedOutletId]);
 
   // Offline sync queue subscriber
   useEffect(() => {
@@ -695,23 +767,40 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
     // Stocks & Lots
     const unsubStockItems = stockFirestoreService.subscribeToStockItems(selectedOutletId, setStockItems);
-    const unsubStockMovements = stockFirestoreService.subscribeToStockMovements(setStockMovements);
-    const unsubStockLots = stockFirestoreService.subscribeToStockLots(setStockLots);
+    const unsubStockMovements = stockFirestoreService.subscribeToStockMovements(setStockMovements, selectedOutletId);
+    const unsubStockLots = stockFirestoreService.subscribeToStockLots(setStockLots, selectedOutletId);
     const unsubSuppliers = stockFirestoreService.subscribeToSuppliers(setSuppliers);
     const unsubPurchaseOrders = stockFirestoreService.subscribeToPurchaseOrders(setPurchaseOrders);
     const unsubHygieneChecks = stockFirestoreService.subscribeToHygieneChecks(setHygieneChecks);
 
-    // Caisse & Finances
-    const unsubCashRegisters = cashFirestoreService.subscribeToCashRegisters(selectedOutletId, setCashRegisters);
-    const unsubCashMovements = cashFirestoreService.subscribeToCashMovements(setCashMovements);
-    const unsubExpenses = cashFirestoreService.subscribeToExpenses(setExpenses);
+    // Caisse & Finances (Auto-provisionnement transparent pour le site actif s'il est vide)
+    const unsubCashRegisters = cashFirestoreService.subscribeToCashRegisters(selectedOutletId, (remoteList) => {
+      if (remoteList.length === 0 && selectedOutletId) {
+        const defaultReg: CashRegister = {
+          id: `reg_${selectedOutletId}`,
+          restaurantId: selectedOutletId,
+          name: 'Caisse Principale (Comptoir)',
+          active: true,
+          assignedUsers: [],
+          allowedPaymentMethods: ['especes', 'orange_money', 'mtn_momo', 'carte'],
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+        setCashRegisters([defaultReg]);
+        cashFirestoreService.saveCashRegister(defaultReg).catch(() => {});
+      } else {
+        setCashRegisters(remoteList);
+      }
+    });
+    const unsubCashMovements = cashFirestoreService.subscribeToCashMovements(setCashMovements, selectedOutletId);
+    const unsubExpenses = cashFirestoreService.subscribeToExpenses(setExpenses, selectedOutletId);
     const unsubCustomers = cashFirestoreService.subscribeToCustomers(setCustomers);
     const unsubClientCredits = cashFirestoreService.subscribeToClientCredits(setClientCredits);
 
     // Réservations, Événements & Livraisons
     const unsubReservations = reservationsFirestoreService.subscribeToReservations(selectedOutletId, setReservations);
-    const unsubDeliveries = reservationsFirestoreService.subscribeToDeliveries(setDeliveries);
-    const unsubEvents = reservationsFirestoreService.subscribeToEvents(setEvents);
+    const unsubDeliveries = reservationsFirestoreService.subscribeToDeliveries(setDeliveries, selectedOutletId);
+    const unsubEvents = reservationsFirestoreService.subscribeToEvents(setEvents, selectedOutletId);
 
     // RH, Personnel & Comptes
     const unsubUserAccounts = staffFirestoreService.subscribeToUsers(setUserAccounts);
@@ -724,41 +813,21 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     const unsubWithholdings = fiscalFirestoreService.subscribeToWithholdings(setWithholdings);
     const unsubFiscalObligations = fiscalFirestoreService.subscribeToFiscalObligations(setFiscalObligations);
     const unsubCancellationLogs = fiscalFirestoreService.subscribeToCancellationLogs(setCancellationLogs);
-
-    // Configuration & Système
-    const unsubOutlets = restaurantFirestoreService.subscribeToOutlets(undefined, (list) => {
-      setOutlets(list);
-      if (list.length > 0 && !selectedOutletId) {
-        setSelectedOutletId(list[0].id);
-      }
-    });
-    const unsubOrg = restaurantFirestoreService.subscribeToOrganization(organization.id, (remoteOrg) => {
-      if (remoteOrg) setOrganization(remoteOrg);
-    });
-    const unsubSettings = restaurantFirestoreService.subscribeToSettings(selectedOutletId, (remoteSettings) => {
-      if (remoteSettings) setSettings(remoteSettings);
-    });
-    const unsubFeatures = configFirestoreService.subscribeToFeatures(setFeatures);
     const unsubPeripherals = configFirestoreService.subscribeToPeripherals(setPeripherals, selectedOutletId);
     const unsubTerminals = configFirestoreService.subscribeToTerminals((remoteList) => {
       if (remoteList && remoteList.length > 0) {
-        setTerminals(remoteList);
-        saveState('terminals', remoteList);
+        const scoped = remoteList.map((t) => (!t.outletId ? { ...t, outletId: selectedOutletId } : t));
+        setTerminals(scoped);
+        saveState('terminals', scoped);
       } else {
         setTerminals((prev) => {
-          const list = prev && prev.length > 0 ? prev : DEFAULT_INITIAL_TERMINALS;
-          saveState('terminals', list);
-          return list;
+          const base = prev && prev.length > 0 ? prev : DEFAULT_INITIAL_TERMINALS;
+          const scoped = base.map((t) => (!t.outletId ? { ...t, outletId: selectedOutletId } : t));
+          saveState('terminals', scoped);
+          return scoped;
         });
       }
     }, selectedOutletId);
-    const unsubRolePermissions = configFirestoreService.subscribeToRolePermissions(setRolePermissions);
-    const unsubRoleLimits = configFirestoreService.subscribeToRoleLimits(setRoleLimits);
-    const unsubPrinterSettings = configFirestoreService.subscribeToPrinterSettings(setPrinterSettings);
-    const unsubOperationRules = configFirestoreService.subscribeToOperationRules(setOperationRules);
-    const unsubConfigHistory = configFirestoreService.subscribeToConfigHistory(setConfigHistory);
-    const unsubAuditLogs = configFirestoreService.subscribeToAuditLogs(setAuditLogs);
-    const unsubNotifications = configFirestoreService.subscribeToNotifications(setNotifications);
 
     return () => {
       unsubOrders();
@@ -768,11 +837,9 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       unsubDocs();
       unsubAssets();
       unsubProducts();
-      unsubCategories();
       unsubStockItems();
       unsubStockMovements();
       unsubStockLots();
-      unsubSuppliers();
       unsubPurchaseOrders();
       unsubHygieneChecks();
       unsubCashRegisters();
@@ -783,7 +850,6 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       unsubReservations();
       unsubDeliveries();
       unsubEvents();
-      unsubUserAccounts();
       unsubEmployees();
       unsubAttendances();
       unsubInvoices();
@@ -791,12 +857,87 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       unsubWithholdings();
       unsubFiscalObligations();
       unsubCancellationLogs();
+      unsubPeripherals();
+      unsubTerminals();
+    };
+  }, [selectedOutletId, organization.id]);
+
+  // Écoutes globales de plateforme & organisation (toujours actives, indépendamment de selectedOutletId)
+  useEffect(() => {
+    const unsubOutlets = restaurantFirestoreService.subscribeToOutlets(undefined, (list) => {
+      // 1. Détection et exclusion des faux établissements de démo (Oasis, etc.)
+      const isDemoOutlet = (o: Outlet) => {
+        const n = (o.name || '').toLowerCase();
+        return n.includes('oasis') || o.id.startsWith('demo_') || o.id.startsWith('fake_');
+      };
+
+      const realList = list.filter((o) => !isDemoOutlet(o));
+
+      // Supprimer en tâche de fond les résidus de démo Firestore
+      list.filter(isDemoOutlet).forEach((demo) => {
+        restaurantFirestoreService.deleteOutlet(demo.id).catch(() => {});
+      });
+
+      // 2. Si aucun établissement réel n'est en base, prendre les données de l'enregistrement utilisateur
+      if (realList.length === 0) {
+        const registeredName = settings.name?.trim() || organization.name?.trim() || 'Restaurant Principal';
+        const singleOutlet: Outlet = {
+          id: settings.restaurantId || 'out-main',
+          organizationId: organization?.id || '',
+          name: registeredName,
+          commercialName: registeredName,
+          city: settings.city || 'Douala',
+          address: settings.address || '',
+          phone: settings.phone || '',
+          isMain: true,
+          active: true,
+          operationalProfile: 'restaurant_classique',
+        };
+        setOutlets([singleOutlet]);
+        setSelectedOutletId(singleOutlet.id);
+      } else {
+        // Mettre à jour avec les établissements réels (en synchronisant le nom si 1 seul établissement)
+        const updatedList = realList.map((o) => {
+          if (realList.length === 1 && settings.name?.trim()) {
+            return { ...o, name: settings.name.trim(), commercialName: settings.name.trim() };
+          }
+          return o;
+        });
+        setOutlets(updatedList);
+        setSelectedOutletId((prev) => {
+          const match = updatedList.find((o) => o.id === prev);
+          return match ? match.id : updatedList[0].id;
+        });
+      }
+    });
+
+    const targetOrgId = currentUser?.organizationId || organization?.id || 'default';
+    const unsubOrg = restaurantFirestoreService.subscribeToOrganization(targetOrgId, (remoteOrg) => {
+      if (remoteOrg) setOrganization(remoteOrg);
+    });
+
+    const targetSettingsId = selectedOutletId || 'default-settings';
+    const unsubSettings = restaurantFirestoreService.subscribeToSettings(targetSettingsId, (remoteSettings) => {
+      if (remoteSettings) setSettings(remoteSettings);
+    });
+
+    const unsubFeatures = configFirestoreService.subscribeToFeatures(setFeatures);
+    const unsubRolePermissions = configFirestoreService.subscribeToRolePermissions(setRolePermissions);
+    const unsubRoleLimits = configFirestoreService.subscribeToRoleLimits(setRoleLimits);
+    const unsubPrinterSettings = configFirestoreService.subscribeToPrinterSettings(setPrinterSettings);
+    const unsubOperationRules = configFirestoreService.subscribeToOperationRules(setOperationRules);
+    const unsubConfigHistory = configFirestoreService.subscribeToConfigHistory(setConfigHistory);
+    const unsubAuditLogs = configFirestoreService.subscribeToAuditLogs(setAuditLogs);
+    const unsubNotifications = configFirestoreService.subscribeToNotifications(setNotifications);
+    const unsubUserAccounts = staffFirestoreService.subscribeToUsers(setUserAccounts);
+    const unsubCategories = productsFirestoreService.subscribeToCategories(setCategories);
+    const unsubSuppliers = stockFirestoreService.subscribeToSuppliers(setSuppliers);
+
+    return () => {
       unsubOutlets();
       unsubOrg();
       unsubSettings();
       unsubFeatures();
-      unsubTerminals();
-      unsubPeripherals();
       unsubRolePermissions();
       unsubRoleLimits();
       unsubPrinterSettings();
@@ -804,8 +945,11 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       unsubConfigHistory();
       unsubAuditLogs();
       unsubNotifications();
+      unsubUserAccounts();
+      unsubCategories();
+      unsubSuppliers();
     };
-  }, [selectedOutletId, organization.id]);
+  }, [currentUser?.organizationId, selectedOutletId]);
 
   const addAuditLog = useCallback(
     (action: string, module: AuditLog['module'], details: string, entityId?: string) => {
@@ -1616,6 +1760,7 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     if (method === 'especes') {
       const movement: CashMovement = {
         id: generateSecureId('cm'),
+        restaurantId: targetOrder.restaurantId || selectedOutletId,
         sessionId: cashSession.id,
         type: 'encaissement_vente',
         amount: roundedAmount,
@@ -2459,6 +2604,7 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     const newExp: Expense = {
       ...exp,
       id: generateSecureId('exp'),
+      restaurantId: exp.restaurantId || selectedOutletId,
       recordedBy: currentUser.name,
       status: requiresApproval ? 'en_attente' : (exp.status || 'validee'),
     };
@@ -2500,6 +2646,7 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     const now = new Date().toISOString();
     const movement: CashMovement = {
       id: generateSecureId('cm'),
+      restaurantId: selectedOutletId,
       sessionId: cashSession.id,
       type,
       amount,
@@ -2587,6 +2734,7 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
     const newSession: CashRegisterSession = {
       id: serverSessionId || generateSecureId('sess'),
+      restaurantId: selectedOutletId,
       openedAt: now,
       openedBy: currentUser.name,
       initialFloat,
@@ -2600,6 +2748,7 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
     const initialMovement: CashMovement = {
       id: generateSecureId('cm'),
+      restaurantId: selectedOutletId,
       sessionId: newSession.id,
       type: 'entree',
       amount: initialFloat,
@@ -3168,6 +3317,99 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     [currentOrgId, currentUser.name, showToast]
   );
 
+  const purgeOperationalData = useCallback(
+    async (scope: 'current_restaurant' | 'all' = 'current_restaurant'): Promise<{ count: number }> => {
+      const targetId = scope === 'all' ? 'all' : selectedOutletId;
+      console.log(`[RestaurantContext] Remise à blanc des données d'exploitation (scope: ${scope}, targetId: ${targetId})`);
+
+      try {
+        // 1. Purge des commandes dans Firestore
+        const count = await ordersFirestoreService.purgeRestaurantOrders(targetId);
+
+        // 2. Nettoyage de l'état local des commandes
+        setOrders((prev) => {
+          if (targetId === 'all') return [];
+          return prev.filter((o) => o.restaurantId && o.restaurantId !== targetId);
+        });
+
+        // 3. Libération de toutes les tables de cet établissement
+        setTables((prev) =>
+          prev.map((t) => {
+            if (targetId === 'all' || t.restaurantId === targetId || !t.restaurantId) {
+              return {
+                ...t,
+                status: 'libre',
+                currentOrderId: undefined,
+                guestsCount: undefined,
+                serverName: undefined,
+              };
+            }
+            return t;
+          })
+        );
+
+        // 4. Réinitialisation de la caisse à zéro
+        const resetSession: CashRegisterSession = {
+          ...DEFAULT_CASH_SESSION,
+          restaurantId: targetId === 'all' ? selectedOutletId : targetId,
+          status: 'fermee',
+          initialFloat: 0,
+          totalCashIn: 0,
+          totalCashOut: 0,
+          expectedTotal: 0,
+          countedTotal: 0,
+          variance: 0,
+        };
+        setCashSession(resetSession);
+        setCashMovements([]);
+
+        // 5. Nettoyage des clés locales localStorage
+        if (typeof window !== 'undefined') {
+          try {
+            if (targetId === 'all') {
+              for (let i = localStorage.length - 1; i >= 0; i--) {
+                const k = localStorage.key(i);
+                if (k && (k.startsWith('cashSession_') || k.startsWith('cashMovements_') || k.startsWith('pos_'))) {
+                  localStorage.removeItem(k);
+                }
+              }
+            } else {
+              localStorage.removeItem(`cashSession_${targetId}`);
+              localStorage.removeItem(`cashMovements_${targetId}`);
+              localStorage.removeItem(`pos_cart_${targetId}`);
+            }
+          } catch {
+            // ignore
+          }
+        }
+
+        // 6. Enregistrement d'un log d'audit
+        addAuditLog(
+          'Remise à blanc des données',
+          'Paramètres',
+          `Remise à blanc des commandes et ventes de test (${count} commandes supprimées, CA remis à 0 FCFA)`
+        );
+
+        showToast({
+          title: 'Remise à zéro réussie',
+          message: `${count} commande(s) supprimée(s). Le chiffre d'affaires et les ventes sont désormais à 0 FCFA.`,
+          type: 'success',
+        });
+
+        return { count };
+      } catch (err: any) {
+        console.error('[RestaurantContext] Erreur lors de la purge des données d\'exploitation:', err);
+        showToast({
+          title: 'Erreur lors de la remise à blanc',
+          message: err?.message || 'Une erreur est survenue lors de la suppression des données.',
+          type: 'error',
+        });
+        throw err;
+      }
+    },
+    [selectedOutletId, addAuditLog, showToast]
+  );
+
   // When network comes back online, trigger queue processing if offline sync is enabled
   useEffect(() => {
     if (isOnline && isFeatureEnabled('offline_sync_engine')) {
@@ -3414,9 +3656,10 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       updatedAt: new Date().toISOString(),
     };
     setOutlets((prev) => [...prev.filter((o) => o.id !== newOutlet.id), newOutlet]);
-    if (!selectedOutletId) {
-      setSelectedOutletId(newOutlet.id);
-    }
+    setSelectedOutletId(newOutlet.id);
+    saveState('selectedOutletId', newOutlet.id);
+    setCashSession({ ...DEFAULT_CASH_SESSION, restaurantId: newOutlet.id });
+    setCashMovements([]);
     try {
       await restaurantFirestoreService.saveOutlet(newOutlet);
     } catch (err) {
@@ -3858,17 +4101,34 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     );
   };
 
-  // 31. Multi-Restaurants & Organisation
   const changeActiveRestaurant = (outletId: string) => {
     const targetOutlet = outlets.find((o) => o.id === outletId);
     if (!targetOutlet) return;
     setSelectedOutletId(outletId);
+    saveState('selectedOutletId', outletId);
     setActiveZoneId('all');
+
     // Affecter la caisse correspondante
     const outletRegister = cashRegisters.find((r) => r.restaurantId === outletId);
     if (outletRegister) {
       setActiveCashRegisterId(outletRegister.id);
+    } else {
+      setActiveCashRegisterId('');
     }
+
+    // Charger immédiatement la session de caisse isolée de cet établissement
+    const scopedSession = loadState<CashRegisterSession>(
+      `cashSession_${outletId}`,
+      { ...DEFAULT_CASH_SESSION, restaurantId: outletId }
+    );
+    setCashSession(scopedSession);
+
+    const scopedMovements = loadState<CashMovement[]>(
+      `cashMovements_${outletId}`,
+      []
+    );
+    setCashMovements(scopedMovements);
+
     addAuditLog(
       'Changement établissement actif',
       'Paramètres',
@@ -3877,13 +4137,18 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   };
 
   const updateOrganization = async (orgUpdates: Partial<Organization>) => {
+    const orgId = orgUpdates.id || organization.id || currentUser?.organizationId || 'default';
     const updatedOrg = {
       ...organization,
       ...orgUpdates,
+      id: orgId,
       updatedAt: new Date().toISOString(),
     };
     setOrganization(updatedOrg);
-    await restaurantFirestoreService.saveOrganization(updatedOrg);
+    saveState('organization', updatedOrg);
+    await restaurantFirestoreService.saveOrganization(updatedOrg).catch((err) => {
+      console.warn('[RestaurantContext] Sauvegarde Firestore organisation différée:', err);
+    });
     addAuditLog(
       'Modification profil organisation',
       'Paramètres',
@@ -4170,8 +4435,8 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         employees,
         attendances,
         cashSession,
-        cashMovements,
-        expenses,
+        cashMovements: activeCashMovements,
+        expenses: activeExpenses,
         documents,
         mediaAssets,
         auditLogs,
@@ -4337,6 +4602,7 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         isModuleEntitled,
         isConfigKeyLocked,
         requestFeatureUnlock,
+        purgeOperationalData,
       }}
     >
       {children}

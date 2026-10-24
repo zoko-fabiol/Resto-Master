@@ -29,6 +29,8 @@ const MIGRATED_VIEWS = [
   'src/components/tables/TablesView.tsx',
   'src/components/kds/KitchenKdsView.tsx',
   'src/components/kds/BarKdsView.tsx',
+  'src/components/pos/PosView.tsx',
+  'src/components/settings/AdminCenterView.tsx',
 ];
 
 describe('Uniformisation du design — vues migrées', () => {

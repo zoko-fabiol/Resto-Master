@@ -45,10 +45,15 @@ export const cashFirestoreService = {
     callback: (registers: CashRegister[]) => void
   ): () => void {
     try {
+      if (!restaurantId || restaurantId.trim() === '') {
+        callback([]);
+        return () => {};
+      }
+
       const colRef = collection(db, 'cash_registers');
-      const q = restaurantId && restaurantId !== 'all'
-        ? query(colRef, where('restaurantId', '==', restaurantId))
-        : query(colRef);
+      const q = restaurantId === 'all'
+        ? query(colRef)
+        : query(colRef, where('restaurantId', '==', restaurantId));
 
       return onSnapshot(
         q,
@@ -106,18 +111,29 @@ export const cashFirestoreService = {
     }
   },
 
-  subscribeToCashMovements(callback: (movements: CashMovement[]) => void): () => void {
+  subscribeToCashMovements(
+    callback: (movements: CashMovement[]) => void,
+    restaurantId?: string
+  ): () => void {
     try {
+      if (!restaurantId || restaurantId.trim() === '') {
+        callback([]);
+        return () => {};
+      }
+
       const colRef = collection(db, 'cash_movements');
-      const q = query(colRef, orderBy('timestamp', 'desc'), limit(200));
+      const q = restaurantId === 'all'
+        ? query(colRef, orderBy('timestamp', 'desc'), limit(200))
+        : query(colRef, where('restaurantId', '==', restaurantId), orderBy('timestamp', 'desc'), limit(200));
+
       return onSnapshot(
         q,
         (snapshot) => {
-          if (!snapshot.empty) {
-            callback(snapshot.docs.map((d) => d.data() as CashMovement));
-          }
+          callback(snapshot.docs.map((d) => d.data() as CashMovement));
         },
-        () => {}
+        (err) => {
+          console.warn('[cashFirestoreService] Écoute cash_movements interrompue:', err);
+        }
       );
     } catch {
       return () => {};
@@ -142,18 +158,29 @@ export const cashFirestoreService = {
     }
   },
 
-  subscribeToExpenses(callback: (expenses: Expense[]) => void): () => void {
+  subscribeToExpenses(
+    callback: (expenses: Expense[]) => void,
+    restaurantId?: string
+  ): () => void {
     try {
+      if (!restaurantId || restaurantId.trim() === '') {
+        callback([]);
+        return () => {};
+      }
+
       const colRef = collection(db, 'expenses');
-      const q = query(colRef, orderBy('date', 'desc'), limit(200));
+      const q = restaurantId === 'all'
+        ? query(colRef, orderBy('date', 'desc'), limit(200))
+        : query(colRef, where('restaurantId', '==', restaurantId), orderBy('date', 'desc'), limit(200));
+
       return onSnapshot(
         q,
         (snapshot) => {
-          if (!snapshot.empty) {
-            callback(snapshot.docs.map((d) => d.data() as Expense));
-          }
+          callback(snapshot.docs.map((d) => d.data() as Expense));
         },
-        () => {}
+        (err) => {
+          console.warn('[cashFirestoreService] Écoute expenses interrompue:', err);
+        }
       );
     } catch {
       return () => {};
