@@ -68,6 +68,7 @@ export const PosView: React.FC<PosViewProps> = ({ initialTableId, onOpenPayment,
     addAuditLog,
     cashSession,
     createProduct,
+    createCategory,
     roleLimits,
   } = useRestaurant();
   const { showToast, playAudioChime } = useToast();
@@ -238,6 +239,8 @@ export const PosView: React.FC<PosViewProps> = ({ initialTableId, onOpenPayment,
   const [newDrinkPrice, setNewDrinkPrice] = useState<number>(2500);
   const [newDrinkCost, setNewDrinkCost] = useState<number>(1000);
   const [newDrinkCategory, setNewDrinkCategory] = useState<string>('');
+  const [isNewDrinkCategoryMode, setIsNewDrinkCategoryMode] = useState<boolean>(false);
+  const [newDrinkCategoryCustomName, setNewDrinkCategoryCustomName] = useState<string>('');
 
   // Filter products (mémoïsé et restreint à 100% boissons si mode === 'bar')
   const filteredProducts = useMemo(() => {
@@ -800,6 +803,8 @@ export const PosView: React.FC<PosViewProps> = ({ initialTableId, onOpenPayment,
                   setNewDrinkName('');
                   setNewDrinkPrice(2500);
                   setNewDrinkCost(1000);
+                  setIsNewDrinkCategoryMode(availableCategories.length === 0);
+                  setNewDrinkCategoryCustomName('');
                   setNewDrinkCategory(availableCategories[0]?.id || categories[0]?.id || '');
                   setShowAddDrinkModal(true);
                 }}
@@ -1938,12 +1943,34 @@ export const PosView: React.FC<PosViewProps> = ({ initialTableId, onOpenPayment,
                   showToast('Veuillez saisir un nom et un prix de vente valide', 'warning');
                   return;
                 }
-                const targetCat = categories.find((c) => c.id === newDrinkCategory) || categories[0];
+
+                let targetCatId = newDrinkCategory;
+                let targetCatName = 'Boissons & Bar';
+
+                if (isNewDrinkCategoryMode || newDrinkCategory === '__new__' || (!newDrinkCategory && availableCategories.length === 0)) {
+                  const catNameToCreate = newDrinkCategoryCustomName.trim() || 'Boissons & Bar';
+                  try {
+                    const created = await createCategory(catNameToCreate);
+                    if (created) {
+                      targetCatId = created.id;
+                      targetCatName = created.name;
+                    }
+                  } catch (err) {
+                    console.error('Erreur création catégorie boisson:', err);
+                  }
+                } else {
+                  const targetCat = categories.find((c) => c.id === newDrinkCategory) || categories[0];
+                  if (targetCat) {
+                    targetCatId = targetCat.id;
+                    targetCatName = targetCat.name;
+                  }
+                }
+
                 await createProduct({
                   name: newDrinkName.trim(),
                   description: 'Boisson ajoutée en direct depuis l\'Espace Bar',
-                  categoryId: targetCat?.id || 'cat-bar',
-                  categoryName: targetCat?.name || 'Boissons & Bar',
+                  categoryId: targetCatId || 'cat-bar',
+                  categoryName: targetCatName,
                   price: newDrinkPrice,
                   costPrice: newDrinkCost,
                   preparationTimeMinutes: 2,
@@ -1955,6 +1982,8 @@ export const PosView: React.FC<PosViewProps> = ({ initialTableId, onOpenPayment,
                 });
                 showToast(`Boisson "${newDrinkName}" ajoutée avec succès au Bar !`, 'success');
                 setShowAddDrinkModal(false);
+                setIsNewDrinkCategoryMode(false);
+                setNewDrinkCategoryCustomName('');
               }}
               className="p-5 space-y-4"
             >
@@ -1995,16 +2024,43 @@ export const PosView: React.FC<PosViewProps> = ({ initialTableId, onOpenPayment,
               </div>
 
               <div>
-                <label className="text-xs font-bold text-slate-700 block mb-1">Catégorie Bar</label>
-                <select
-                  value={newDrinkCategory}
-                  onChange={(e) => setNewDrinkCategory(e.target.value)}
-                  className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 border border-slate-200 focus:outline-hidden focus:border-emerald-500 font-bold"
-                >
-                  {availableCategories.map((c) => (
-                    <option key={c.id} value={c.id}>{c.name}</option>
-                  ))}
-                </select>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs font-bold text-slate-700">Catégorie Bar</label>
+                  <button
+                    type="button"
+                    onClick={() => setIsNewDrinkCategoryMode(!isNewDrinkCategoryMode)}
+                    className="text-[11px] font-semibold text-emerald-600 hover:text-emerald-700 underline cursor-pointer"
+                  >
+                    {isNewDrinkCategoryMode ? '← Choisir existante' : '+ Nouvelle catégorie'}
+                  </button>
+                </div>
+                {isNewDrinkCategoryMode || availableCategories.length === 0 ? (
+                  <input
+                    type="text"
+                    required
+                    placeholder="ex: Bières Pression, Cocktails, Vins..."
+                    value={newDrinkCategoryCustomName}
+                    onChange={(e) => setNewDrinkCategoryCustomName(e.target.value)}
+                    className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 border border-slate-200 focus:outline-hidden focus:border-emerald-500 font-bold"
+                  />
+                ) : (
+                  <select
+                    value={newDrinkCategory}
+                    onChange={(e) => {
+                      if (e.target.value === '__new__') {
+                        setIsNewDrinkCategoryMode(true);
+                      } else {
+                        setNewDrinkCategory(e.target.value);
+                      }
+                    }}
+                    className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 border border-slate-200 focus:outline-hidden focus:border-emerald-500 font-bold"
+                  >
+                    {availableCategories.map((c) => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                    <option value="__new__">+ Nouvelle catégorie...</option>
+                  </select>
+                )}
               </div>
 
               <div className="flex items-center gap-2 pt-2">

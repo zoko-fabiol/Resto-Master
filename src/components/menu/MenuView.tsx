@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { PageHeader, Button } from '../ui';
+import { PageHeader, Button, Modal } from '../ui';
 import { useRestaurant } from '../../context/RestaurantContext';
 import { useToast } from '../../context/ToastContext';
 import { Product, RecipeIngredient } from '../../types/restaurant';
@@ -20,20 +20,35 @@ import {
   UploadCloud,
   Image as ImageIcon,
   Loader2,
+  Tags,
 } from 'lucide-react';
 
 export const MenuView: React.FC = () => {
-  const { products, categories, stockItems, createProduct, toggleProductAvailability, settings, activeRestaurant } = useRestaurant();
+  const {
+    products,
+    categories,
+    stockItems,
+    createProduct,
+    createCategory,
+    deleteCategory,
+    toggleProductAvailability,
+    settings,
+    activeRestaurant,
+  } = useRestaurant();
   const { showToast } = useToast();
 
   const [selectedCat, setSelectedCat] = useState<string>('all');
   const [search, setSearch] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
+  const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
+  const [newCatNameInput, setNewCatNameInput] = useState('');
 
   // New product form — vide par défaut
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [categoryId, setCategoryId] = useState(categories[0]?.id || '');
+  const [isNewCategoryMode, setIsNewCategoryMode] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
   const [price, setPrice] = useState<number | ''>('');
   const [costPrice, setCostPrice] = useState<number | ''>('');
   const [prepTime, setPrepTime] = useState<number | ''>('');
@@ -122,13 +137,37 @@ export const MenuView: React.FC = () => {
       return;
     }
 
-    const cat = categories.find((c) => c.id === categoryId);
+    let finalCategoryId = categoryId;
+    let finalCategoryName = '';
+
+    if (isNewCategoryMode || categories.length === 0 || categoryId === '__new__') {
+      const cleanCatName = newCategoryName.trim();
+      if (!cleanCatName) {
+        showToast({
+          type: 'warning',
+          title: 'Catégorie requise',
+          message: 'Veuillez saisir le nom de la catégorie.',
+        });
+        return;
+      }
+      const savedCat = await createCategory(cleanCatName);
+      if (savedCat) {
+        finalCategoryId = savedCat.id;
+        finalCategoryName = savedCat.name;
+      } else {
+        finalCategoryName = cleanCatName;
+      }
+    } else {
+      const cat = categories.find((c) => c.id === categoryId);
+      finalCategoryId = categoryId || (categories[0] ? categories[0].id : '');
+      finalCategoryName = cat ? cat.name : 'Général';
+    }
 
     await createProduct({
       name: name.trim(),
       description: description.trim(),
-      categoryId,
-      categoryName: cat ? cat.name : 'Général',
+      categoryId: finalCategoryId,
+      categoryName: finalCategoryName,
       price: numPrice,
       costPrice: numCost,
       preparationTimeMinutes: numPrep > 0 ? numPrep : 10,
@@ -153,7 +192,9 @@ export const MenuView: React.FC = () => {
     setIngredients([]);
     setSelectedStockId('');
     setIngredientQty('');
-    showToast('Plat enregistré avec succès !', 'success');
+    setIsNewCategoryMode(false);
+    setNewCategoryName('');
+    showToast('Plat et catégorie enregistrés avec succès !', 'success');
   };
 
   const handleFileUploadToCloudinary = async (file: File) => {
@@ -214,14 +255,30 @@ export const MenuView: React.FC = () => {
           </span>
         }
         actions={
-          <Button
-            variant="primary"
-            size="touch"
-            onClick={() => setModalOpen(true)}
-            icon={Plus}
-          >
-            Créer un Plat / Produit
-          </Button>
+          <div className="flex items-center gap-2 flex-wrap">
+            <Button
+              variant="outline"
+              size="touch"
+              onClick={() => setIsCategoryModalOpen(true)}
+              icon={Tags}
+            >
+              Gérer les Catégories
+            </Button>
+            <Button
+              variant="primary"
+              size="touch"
+              onClick={() => {
+                if (categories.length === 0) {
+                  setIsNewCategoryMode(true);
+                  setNewCategoryName('');
+                }
+                setModalOpen(true);
+              }}
+              icon={Plus}
+            >
+              Créer un Plat / Produit
+            </Button>
+          </div>
         }
       />
 
@@ -281,9 +338,17 @@ export const MenuView: React.FC = () => {
                     : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                 }`}
               >
-                {c.name}
+                {c.name} ({products.filter((p) => p.categoryId === c.id).length})
               </button>
             ))}
+            <button
+              type="button"
+              onClick={() => setIsCategoryModalOpen(true)}
+              className="px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap shrink-0 transition-all bg-amber-50 text-amber-800 hover:bg-amber-100 border border-amber-300 flex items-center gap-1 cursor-pointer"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>+ Nouvelle Catégorie</span>
+            </button>
           </div>
         </div>
       </div>
@@ -434,18 +499,58 @@ export const MenuView: React.FC = () => {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs font-bold text-slate-700 block mb-1">Catégorie</label>
-                  <select
-                    value={categoryId}
-                    onChange={(e) => setCategoryId(e.target.value)}
-                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200"
-                  >
-                    {categories.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-xs font-bold text-slate-700">Catégorie *</label>
+                    {categories.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsNewCategoryMode(!isNewCategoryMode);
+                          if (!isNewCategoryMode) setNewCategoryName('');
+                        }}
+                        className="text-xs font-bold text-amber-600 hover:text-amber-700 underline cursor-pointer"
+                      >
+                        {isNewCategoryMode ? '← Choisir existante' : '+ Nouvelle'}
+                      </button>
+                    )}
+                  </div>
+
+                  {isNewCategoryMode || categories.length === 0 ? (
+                    <div className="space-y-1">
+                      <input
+                        type="text"
+                        required
+                        placeholder="Nom de la catégorie (ex: Grillades, Plats Chauds...)"
+                        value={newCategoryName}
+                        onChange={(e) => setNewCategoryName(e.target.value)}
+                        className="w-full px-3 py-2 text-xs rounded-xl border border-amber-300 bg-amber-50/40 focus:outline-hidden focus:border-amber-500 font-medium"
+                        autoFocus
+                      />
+                      <p className="text-[10px] text-slate-500">
+                        Cette catégorie sera automatiquement enregistrée dans votre base de données.
+                      </p>
+                    </div>
+                  ) : (
+                    <select
+                      value={categoryId}
+                      onChange={(e) => {
+                        if (e.target.value === '__new__') {
+                          setIsNewCategoryMode(true);
+                          setNewCategoryName('');
+                        } else {
+                          setCategoryId(e.target.value);
+                        }
+                      }}
+                      className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 bg-white focus:outline-hidden focus:border-amber-500"
+                    >
+                      {categories.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name}
+                        </option>
+                      ))}
+                      <option value="__new__">+ Saisir une nouvelle catégorie...</option>
+                    </select>
+                  )}
                 </div>
                 <div>
                   <label className="text-xs font-bold text-slate-700 block mb-1">Poste de préparation</label>
@@ -663,13 +768,13 @@ export const MenuView: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setModalOpen(false)}
-                  className="px-4 py-2 text-xs font-semibold text-slate-600 hover:text-slate-800"
+                  className="px-4 py-2 text-xs font-semibold text-slate-600 hover:text-slate-800 cursor-pointer"
                 >
                   Annuler
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold shadow-xs"
+                  className="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold shadow-xs cursor-pointer"
                 >
                   Enregistrer Produit
                 </button>
@@ -678,6 +783,89 @@ export const MenuView: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Category Management Modal */}
+      <Modal
+        isOpen={isCategoryModalOpen}
+        onClose={() => setIsCategoryModalOpen(false)}
+        title="Catégories de Plats & Boissons"
+        icon={<Tags className="w-5 h-5 text-amber-500" />}
+      >
+        <div className="space-y-5 p-1">
+          <p className="text-xs text-slate-500">
+            Personnalisez vos catégories de plats. Elles s'enregistrent automatiquement dans la base de données de votre restaurant et s'affichent instantanément sur le menu et la caisse.
+          </p>
+
+          {/* Quick Add Form */}
+          <form
+            onSubmit={async (e) => {
+              e.preventDefault();
+              if (!newCatNameInput.trim()) return;
+              await createCategory(newCatNameInput.trim());
+              setNewCatNameInput('');
+              showToast('Nouvelle catégorie enregistrée dans votre base de données !', 'success');
+            }}
+            className="flex items-center gap-2"
+          >
+            <input
+              type="text"
+              placeholder="Nom de la nouvelle catégorie (ex: Salades, Poissons, Desserts...)"
+              value={newCatNameInput}
+              onChange={(e) => setNewCatNameInput(e.target.value)}
+              className="flex-1 px-3.5 py-2 text-xs rounded-xl border border-slate-300 focus:outline-hidden focus:border-amber-500 bg-white font-medium"
+            />
+            <Button variant="primary" size="touch" icon={Plus} type="submit">
+              Ajouter
+            </Button>
+          </form>
+
+          {/* Categories List */}
+          <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+            <div className="text-xs font-bold text-slate-700">
+              Catégories Enregistrées ({categories.length}) :
+            </div>
+            {categories.length === 0 ? (
+              <div className="p-4 rounded-xl bg-slate-50 border border-dashed border-slate-300 text-center text-xs text-slate-400">
+                Aucune catégorie enregistrée. Saisissez votre première catégorie ci-dessus.
+              </div>
+            ) : (
+              categories.map((c) => {
+                const count = products.filter((p) => p.categoryId === c.id).length;
+                return (
+                  <div
+                    key={c.id}
+                    className="p-3 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between gap-3 text-xs"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-7 h-7 rounded-lg bg-amber-500/10 text-amber-700 flex items-center justify-center font-bold">
+                        <Utensils className="w-3.5 h-3.5" />
+                      </div>
+                      <div>
+                        <span className="font-bold text-slate-800">{c.name}</span>
+                        <span className="text-[11px] text-slate-400 ml-2">({count} plat{count > 1 ? 's' : ''})</span>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (count > 0) {
+                          if (!window.confirm(`Cette catégorie contient ${count} plat(s). Êtes-vous sûr de vouloir la supprimer ?`)) return;
+                        }
+                        deleteCategory(c.id);
+                        showToast('Catégorie supprimée.', 'info');
+                      }}
+                      className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                      title="Supprimer cette catégorie"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 };

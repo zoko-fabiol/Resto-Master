@@ -102,13 +102,23 @@ export const productsFirestoreService = {
   },
 
   /**
-   * Écoute en temps réel de toutes les catégories
+   * Écoute en temps réel des catégories du restaurant actif
    */
-  subscribeToCategories(callback: (categories: Category[]) => void): () => void {
+  subscribeToCategories(
+    restaurantId: string | undefined,
+    callback: (categories: Category[]) => void
+  ): () => void {
     try {
+      if (!restaurantId || restaurantId.trim() === '') {
+        callback([]);
+        return () => {};
+      }
       const colRef = collection(db, 'categories');
+      const q = restaurantId === 'all'
+        ? query(colRef)
+        : query(colRef, where('restaurantId', '==', restaurantId));
       return onSnapshot(
-        colRef,
+        q,
         (snapshot) => {
           const list = snapshot.docs.map((d) => d.data() as Category);
           list.sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0));

@@ -190,6 +190,8 @@ interface RestaurantContextType {
   seatReservation: (reservationId: string, tableId: string) => Promise<void>;
   addStockMovement: (movement: Omit<StockMovement, 'id' | 'timestamp' | 'userName'>) => Promise<void>;
   createProduct: (product: Omit<Product, 'id'>) => Promise<void>;
+  createCategory: (name: string, icon?: string) => Promise<Category | null>;
+  deleteCategory: (categoryId: string) => Promise<void>;
   updateProduct: (productId: string, updates: Partial<Product>) => Promise<void>;
   toggleProductAvailability: (productId: string) => Promise<void>;
   submitInventoryAudit: (inventory: Omit<Inventory, 'id'>) => Promise<void>;
@@ -763,7 +765,7 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
     // Menu & Produits
     const unsubProducts = productsFirestoreService.subscribeToProducts(selectedOutletId, setProducts);
-    const unsubCategories = productsFirestoreService.subscribeToCategories(setCategories);
+    const unsubCategories = productsFirestoreService.subscribeToCategories(selectedOutletId, setCategories);
 
     // Stocks & Lots
     const unsubStockItems = stockFirestoreService.subscribeToStockItems(selectedOutletId, setStockItems);
@@ -930,7 +932,7 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     const unsubAuditLogs = configFirestoreService.subscribeToAuditLogs(setAuditLogs);
     const unsubNotifications = configFirestoreService.subscribeToNotifications(setNotifications);
     const unsubUserAccounts = staffFirestoreService.subscribeToUsers(setUserAccounts);
-    const unsubCategories = productsFirestoreService.subscribeToCategories(setCategories);
+    const unsubCategories = productsFirestoreService.subscribeToCategories(selectedOutletId, setCategories);
     const unsubSuppliers = stockFirestoreService.subscribeToSuppliers(setSuppliers);
 
     return () => {
@@ -2388,6 +2390,36 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       `${movement.quantityChange > 0 ? '+' : ''}${movement.quantityChange} ${movement.unit} pour ${movement.stockItemName}. Motif: ${movement.reason}`,
       movement.stockItemId
     );
+  };
+
+  // 10. Create Category (rattachée au restaurant actif)
+  const createCategory = async (name: string, icon = 'Utensils'): Promise<Category | null> => {
+    const cleanName = name.trim().replace(/\s+/g, ' ');
+    if (!cleanName || !selectedOutletId) return null;
+    const existing = categories.find((c) => c.name.toLowerCase() === cleanName.toLowerCase());
+    if (existing) return existing;
+    const newCategory: Category = {
+      id: generateSecureId('cat'),
+      restaurantId: selectedOutletId,
+      name: cleanName,
+      icon,
+      displayOrder: categories.length + 1,
+      active: true,
+    };
+    setCategories((prev) => [...prev, newCategory]);
+    productsFirestoreService.saveCategory(newCategory).catch((err) => {
+      handleSyncError('Création catégorie', err);
+    });
+    addAuditLog('Création catégorie menu', 'POS', `Catégorie ${cleanName} créée`, newCategory.id);
+    return newCategory;
+  };
+
+  const deleteCategory = async (categoryId: string): Promise<void> => {
+    setCategories((prev) => prev.filter((c) => c.id !== categoryId));
+    productsFirestoreService.deleteCategory(categoryId).catch((err) => {
+      handleSyncError('Suppression catégorie', err);
+    });
+    addAuditLog('Suppression catégorie menu', 'POS', `Catégorie supprimée`, categoryId);
   };
 
   // 10. Create Product
@@ -4532,6 +4564,8 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         seatReservation,
         addStockMovement,
         createProduct,
+        createCategory,
+        deleteCategory,
         updateProduct,
         toggleProductAvailability,
         submitInventoryAudit,
